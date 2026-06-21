@@ -21,7 +21,7 @@ The objective of Phase 1 is to establish the core software engineering scaffoldi
    - `go get github.com/labstack/echo/v4/middleware`
    - `go get github.com/jackc/pgx/v5` (or preferred DB connector).
 3. **Database Driver Setup:** Create a `db` package that opens a connection pool with PostgreSQL using environment variables (e.g. `DATABASE_URL`).
-4. **Echo Server Setup:** Initialize an Echo router in `main.go`, attaching the Logger, Recovery, and CORS middlewares (enabling origins like `http://localhost:9000`).
+4. **Echo Server Setup:** Initialize an Echo router in `main.go`, attaching the Logger, Recovery, and CORS middlewares (enabling origins like `http://localhost:8000`).
 5. **Start Server:** Bind the application to port `8080`.
 
 ### Step 1.3: Core Project & Task APIs
@@ -36,7 +36,7 @@ The objective of Phase 1 is to establish the core software engineering scaffoldi
 5. For task/project delete routes that remove child requirements or tasks, verify every affected current row is archived to the matching history table with `deleted = true` before removal.
 
 ### Step 1.4: Vue/Quasar Frontend Scaffolding
-1. **Scaffold CLI:** Create a clean Quasar installation using Vite (Vue 3, Pinia) by running `npm init quasar` or utilizing the Quasar CLI.
+1. **Frontend Skeleton:** Use the existing Vite/Vue/Quasar skeleton under `frontend/` as the template for further development.
 2. **Navigation Shell Setup:**
    - Modify the default layout (`MainLayout.vue`) to include a clean top navigation bar.
    - Add `<q-tabs>` matching the four core views: Home, Planning, Projects, Help.
@@ -61,7 +61,7 @@ To complete Phase 1, verify the following checks pass:
 
 - [ ] **DB Link:** Go backend successfully starts without logging database connection errors.
 - [ ] **Echo Server Routing:** Accessing `http://localhost:8080/api/projects` via browser or curl returns a valid HTTP `200` response containing a JSON array (even if empty).
-- [ ] **Vue/Quasar Layout:** Running the front-end dev watch command (`quasar dev`) compiles without errors and loads the UI in the browser.
+- [ ] **Vue/Quasar Layout:** Running the frontend dev command (`npm run dev` from `frontend/`) compiles without errors and loads the UI at `http://localhost:8000`.
 - [ ] **Reactive Navigation:** Clicking between Home, Planning, Projects, and Help in the top menu dynamically updates the URL path and changes the page container context without triggering full-page browser reloads.
 - [ ] **Integration Check:** Creating a project through the Quasar UI immediately registers the record using the existing PostgreSQL schema, and refreshing the list renders the newly created project card instantly.
 - [ ] **Schema Safety:** No migrations, schema changes, or `task_phase`/`task_type` data changes are introduced.

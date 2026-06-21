@@ -10,7 +10,7 @@ This document serves as a high-level conceptual specification outlining the acti
 - **Base Path:** `/api`
 - **Port:** Configured by default to `:8080` (or as set via `PORT` environment variable).
 - **Format:** All requests containing bodies should expect `application/json` format.
-- **CORS:** Cross-Origin Resource Sharing (CORS) is enabled globally for local development origins (e.g. `http://localhost:9000` for Quasar/Vite).
+- **CORS:** Cross-Origin Resource Sharing (CORS) is enabled globally for local development origins, including `http://localhost:8000` for the Vite/Quasar frontend.
 
 ---
 

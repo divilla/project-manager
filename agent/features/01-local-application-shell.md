@@ -7,11 +7,12 @@ This feature exists to make the rest of the product usable quickly. It intention
 
 ## 2. Prototype Scope
 - Vue 3 + Quasar single-page application with top navigation.
+- Frontend development server runs at `http://localhost:8000`.
 - Go/Echo JSON API server running locally.
 - PostgreSQL connection using `postgresql://localhost:5432/postgres` by default.
 - Existing database schema used as-is, with no migrations or schema mutation by agents.
 - Basic health/config checks so setup failures are obvious.
-- Local development CORS support between the Quasar dev server and Go API server.
+- Local development CORS support between the Vite/Quasar dev server at `http://localhost:8000` and the Go API server.
 
 ## 3. Out of Scope
 - Login, signup, sessions, OAuth, RBAC, and tenant separation.
@@ -45,6 +46,7 @@ If the backend or database is unavailable, the frontend should show a clear non-
 
 ## 7. Acceptance Criteria
 - A developer can start the backend and frontend locally with documented commands.
+- Running the frontend dev command serves the app at `http://localhost:8000`.
 - The frontend top navigation routes to Home, Planning, Projects, and Help.
 - The frontend can call the backend successfully from the local dev server.
 - Database connection failures are visible in logs and understandable in the UI.
