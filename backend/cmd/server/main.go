@@ -4,9 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/divilla/project-manager/internal/project"
-	"github.com/divilla/project-manager/pkg/config"
-	"github.com/divilla/project-manager/pkg/db"
+	"aipm/internal/project"
+	"aipm/pkg/config"
+	"aipm/pkg/db"
+
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 )

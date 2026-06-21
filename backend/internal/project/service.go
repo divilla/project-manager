@@ -3,7 +3,7 @@ package project
 import (
 	"context"
 
-	"github.com/divilla/project-manager/internal/dto"
+	"aipm/internal/dto"
 )
 
 type (

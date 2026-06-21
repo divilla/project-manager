@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/divilla/project-manager/internal/dto"
+	"aipm/internal/dto"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

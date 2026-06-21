@@ -1,4 +1,4 @@
-module github.com/divilla/project-manager
+module aipm
 
 go 1.26.4
 
