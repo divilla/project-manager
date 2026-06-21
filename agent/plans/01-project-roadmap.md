@@ -16,6 +16,7 @@ Our goal is to build a fully functional local-first developer workspace in 3 seq
   |  - Scaffold Vue/Quasar & Go/Echo                       |
   |  - Establish Local PG Database Connection              |
   |  - Implement Project & Task CRUD                       |
+  |  - Preserve Task History on Changes                    |
   |                            |                           |
   |                            v                           |
   |  [Phase 2: Core Tracking]                              |
@@ -38,7 +39,7 @@ Our goal is to build a fully functional local-first developer workspace in 3 seq
 ### Phase 1: Tech Stack Foundations
 - **Objective:** Create a working, running application shell where projects and tasks can be created, updated, and listed manually.
 - **Deliverables:**
-  - Database migrations and connection layer established.
+  - Existing database connection layer established with no migrations or schema changes.
   - REST endpoints running for Projects and Tasks.
   - Quasar UI top-menu shell set up with working routing.
   - Project/Task listing and creation forms fully connected to backend APIs.
@@ -46,9 +47,10 @@ Our goal is to build a fully functional local-first developer workspace in 3 seq
 ### Phase 2: Core Completeness Engine
 - **Objective:** Establish the defining "Completeness over Estimation" mechanism.
 - **Deliverables:**
-  - Requirement table and backend CRUD endpoints.
+  - Requirement backend CRUD endpoints using the existing `requirement` table.
   - Real-time task completeness percentage calculations in Go.
-  - Home Dashboard displaying overall completeness and aggregate metrics grouped by the five development phases.
+  - History writes for requirement/task updates and deletes.
+  - Home Dashboard displaying overall completeness and aggregate metrics grouped by phases from the existing `task_phase` table.
   - Clean progress bars and interactive status transitions.
 
 ### Phase 3: AI-Powered Planning Copilot

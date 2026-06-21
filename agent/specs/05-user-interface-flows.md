@@ -40,15 +40,15 @@ The analytical hub displaying **Completeness Grouped by Phase** instead of stand
 |  Overall Completeness: [████████████████████████░░░░░░░░░░] 70%             |
 |                                                                             |
 |  +--------------------+  +--------------------+  +--------------------+     |
-|  | PHASE: BACKLOG     |  | PHASE: IN-PROGRESS |  | PHASE: REVIEW      |     |
+|  | PHASE: DB LABEL    |  | PHASE: DB LABEL    |  | PHASE: DB LABEL    |     |
 |  | Completeness: 0%   |  | Completeness: 45%  |  | Completeness: 85%  |     |
 |  | [██░░░░░░░░░░]      |  | [█████░░░░░]        |  | [█████████░]       |     |
 |  | Tasks count: 5     |  | Tasks count: 3     |  | Tasks count: 2     |     |
 |  +--------------------+  +--------------------+  +--------------------+     |
 |                                                                             |
 |  +-----------------------------------------------------------------------+  |
-|  | BOTTLENECK WATCH (Tasks stuck in "Review" or labeled "In-Progress")   |  |
-|  | - "Refactor Auth Middleware" (In Review, 1/3 completeness criteria)   |  |
+|  | BOTTLENECK WATCH (Tasks stuck in configured review/progress phases)    |  |
+|  | - "Refactor Auth Middleware" (review-like phase, 1/3 criteria)        |  |
 |  +-----------------------------------------------------------------------+  |
 +-----------------------------------------------------------------------------+
 ```
@@ -70,12 +70,12 @@ The AI engine room where natural language ideas are transformed into structured 
 #### Key Flows:
 1. User types: *"Add multi-file upload capabilities to our storage driver."*
 2. System displays loading spinner (`q-inner-loading`).
-3. System shows the LLM-derived suggestions grouped by Phase:
-   - **Phase: Backlog**
+3. System shows the LLM-derived suggestions grouped by phases loaded from the database:
+   - **Phase: Example DB Phase**
      - [x] Research AWS S3 multi-part limits
-   - **Phase: Planning**
+   - **Phase: Example DB Phase**
      - [x] Design DB table for multi-file attachments
-   - **Phase: In-Progress**
+   - **Phase: Example DB Phase**
      - [x] Build backend Echo attachment upload handler
      - [x] Design Vue drag-and-drop component
 4. User clicks "Commit Plan". The system creates the tasks and nested requirements, redirecting the user to the Projects page.
@@ -92,7 +92,7 @@ The operational workflow view where task phases and requirements are managed.
 | [Create Project Button (+)]                                                 |
 |                                                                             |
 | +---------------------+   +---------------------+   +---------------------+ |
-| | BACKLOG             |   | IN-PROGRESS         |   | REVIEW / VERIFY     | |
+| | DB PHASE            |   | DB PHASE            |   | DB PHASE            | |
 | +---------------------+   +---------------------+   +---------------------+ |
 | | [Task #1]           |   | [Task #2]           |   | [Task #3]           | |
 | | Setup Database      |   | Implement API       |   | Design CSS Layout   | |
@@ -108,7 +108,7 @@ Clicking a task opens a dedicated modal containing:
 - **Interactive Requirements List (The Progress Driver):** 
   - Clicking a checkbox immediately triggers the backend `POST` request.
   - Upon server response, the local task's progress bar animates to reflect the updated value.
-- **Phase Selector:** Quick dropdown button (`q-btn-dropdown`) to advance the task's active phase (e.g., from `'In-Progress'` to `'Review'`).
+- **Phase Selector:** Quick dropdown button (`q-btn-dropdown`) populated from the existing `task_phase` table.
 
 ---
 

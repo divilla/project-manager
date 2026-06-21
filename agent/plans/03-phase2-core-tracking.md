@@ -6,17 +6,22 @@ The objective of Phase 2 is to implement the **Completeness Engine**—the defin
 
 ## 1. Step-by-Step Developer Implementation Tasks
 
-### Step 2.1: Requirement Table & Database Integration
-1. Apply the advisory database table schema for `requirements` ( FK -> `tasks.id` ) to your PostgreSQL database.
-2. In your Go backend, create the repository models for requirements and configure query handlers to support CRUD operations on requirement entities.
+### Step 2.1: Requirement Data Integration
+1. Inspect the existing database schema to identify the current requirement/task-completeness tables and columns.
+2. In your Go backend, create repository models and query handlers against the existing schema only.
+3. Do not create or alter requirement-related tables from application or agent work.
 
 ### Step 2.2: Dynamic Backend Completeness Calculator
 1. In the Go backend, create a helper module or database hook that performs the following mathematical task percentage calculation:
    $$\text{Completeness}(T) = \left( \frac{\text{Completed Items}}{\text{Total Items}} \right) \times 100$$
 2. Hook this calculator to the requirement mutation endpoints. When a requirement is added, toggled, or deleted:
+   - Before changing an existing requirement, insert its current row into `requirement_history`.
+   - For requirement updates/toggles, write the history row with `deleted = false`.
+   - For requirement deletes, write the history row with `deleted = true`.
    - Recalculate the parent task's completion percentage.
-   - Run a SQL transaction updating the `tasks.completeness` database field.
-3. Establish a conceptual aggregation query for a specific project. This query must sum up all requirements across all tasks within each separate `task_phase` (e.g., Backlog, Planning, In-Progress, Review, Completed) to return aggregated phase completeness:
+   - Before changing the parent task completeness value, insert the current task row into `task_history` with `deleted = false`.
+   - Run a SQL transaction updating the existing `task` completeness field.
+3. Establish a conceptual aggregation query for a specific project. This query must sum up all requirements across all tasks within each phase from the existing `task_phase` table to return aggregated phase completeness:
    $$\text{PhaseCompleteness}(P) = \left( \frac{\sum \text{Completed Items in Phase } P}{\sum \text{Total Items in Phase } P} \right) \times 100$$
 
 ### Step 2.3: Task Detail Dialog & Requirements UI
@@ -30,7 +35,7 @@ The objective of Phase 2 is to implement the **Completeness Engine**—the defin
 1. Build out `IndexPage.vue` (Home screen) as the analytical control center.
 2. Build an async function that fetches aggregated phase completeness statistics from the backend on page mount.
 3. Display a large project progress card displaying the master project completeness score.
-4. Render five distinct metrics grid blocks representing the standard development phases (`backlog`, `planning`, `in_progress`, `review`, and `completed`). 
+4. Render one metrics block for each phase returned by the existing `task_phase` table.
 5. Each block must feature:
    - A bold percentage label.
    - A `<q-linear-progress>` indicator showing phase completeness.
@@ -43,7 +48,10 @@ The objective of Phase 2 is to implement the **Completeness Engine**—the defin
 To complete Phase 2, verify the following checks pass:
 
 - [ ] **Requirement Persistence:** Adding, checking, and deleting requirements is persistent across browser reloads.
+- [ ] **Requirement History Safety:** Updating, toggling, or deleting a requirement writes the previous current version to `requirement_history` in the same transaction.
+- [ ] **Delete Audit Flag:** Requirement delete operations write history with `deleted = true`.
 - [ ] **Calculated Logic:** If a task features 4 requirements, marking one as completed immediately reflects a task progress of `25%` in the database and in the task modal progress bar.
 - [ ] **Dynamic Re-aggregation:** When you check off a task requirement in the Projects screen and click back to the Home Dashboard, the corresponding phase progress bar (and overall project progress) immediately animates to display the recalculated progress.
 - [ ] **Zero-State Resilience:** A newly created task with zero requirements defaults to `0%` progress gracefully without triggering dividing-by-zero math errors in Go or Vue.
 - [ ] **Phase Alignment:** Tasks can be successfully dragged or selected to change phases, and the dashboard aggregates them under their new phase instantly.
+- [ ] **Reference Data Safety:** No code path inserts, updates, deletes, or hardcodes replacement values for `task_phase` or `task_type`.

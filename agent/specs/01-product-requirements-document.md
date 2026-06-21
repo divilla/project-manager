@@ -37,7 +37,7 @@ To ensure high velocity and quick validation during the prototype phase, we stri
 | **Task Assignment** | No assignments. Tasks are shared in a single pool.| Explicit task assignees, watchers, notifications. |
 | **Core UI / Layout** | Top menu navigation: Home, Planning, Projects, Help. | Side navigation, personalized user dashboard. |
 | **AI Integration** | Basic prompt workflows for planning and breakdown. | Background AI agents, code integrations, chat. |
-| **Database** | Single local PostgreSQL instance. | Scalable, partitioned, multi-tenant cloud PostgreSQL.|
+| **Database** | Existing local PostgreSQL database used as-is. No prototype migrations or lookup-table changes. | Future database changes only through explicit human-owned schema design. |
 
 ---
 
@@ -49,14 +49,14 @@ The prototype centers around four main user screens accessible via a top navigat
 - **Goal:** Provide an immediate, visual snapshot of the project portfolio's overall health and completeness.
 - **Features:**
   - High-level progress charts showing project completion percentages.
-  - Kanban or list style view of task phases (e.g., Backlog, Planning, In-Progress, Review, Completed) indicating the aggregated completeness of tasks within each phase.
-  - Highlighted bottlenecks (e.g., tasks stuck in "Review" or tasks with 0% progress but labeled "In-Progress").
+  - Kanban or list style view of task phases loaded from the existing `task_phase` table, indicating the aggregated completeness of tasks within each phase.
+  - Highlighted bottlenecks using the existing phase semantics from `task_phase` (e.g., review-like work below 100% completeness or active work with no completed requirements).
 
 ### B. Planning Copilot
 - **Goal:** Leverage generative AI to brainstorm, scope, and break down project initiatives.
 - **Features:**
   - Conversational interface (Planning Chat) where the developer can write a high-level goal (e.g., "Implement markdown-based documentation generator").
-  - AI suggests a list of discrete requirements grouped by development phases.
+  - AI suggests a list of discrete requirements grouped by valid development phases loaded from the existing database.
   - The developer can edit, add, or reject items before pushing them directly to the active project task board.
 
 ### C. Projects & Tasks
@@ -65,7 +65,7 @@ The prototype centers around four main user screens accessible via a top navigat
   - Project listing and creation screens.
   - Task management: create, read, update, delete (CRUD) tasks.
   - Interactive requirements list for each task where checking off a requirement recalculates the task's completeness percentage instantly.
-  - Manual phase transitions (e.g., moving a task from "Planning" to "In-Progress").
+  - Manual phase transitions using options loaded from the existing `task_phase` table.
 
 ### D. Help & Documentation
 - **Goal:** Instruct developers on how the tool operates, how to write prompt templates, and how to structure project completeness criteria.
@@ -78,5 +78,5 @@ The prototype centers around four main user screens accessible via a top navigat
 ## 5. Non-Functional Requirements (Prototype)
 - **Local First:** Easy setup and execution on developer machines via simple commands.
 - **Responsive Interface:** Responsive UI built with Quasar to support both standard monitors and tablet displays.
-- **Auditability:** DB design must record history of task transitions and requirement completion to show progress trends over time.
+- **Auditability:** The existing `task_history` and `requirement_history` tables must capture the current task/requirement version before every user or AI update/delete. Delete history rows must be marked with `deleted = true`.
 - **Performance:** DB queries and AI prompts must return responses fast enough to maintain interactive dashboard fluidness (sub-second UI updates for data, <10s for LLM interactions).

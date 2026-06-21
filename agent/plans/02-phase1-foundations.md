@@ -6,11 +6,13 @@ The objective of Phase 1 is to establish the core software engineering scaffoldi
 
 ## 1. Step-by-Step Developer Implementation Tasks
 
-### Step 1.1: Database Initialization
+### Step 1.1: Existing Database Connection
 1. Ensure a PostgreSQL server is running locally on port `5432`.
-2. Connect to the server and create a dedicated database named `postgres` (or use the existing default).
-3. Create the initial database schema tables for `projects` and `tasks` as outlined in `specs/03-data-model-suggestions.md`.
-4. Insert 1-2 mock project rows and a few mock tasks directly into the database to serve as initial seed data.
+2. Connect to the existing database named `postgres` or the configured database URL.
+3. Inspect the existing schema and use the current table/column names exactly as-is.
+4. Do not create migrations, create tables, alter tables, or seed lookup/reference data.
+5. Treat `task_phase` and `task_type` as fixed reference tables that already contain all valid options.
+6. Treat `task`, `requirement`, `task_history`, and `requirement_history` as existing tables. Use created/modified timestamps and history writes according to the database contract.
 
 ### Step 1.2: Go/Echo Backend Scaffolding
 1. **Initialize Module:** Run `go mod init project-manager` inside the backend directory.
@@ -23,13 +25,15 @@ The objective of Phase 1 is to establish the core software engineering scaffoldi
 5. **Start Server:** Bind the application to port `8080`.
 
 ### Step 1.3: Core Project & Task APIs
-1. Create DB repositories or service layers to list, create, and delete records for Projects and Tasks.
+1. Create DB repositories or service layers to list, create, and delete records for Projects and Tasks using the existing database schema.
 2. Map the resource routes:
    - `GET /api/projects` -> list projects.
    - `POST /api/projects/create` -> create project.
    - `GET /api/projects/:id/tasks` -> list tasks for a project.
    - `POST /api/tasks/create` -> create task.
 3. Test endpoints using a REST client (e.g., Postman, Curl, Bruno) to verify that queries execute properly and return valid JSON content.
+4. For task update/delete routes, verify that the current `task` row is copied to `task_history` before the active row changes. Delete history rows must use `deleted = true`.
+5. For task/project delete routes that remove child requirements or tasks, verify every affected current row is archived to the matching history table with `deleted = true` before removal.
 
 ### Step 1.4: Vue/Quasar Frontend Scaffolding
 1. **Scaffold CLI:** Create a clean Quasar installation using Vite (Vue 3, Pinia) by running `npm init quasar` or utilizing the Quasar CLI.
@@ -59,4 +63,7 @@ To complete Phase 1, verify the following checks pass:
 - [ ] **Echo Server Routing:** Accessing `http://localhost:8080/api/projects` via browser or curl returns a valid HTTP `200` response containing a JSON array (even if empty).
 - [ ] **Vue/Quasar Layout:** Running the front-end dev watch command (`quasar dev`) compiles without errors and loads the UI in the browser.
 - [ ] **Reactive Navigation:** Clicking between Home, Planning, Projects, and Help in the top menu dynamically updates the URL path and changes the page container context without triggering full-page browser reloads.
-- [ ] **Integration Check:** Creating a project through the Quasar UI immediately registers the record in the PostgreSQL database, and refreshing the list renders the newly created project card instantly.
+- [ ] **Integration Check:** Creating a project through the Quasar UI immediately registers the record using the existing PostgreSQL schema, and refreshing the list renders the newly created project card instantly.
+- [ ] **Schema Safety:** No migrations, schema changes, or `task_phase`/`task_type` data changes are introduced.
+- [ ] **Task History Safety:** Updating or deleting a task writes the previous current version to `task_history` in the same transaction.
+- [ ] **Cascade History Safety:** Project/task deletes archive all affected task and requirement rows with `deleted = true`.

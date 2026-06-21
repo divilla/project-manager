@@ -11,7 +11,8 @@ Before sharing the prototype with a broader developer audience or moving to V2, 
 1. **Initial Setup:** The developer spins up the local Quasar and Echo servers and creates their primary software development project workspace.
 2. **Scoping Sprints:** Every major feature addition or refactoring job must be processed through the AI Planning screen. The developer reviews the LLM's suggested requirements lists and adjusts items as needed.
 3. **Daily Tracking:** The developer commits to tracking *all* work progress via the requirement progress engine. No task should be marked as "Completed" on the board unless all its constituent requirement sub-tasks have been verified.
-4. **Dashboard Auditing:** The developer monitors the Home Dashboard to identify bottleneck phases (e.g., tasks piling up in `'review'` or stalled in `'in_progress'`) and assesses if the "Phase Completeness" percentage matches physical product progress.
+4. **Dashboard Auditing:** The developer monitors the Home Dashboard to identify bottleneck phases using the existing `task_phase` values and assesses if the "Phase Completeness" percentage matches physical product progress.
+5. **History Auditing:** The developer spot-checks `task_history` and `requirement_history` after edits and deletes to verify previous versions are captured and deletes are marked with `deleted = true`.
 
 ---
 
@@ -21,7 +22,8 @@ During the dogfooding trial, the developer should record observations to guide V
 | Category | Observation / Pain Point | Core Idea for Improvement |
 | :--- | :--- | :--- |
 | **Requirement Granularity** | *E.g., "Requirements are sometimes too small (e.g. 'write import statement') or too broad ('implement full database')."* | Refine LLM system instructions to enforce a 3-5 item limit per task, with each item representing roughly 1-4 hours of work. |
-| **Calculation Accuracy** | *E.g., "If a task has no requirements, it jumps straight from 0% to 100% on phase transition. This causes progress bar jumps."* | Adjust the progress engine so a requirement-less task defaults to 50% progress when placed in `'in_progress'`. |
+| **Calculation Accuracy** | *E.g., "If a task has no requirements, it jumps straight from 0% to 100% on phase transition. This causes progress bar jumps."* | Adjust the progress engine behavior in application code without changing phase reference data. |
+| **History Completeness** | *E.g., "Requirement toggles are recorded, but task completeness recalculations are not."* | Ensure every task/requirement update path writes the current version to the matching history table inside the same transaction. |
 | **AI Generation Speed** | *E.g., "Waiting 8 seconds for OpenAI response on poor connection stalls the planning flow."* | Implement client-side optimistic UI skeletons or migrate prompt execution to local Ollama (Llama3/Mistral) for sub-second offline generation. |
 
 ---
@@ -34,7 +36,7 @@ The primary feature updates required for the V2 transition are grouped below:
 ### Area A: Secure Multi-User Infrastructure
 - **User Authentication:** Integrate an industry-standard OAuth2 or JWT provider. Set up registration, login, password recovery, and secure cookie-based session tracking.
 - **Task Assignments:** Add user relation tables. Tasks will feature an `assignee_id` field enabling personalized user filter views (e.g., *"Show my tasks"*).
-- **Audit Logs:** Log task movements and requirement updates with historical user tracking (e.g., *"Developer V completed sub-task X at 14:02"*).
+- **Audit Logs:** Extend the existing `task_history` and `requirement_history` model with actor/source metadata if multi-user identity is added later.
 
 ### Area B: Developer Ecosystem Integrations
 - **Git/GitHub Hooks:** Introduce a webhook endpoint `/api/integrations/github` in Echo. When a developer pushes code containing commit keywords (e.g., `closes #24 [subtask-3]`), the backend automatically checks off the corresponding sub-requirement in the database.
@@ -42,5 +44,5 @@ The primary feature updates required for the V2 transition are grouped below:
 
 ### Area C: Advanced Enterprise Features
 - **Project Portfolios:** Allow grouping projects into portfolios or organizational units.
-- **Multiple Phase Workflows:** Enable teams to define custom workflow phases per project (e.g., some projects may need `'design'` and `'staging_test'` phases, while others can use standard `'planning'` -> `'in_progress'`).
+- **Multiple Phase Workflows:** Future workflow customization requires explicit human-owned database design. The prototype must continue to use the existing `task_phase` reference data as-is.
 - **Data Exporting:** Support exporting project roadmaps and completeness audits as CSV, JSON, or beautifully formatted PDF status summaries for business executives.

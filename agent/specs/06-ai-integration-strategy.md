@@ -20,10 +20,10 @@ The backend Go service acts as a proxy controller between the user interface and
 ## 2. Core LLM Operations
 
 ### Operation A: High-Level Goal Decomposition (Planning Copilot)
-- **Objective:** Take a user's natural language project objective (e.g., *"Set up Docker deployment for an Express API and Nginx proxy"*) and transform it into a structured set of tasks grouped by standard development phases, where each task features a nested "Definition of Done" requirements list.
+- **Objective:** Take a user's natural language project objective (e.g., *"Set up Docker deployment for an Express API and Nginx proxy"*) and transform it into a structured set of tasks grouped by valid development phases from the existing database, where each task features a nested "Definition of Done" requirements list.
 - **Prompt Engineering Strategy (System Blueprint):**
   - Instruct the model to act as a World-Class Software Architect and Agile Product Manager.
-  - Define the target development phases explicitly: `backlog`, `planning`, `in_progress`, `review`, and `completed`.
+  - Inject valid task phases and task types fetched from the existing `task_phase` and `task_type` tables.
   - Enforce a structured output format (such as JSON Schema or standard XML tags) containing:
     1. Task Title.
     2. Task Description.
@@ -42,15 +42,17 @@ Below is the conceptual prompt scaffolding compiled by the Go backend before dis
 
 ```yaml
 SystemPrompt: |
-  You are an expert technical product manager. Your task is to decompose high-level development goals into a structured, phase-based backlog.
+  You are an expert technical product manager. Your task is to decompose high-level development goals into a structured plan grouped by valid database-provided phases.
   
   The skeleton backend application is built within the root `backend/` directory. You must strictly apply this workspace layout and our specific architectural rules (POST-only mutating actions, `/create` suffixes, and `'requirement'` naming for Definition of Done items) when designing new application logic.
 
-  You must partition tasks into these specific phases:
-  - backlog: Raw ideas, future extensions.
-  - planning: Architecture design, DB schema draft, API contract agreement.
-  - in_progress: Implementation, logic writing, initial unit testing.
-  - review: Code review, QA, manual validation, integration tests.
+  You must partition tasks into one of the valid phases provided by the application from the existing database. You must also choose task types only from the existing database-provided options.
+
+  Database rules:
+  - The database already exists and must be used as-is.
+  - Do not propose migrations or schema changes.
+  - Do not propose adding, renaming, or removing task_phase or task_type options.
+  - Use only the phase/type options supplied in this prompt context.
 
   Every task must contain a detailed "Definition of Done" requirements list. Each single DoD item is defined as a 'requirement'. Each requirement must be concrete, binary (either true or false), and testable. Avoid vague descriptors like "make sure it works." Use explicit assertions like "write test suite achieving 80% coverage."
 
@@ -60,7 +62,8 @@ SystemPrompt: |
       {
         "title": "Task title",
         "description": "Task description",
-        "phase": "suggested_phase_string",
+        "phase": "existing_phase_identifier_or_code",
+        "type": "existing_type_identifier_or_code",
         "requirements": ["verifiable requirement 1", "verifiable requirement 2"]
       }
     ]
