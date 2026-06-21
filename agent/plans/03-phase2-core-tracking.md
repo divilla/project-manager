@@ -22,8 +22,8 @@ The objective of Phase 2 is to implement the **Completeness Engine**—the defin
 ### Step 2.3: Task Detail Dialog & Requirements UI
 1. In `ProjectsPage.vue`, configure the UI so clicking a task card triggers a modal dialog (`<q-dialog>`).
 2. Inside the dialog, display the task title, description, and list its corresponding requirements.
-3. Build an input box that allows the developer to quickly add a new Definition of Done step (creating a new requirement via `POST /api/requirements`).
-4. Set up checkboxes (`<q-checkbox>`) for each item. Hook the `@update:model-value` change gesture to dispatch a `PATCH` request to `/api/requirements/:id` to toggle the completed state.
+3. Build an input box that allows the developer to quickly add a new Definition of Done step (creating a new requirement via `POST /api/requirements/create`).
+4. Set up checkboxes (`<q-checkbox>`) for each item. Hook the `@update:model-value` change gesture to dispatch a `POST` request to `/api/requirements/:id/update` to toggle the completed state.
 5. In the same dialog, display a highly visible `<q-linear-progress>` bar representing the task's individual completion percentage. The progress bar should dynamically animate when requirements are toggled.
 
 ### Step 2.4: Home Dashboard (Analytical Overview)

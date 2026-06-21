@@ -26,9 +26,9 @@ The objective of Phase 1 is to establish the core software engineering scaffoldi
 1. Create DB repositories or service layers to list, create, and delete records for Projects and Tasks.
 2. Map the resource routes:
    - `GET /api/projects` -> list projects.
-   - `POST /api/projects` -> create project.
+   - `POST /api/projects/create` -> create project.
    - `GET /api/projects/:id/tasks` -> list tasks for a project.
-   - `POST /api/tasks` -> create task.
+   - `POST /api/tasks/create` -> create task.
 3. Test endpoints using a REST client (e.g., Postman, Curl, Bruno) to verify that queries execute properly and return valid JSON content.
 
 ### Step 1.4: Vue/Quasar Frontend Scaffolding

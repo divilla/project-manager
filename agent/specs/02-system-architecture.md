@@ -63,7 +63,7 @@ The system is constructed as a modern, decoupled web application. Because this i
 
 ### Scenario A: Real-Time Completeness Calculation
 1. **User Action:** The developer checks off a requirement on a task in the Vue UI.
-2. **Client Event:** The frontend sends an HTTP `PATCH` request to `/api/requirements/:id` with `{ "completed": true }`.
+2. **Client Event:** The frontend sends an HTTP `POST` request to `/api/requirements/:id/toggle` with `{ "completed": true }`.
 3. **Backend Action:** 
    - The Go server receives the request, updates the database, and queries all requirements for that task.
    - It recalculates the task's completeness percentage based on active vs. completed requirements.

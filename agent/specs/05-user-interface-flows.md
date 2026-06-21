@@ -106,7 +106,7 @@ The operational workflow view where task phases and requirements are managed.
 Clicking a task opens a dedicated modal containing:
 - Task title and markdown-enabled description.
 - **Interactive Requirements List (The Progress Driver):** 
-  - Clicking a checkbox immediately triggers the backend `PATCH` request.
+  - Clicking a checkbox immediately triggers the backend `POST` request.
   - Upon server response, the local task's progress bar animates to reflect the updated value.
 - **Phase Selector:** Quick dropdown button (`q-btn-dropdown`) to advance the task's active phase (e.g., from `'In-Progress'` to `'Review'`).
 

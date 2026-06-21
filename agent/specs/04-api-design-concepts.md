@@ -21,33 +21,33 @@ Manages high-level projects.
 
 | Endpoint | Verb | Conceptual Intent / Behavior |
 | :--- | :--- | :--- |
-| `/api/projects` | `GET` | Retrieves a list of all active projects, including an aggregated overall project completeness score. |
-| `/api/projects/:id` | `GET` | Retrieves a single project's details, including a summary of tasks grouped by their phases. |
-| `/api/projects` | `POST` | Creates a new project workspace. Takes a name and optional description. |
-| `/api/projects/:id` | `PUT` | Updates project details (name, description, or status). |
-| `/api/projects/:id` | `DELETE`| Permanently deletes a project and cascades deletion to all associated tasks and requirements. |
+| `/api/project/list` | `POST` | Retrieves a list of all active projects, including an aggregated overall project completeness score. |
+| `/api/project/get` | `POST` | Retrieves a single project's details, including a summary of tasks grouped by their phases. |
+| `/api/project/create` | `POST` | Creates a new project workspace. Takes a name and optional description. |
+| `/api/project/update` | `POST` | Updates project details (name, description, or status). |
+| `/api/project/delete` | `POST`| Permanently deletes a project and cascades deletion to all associated tasks and requirements. |
 
 ### B. Tasks Resource (`/api/tasks`)
 Manages individual tasks and maps them to projects and workflow phases.
 
 | Endpoint | Verb | Conceptual Intent / Behavior |
 | :--- | :--- | :--- |
-| `/api/projects/:project_id/tasks`| `GET` | Retrieves all tasks belonging to a specific project. Tasks should contain metadata detailing their phase and calculated completeness. |
-| `/api/tasks/:id` | `GET` | Retrieves a single task and includes all its associated requirements. |
-| `/api/tasks` | `POST` | Creates a new task under a specific project, defaulting to the `'backlog'` phase with 0% completeness. |
-| `/api/tasks/:id` | `PUT` | Updates task fields (title, description). |
-| `/api/tasks/:id/phase` | `PATCH`| Updates the workflow phase of the task (e.g., moves it from `'planning'` to `'in_progress'`). |
-| `/api/tasks/:id` | `DELETE`| Deletes a task and all associated requirements. |
+| `/api/task/list`| `POST` | Retrieves all tasks belonging to a specific project. Tasks should contain metadata detailing their phase and calculated completeness. |
+| `/api/task/get` | `POST` | Retrieves a single task and includes all its associated requirements. |
+| `/api/task/create` | `POST` | Creates a new task under a specific project, defaulting to the `'backlog'` phase with 0% completeness. |
+| `/api/task/update` | `POST` | Updates task fields (title, description). |
+| `/api/task/phase` | `POST`| Updates the workflow phase of the task (e.g., moves it from `'planning'` to `'in_progress'`). |
+| `/api/task/delete` | `POST`| Deletes a task and all associated requirements. |
 
 ### C. Requirements Resource (`/api/requirements`)
 Provides granular requirement actions that drive the completeness progress calculation.
 
 | Endpoint | Verb | Conceptual Intent / Behavior |
 | :--- | :--- | :--- |
-| `/api/tasks/:task_id/requirements`| `GET` | Retrieves all requirements for a specific task. |
-| `/api/requirements` | `POST` | Appends a new requirement (a Definition of Done step) to a task. |
-| `/api/requirements/:id` | `PATCH`| Updates requirement text or toggles the completion status (`completed = true/false`). *Note: Triggering this endpoint causes the server to instantly recalculate the parent task's completeness percentage.* |
-| `/api/requirements/:id` | `DELETE`| Deletes a requirement and triggers parent task completeness recalculation. |
+| `/api/requirement/list`| `POST` | Retrieves all requirements for a specific task. |
+| `/api/requirement/create` | `POST` | Appends a new requirement (a Definition of Done step) to a task. |
+| `/api/requirement/update` | `POST`| Updates requirement text or toggles the completion status (`completed = true/false`). *Note: Triggering this endpoint causes the server to instantly recalculate the parent task's completeness percentage.* |
+| `/api/requirement/delete` | `POST`| Deletes a requirement and triggers parent task completeness recalculation. |
 
 ### D. AI Planning & Copilot Resource (`/api/planning`)
 Interfaces with the language model provider to process user intent and produce project assets.
@@ -77,5 +77,5 @@ Echo's central error handler should catch all database or service failures and m
 
 ## 4. Iterative API Roadmap Suggestions
 1. **Endpoint Testing:** In Phase 1, these endpoints can be rapidly simulated and validated using standard curl requests, Bruno, or Postman before the frontend UI is connected.
-2. **Phase Updates:** Since task phases are strings (e.g. `'backlog'`, `'planning'`, `'in_progress'`), the API remains flexible to dynamic workflow modifications in V2 without requiring complex schema migrations.
+2. **Phase Updates:** Since task phases are strings (e.g. `'backlog'`, `'planning'`, `'progress'`), the API remains flexible to dynamic workflow modifications in V2 without requiring complex schema migrations.
 3. **SSE/WebSockets (V2):** If live multi-user dashboard updates are required in the future, Echo can easily support Server-Sent Events (SSE) or WebSockets on these same endpoints to broadcast changes instantly.

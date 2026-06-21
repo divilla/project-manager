@@ -32,7 +32,7 @@ The objective of Phase 3 is to integrate the **AI Planning Copilot**. By the end
 
 ### Step 3.4: One-Click Commit Action
 1. At the bottom of the suggestions list on the Planning screen, build a prominent "Commit Blueprint to Project Board" button.
-2. Clicking this button sends a batch `POST` request to `/api/projects/:id/batch-tasks` containing the selected, edited task array.
+2. Clicking this button sends a batch `POST` request to `/api/projects/:id/batch-tasks/create` containing the selected, edited task array.
 3. On the Go backend, process this batch operation within a secure SQL transaction:
    - Insert each task row mapping to the specified phase.
    - Read the generated task IDs.
