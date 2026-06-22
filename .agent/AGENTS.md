@@ -34,6 +34,10 @@ go test -race ./...
 make benchmark
 ```
 
+## Database
+
+- no database objects should be created, altered or dropped (refactored, optimized) under any circumstances, unless there is explicit command to do so in prompt or specification.
+
 ## Backend Code Architecture
 
 ### Core Packages
