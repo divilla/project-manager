@@ -41,7 +41,7 @@ export async function getHealth(): Promise<HealthResponse> {
 }
 
 export interface Project {
-  id: string;
+  id: number;
   name: string;
 }
 
@@ -51,24 +51,27 @@ export interface ReferenceOption {
 }
 
 export interface Task {
-  id: string;
-  project_id: string;
-  parent_id?: string;
-  phase: string;
-  type: string;
+  id: number;
+  version: number;
+  project_id: number;
+  parent_id?: number;
+  task_phase: string;
+  task_type: string;
   name: string;
   description: string;
   difficulty: number;
-  complete: number;
+  done_req: number;
+  total_req: number;
+  completed: number;
   priority: number;
-  depth: number;
   created: string;
   modified: string;
 }
 
 export interface Requirement {
-  id: string;
-  task_id: string;
+  id: number;
+  version: number;
+  task_id: number;
   definition: string;
   done: boolean;
   created: string;
@@ -92,80 +95,100 @@ export interface TaskReferences {
 }
 
 export function listProjects(): Promise<Project[]> {
-  return post<Project[]>('/api/project/list');
+  return post<Project[]>('/api/v1/project/list');
 }
 
 export function createProject(name: string): Promise<Project> {
-  return post<Project>('/api/project/create', { name });
+  return post<Project>('/api/v1/project/create', { name });
 }
 
-export function updateProject(id: string, name: string): Promise<Project> {
-  return post<Project>('/api/project/update', { id, name });
+export function updateProject(id: number, name: string): Promise<Project> {
+  return post<Project>('/api/v1/project/update', { id, name });
 }
 
-export function deleteProject(id: string): Promise<void> {
-  return post<void>('/api/project/delete', { id });
+export function deleteProject(id: number): Promise<void> {
+  return post<void>('/api/v1/project/delete', { id });
 }
 
 export function getTaskReferences(): Promise<TaskReferences> {
-  return post<TaskReferences>('/api/task/reference');
+  return post<TaskReferences>('/api/v1/task/reference');
 }
 
-export function listTasks(projectId: string): Promise<Task[]> {
-  return post<Task[]>('/api/task/list', { project_id: projectId });
+export function listTasks(projectId: number): Promise<Task[]> {
+  return post<Task[]>('/api/v1/task/list', { project_id: projectId });
 }
 
-export function getTask(id: string): Promise<TaskDetail> {
-  return post<TaskDetail>('/api/task/get', { id });
+export function getTask(id: number): Promise<TaskDetail> {
+  return post<TaskDetail>('/api/v1/task/get', { id });
 }
 
 export function createTask(input: {
-  project_id: string;
+  project_id: number;
   name: string;
   description?: string;
-  phase?: string;
-  type?: string;
+  task_phase?: string;
+  task_type?: string;
   difficulty?: number;
   priority?: number;
 }): Promise<Task> {
-  return post<Task>('/api/task/create', input);
+  return post<Task>('/api/v1/task/create', input);
 }
 
 export function updateTask(input: {
-  id: string;
+  id: number;
   name: string;
   description?: string;
-  type?: string;
-  difficulty?: number;
-  priority?: number;
+  task_type?: string;
 }): Promise<Task> {
-  return post<Task>('/api/task/update', input);
+  return post<Task>('/api/v1/task/update', input);
 }
 
-export function changeTaskPhase(id: string, phase: string): Promise<Task> {
-  return post<Task>('/api/task/phase', { id, phase });
+export function updateTaskDifficulty(id: number, difficulty: number): Promise<Task> {
+  return post<Task>('/api/v1/task/update-difficulty', { id, difficulty });
 }
 
-export function deleteTask(id: string): Promise<void> {
-  return post<void>('/api/task/delete', { id });
+export function updateTaskPriority(id: number, priority: number): Promise<Task> {
+  return post<Task>('/api/v1/task/update-priority', { id, priority });
 }
 
-export function listRequirements(taskId: string): Promise<Requirement[]> {
-  return post<Requirement[]>('/api/requirement/list', { task_id: taskId });
+export function updateTaskParent(id: number, parentId: number | null): Promise<Task> {
+  return post<Task>('/api/v1/task/update-parent', { id, parent_id: parentId });
 }
 
-export function createRequirement(taskId: string, definition: string): Promise<RequirementMutation> {
-  return post<RequirementMutation>('/api/requirement/create', { task_id: taskId, definition });
+export function updateTaskPhase(id: number, taskPhase: string): Promise<Task> {
+  return post<Task>('/api/v1/task/update-phase', { id, task_phase: taskPhase });
+}
+
+export function deleteTask(id: number): Promise<void> {
+  return post<void>('/api/v1/task/delete', { id });
+}
+
+export function listRequirements(taskId: number): Promise<Requirement[]> {
+  return post<Requirement[]>('/api/v1/requirement/list', { task_id: taskId });
+}
+
+export function createRequirement(
+  taskId: number,
+  definition: string,
+): Promise<RequirementMutation> {
+  return post<RequirementMutation>('/api/v1/requirement/create', { task_id: taskId, definition });
 }
 
 export function updateRequirement(input: {
-  id: string;
+  id: number;
   definition: string;
-  done: boolean;
 }): Promise<RequirementMutation> {
-  return post<RequirementMutation>('/api/requirement/update', input);
+  return post<RequirementMutation>('/api/v1/requirement/update', input);
 }
 
-export function deleteRequirement(id: string): Promise<RequirementMutation> {
-  return post<RequirementMutation>('/api/requirement/delete', { id });
+export function updateRequirementDone(id: number, done: boolean): Promise<RequirementMutation> {
+  return post<RequirementMutation>('/api/v1/requirement/update-done', { id, done });
+}
+
+export function updateRequirementTask(id: number, taskId: number): Promise<RequirementMutation> {
+  return post<RequirementMutation>('/api/v1/requirement/update-task', { id, task_id: taskId });
+}
+
+export function deleteRequirement(id: number): Promise<RequirementMutation> {
+  return post<RequirementMutation>('/api/v1/requirement/delete', { id });
 }

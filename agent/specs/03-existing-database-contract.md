@@ -76,7 +76,18 @@ completeness = completed_requirements / total_requirements * 100
 
 Implementation details must adapt to the actual existing tables and columns. If the database already stores cached completeness values, use the existing field. If it does not, calculate completeness in queries or service logic without adding schema.
 
-## 6. Phase and Type Handling
+## 6. Task Hierarchy Helpers
+The database provides `public.fn_task_descendants(_task_id bigint, _descendants bigint[])` for retrieving the complete descendant task ID set below a task.
+
+Call it with an empty bigint accumulator:
+
+```sql
+select public.fn_task_descendants(6, ARRAY[]::bigint[]);
+```
+
+The returned array contains descendants only and excludes the root task ID. Use this helper before re-parenting a task to reject a requested parent that is already one of the task's descendants.
+
+## 7. Phase and Type Handling
 Task phases and task types are not free-form strings in product logic. They are existing database-managed options.
 
 Application behavior:
@@ -93,5 +104,5 @@ AI behavior:
 - AI output must be validated against those fetched options.
 - Invalid AI phase/type values must be rejected or mapped by the user before saving.
 
-## 7. Documentation Note
+## 8. Documentation Note
 Any diagrams or examples in the documentation are conceptual only. They describe product behavior, not a proposed database schema. The actual database always wins.

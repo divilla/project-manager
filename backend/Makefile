@@ -20,7 +20,7 @@ test: ## Run tests
 
 api-test: ## Run integration tests
 	@go build -o aipm-server cmd/server/*.go
-	@PORT=18080 ./aipm-server >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
+	@DATABASE_URL=postgres://postgres:postgres@localhost:5432/project_manager_test PORT=18080 ./aipm-server >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
 		trap 'kill $$pid >/dev/null 2>&1 || true; rm -f aipm-server' EXIT; \
 		for _ in $$(seq 1 50); do \
 			if curl -fsS http://localhost:18080/api/v1/health >/dev/null 2>&1; then \

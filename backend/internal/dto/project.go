@@ -2,7 +2,7 @@ package dto
 
 type (
 	Project struct {
-		Id   string `json:"id"`
+		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
 
@@ -12,7 +12,7 @@ type (
 	}
 
 	ProjectIDRequest struct {
-		ID string `json:"id"`
+		ID int `json:"id"`
 	}
 
 	ProjectCreateRequest struct {
@@ -20,7 +20,7 @@ type (
 	}
 
 	ProjectUpdateRequest struct {
-		ID   string `json:"id"`
+		ID   int    `json:"id"`
 		Name string `json:"name"`
 	}
 )

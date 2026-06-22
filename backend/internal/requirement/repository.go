@@ -15,17 +15,31 @@ type Repo struct {
 	pool *pgxpool.Pool
 }
 
+const taskColumns = `
+	id,
+	version,
+	task_type,
+	name,
+	coalesce(description, ''),
+	difficulty,
+	priority,
+	task_phase,
+	parent_id,
+	project_id,
+	done_req,
+	total_req,
+	completed,
+	created,
+	modified`
+
 func NewRepo(pool *pgxpool.Pool) *Repo {
-	return &Repo{
-		pool: pool,
-	}
+	return &Repo{pool: pool}
 }
 
-func (r *Repo) List(ctx context.Context, taskID string) ([]dto.Requirement, error) {
-	if _, err := getTask(ctx, r.pool, taskID); err != nil {
+func (r *Repo) List(ctx context.Context, taskID int) ([]dto.Requirement, error) {
+	if err := ensureTaskExists(ctx, r.pool, taskID); err != nil {
 		return nil, err
 	}
-
 	return listRequirements(ctx, r.pool, taskID)
 }
 
@@ -36,38 +50,18 @@ func (r *Repo) Create(ctx context.Context, req dto.RequirementCreateRequest) (dt
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := getTask(ctx, tx, req.TaskID); err != nil {
+	if err := ensureTaskExists(ctx, tx, req.TaskID); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
-		insert into requirement (definition, task_id)
+		insert into public.requirement (definition, task_id)
 		values ($1, $2)
-		returning id, task_id, definition, done, created, modified
+		returning id, version, definition, done, task_id, created, modified
 	`, req.Definition, req.TaskID))
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
-	task, err := recalculateTaskCompleteness(ctx, tx, req.TaskID)
-	if err != nil {
-		return dto.RequirementMutationResponse{}, err
-	}
-
-	requirements, err := listRequirements(ctx, tx, req.TaskID)
-	if err != nil {
-		return dto.RequirementMutationResponse{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return dto.RequirementMutationResponse{}, err
-	}
-
-	return dto.RequirementMutationResponse{
-		Requirement:  &requirement,
-		Task:         task,
-		Requirements: requirements,
-	}, nil
+	return finishMutation(ctx, tx, requirement.TaskID, []int{requirement.TaskID}, &requirement)
 }
 
 func (r *Repo) Update(ctx context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error) {
@@ -77,137 +71,165 @@ func (r *Repo) Update(ctx context.Context, req dto.RequirementUpdateRequest) (dt
 	}
 	defer tx.Rollback(ctx)
 
-	current, err := getRequirementForUpdate(ctx, tx, req.ID)
+	current, err := getRequirement(ctx, tx, req.ID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
-	if err := archiveRequirement(ctx, tx, req.ID, false); err != nil {
+	if req.Definition == current.Definition {
+		return finishMutation(ctx, tx, current.TaskID, nil, &current)
+	}
+	if _, err := tx.Exec(ctx, "call public.sp_requirement_to_history($1, false)", req.ID); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
 
-	done := current.Done
-	if req.Done != nil {
-		done = *req.Done
-	}
-
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
-		update requirement
+		update public.requirement
 		set definition = $2,
-			done = $3,
+			version = version + 1,
 			modified = now()
 		where id = $1
-		returning id, task_id, definition, done, created, modified
-	`, req.ID, req.Definition, done))
+		returning id, version, definition, done, task_id, created, modified
+	`, req.ID, req.Definition))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.RequirementMutationResponse{}, ErrNotFound
 	}
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
-	task, err := recalculateTaskCompleteness(ctx, tx, current.TaskID)
-	if err != nil {
-		return dto.RequirementMutationResponse{}, err
-	}
-
-	requirements, err := listRequirements(ctx, tx, current.TaskID)
-	if err != nil {
-		return dto.RequirementMutationResponse{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return dto.RequirementMutationResponse{}, err
-	}
-
-	return dto.RequirementMutationResponse{
-		Requirement:  &requirement,
-		Task:         task,
-		Requirements: requirements,
-	}, nil
+	return finishMutation(ctx, tx, current.TaskID, nil, &requirement)
 }
 
-func (r *Repo) Delete(ctx context.Context, id string) (dto.RequirementMutationResponse, error) {
+func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequest) (dto.RequirementMutationResponse, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	defer tx.Rollback(ctx)
+	current, err := getRequirement(ctx, tx, req.ID)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	if req.Done == current.Done {
+		return finishMutation(ctx, tx, current.TaskID, nil, &current)
+	}
+	requirement, err := scanRequirement(tx.QueryRow(ctx, `
+		update public.requirement
+		set done = $2, modified = now()
+		where id = $1
+		returning id, version, definition, done, task_id, created, modified
+	`, req.ID, req.Done))
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	return finishMutation(ctx, tx, current.TaskID, []int{current.TaskID}, &requirement)
+}
+
+func (r *Repo) UpdateTask(ctx context.Context, req dto.RequirementUpdateTaskRequest) (dto.RequirementMutationResponse, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	defer tx.Rollback(ctx)
+	current, err := getRequirement(ctx, tx, req.ID)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	if err := ensureTaskExists(ctx, tx, req.TaskID); err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	if req.TaskID == current.TaskID {
+		return finishMutation(ctx, tx, current.TaskID, nil, &current)
+	}
+	requirement, err := scanRequirement(tx.QueryRow(ctx, `
+		update public.requirement
+		set task_id = $2, modified = now()
+		where id = $1
+		returning id, version, definition, done, task_id, created, modified
+	`, req.ID, req.TaskID))
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	return finishMutation(ctx, tx, req.TaskID, []int{current.TaskID, req.TaskID}, &requirement)
+}
+
+func (r *Repo) Delete(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
 	defer tx.Rollback(ctx)
 
-	current, err := getRequirementForUpdate(ctx, tx, id)
+	current, err := getRequirement(ctx, tx, req.ID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
-	if err := archiveRequirement(ctx, tx, id, true); err != nil {
+	if _, err := tx.Exec(ctx, "call public.sp_requirement_to_history($1, true)", req.ID); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
-	tag, err := tx.Exec(ctx, "delete from requirement where id = $1", id)
+	tag, err := tx.Exec(ctx, "delete from public.requirement where id = $1", req.ID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
 	if tag.RowsAffected() == 0 {
 		return dto.RequirementMutationResponse{}, ErrNotFound
 	}
+	return finishMutation(ctx, tx, current.TaskID, []int{current.TaskID}, nil)
+}
 
-	task, err := recalculateTaskCompleteness(ctx, tx, current.TaskID)
+func finishMutation(ctx context.Context, tx pgx.Tx, responseTaskID int, affectedTaskIDs []int, requirement *dto.Requirement) (dto.RequirementMutationResponse, error) {
+	for _, taskID := range affectedTaskIDs {
+		if _, err := tx.Exec(ctx, "call public.sp_task_requirement_recalculate($1)", taskID); err != nil {
+			return dto.RequirementMutationResponse{}, err
+		}
+	}
+	task, err := getTask(ctx, tx, responseTaskID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
-	requirements, err := listRequirements(ctx, tx, current.TaskID)
+	requirements, err := listRequirements(ctx, tx, responseTaskID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
-	return dto.RequirementMutationResponse{
-		Task:         task,
-		Requirements: requirements,
-	}, nil
+	return dto.RequirementMutationResponse{Requirement: requirement, Task: task, Requirements: requirements}, nil
 }
 
-func getRequirement(ctx context.Context, q queryer, id string) (dto.Requirement, error) {
-	requirement, err := scanRequirement(q.QueryRow(ctx, `
-		select id, task_id, definition, done, created, modified
-		from requirement
-		where id = $1
-	`, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Requirement{}, ErrNotFound
-	}
-	return requirement, err
-}
-
-func getRequirementForUpdate(ctx context.Context, tx pgx.Tx, id string) (dto.Requirement, error) {
+func getRequirement(ctx context.Context, tx pgx.Tx, id int) (dto.Requirement, error) {
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
-		select id, task_id, definition, done, created, modified
-		from requirement
-		where id = $1
-		for update
+		select id, version, definition, done, task_id, created, modified
+		from public.requirement where id = $1
 	`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Requirement{}, ErrNotFound
 	}
-	return requirement, err
+	if err != nil {
+		return dto.Requirement{}, err
+	}
+	return requirement, nil
 }
 
-func listRequirements(ctx context.Context, q queryer, taskID string) ([]dto.Requirement, error) {
+func ensureTaskExists(ctx context.Context, q queryer, id int) error {
+	var exists bool
+	if err := q.QueryRow(ctx, "select exists(select 1 from public.task where id = $1)", id).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func listRequirements(ctx context.Context, q queryer, taskID int) ([]dto.Requirement, error) {
 	rows, err := q.Query(ctx, `
-		select id, task_id, definition, done, created, modified
-		from requirement
-		where task_id = $1
-		order by created, definition
+		select id, version, definition, done, task_id, created, modified
+		from public.requirement where task_id = $1 order by created, definition
 	`, taskID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	requirements := make([]dto.Requirement, 0)
 	for rows.Next() {
 		requirement, err := scanRequirement(rows)
@@ -216,242 +238,42 @@ func listRequirements(ctx context.Context, q queryer, taskID string) ([]dto.Requ
 		}
 		requirements = append(requirements, requirement)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return requirements, nil
+	return requirements, rows.Err()
 }
 
 func scanRequirement(row pgx.Row) (dto.Requirement, error) {
 	var requirement dto.Requirement
 	err := row.Scan(
-		&requirement.ID,
-		&requirement.TaskID,
-		&requirement.Definition,
-		&requirement.Done,
-		&requirement.Created,
-		&requirement.Modified,
+		&requirement.ID, &requirement.Version, &requirement.Definition, &requirement.Done,
+		&requirement.TaskID, &requirement.Created, &requirement.Modified,
 	)
-	if err != nil {
-		return dto.Requirement{}, err
-	}
-
-	return requirement, nil
+	return requirement, err
 }
 
-func archiveRequirement(ctx context.Context, tx pgx.Tx, id string, deleted bool) error {
-	tag, err := tx.Exec(ctx, `
-		insert into requirement_history (
-			id,
-			version,
-			definition,
-			done,
-			task_id,
-			created,
-			deleted
-		)
-		select
-			r.id,
-			coalesce((select max(rh.version) + 1 from requirement_history rh where rh.id = r.id), 1),
-			r.definition,
-			r.done,
-			r.task_id,
-			r.created,
-			$2
-		from requirement r
-		where r.id = $1
-	`, id, deleted)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-
-	return nil
-}
-
-func recalculateTaskCompleteness(ctx context.Context, tx pgx.Tx, taskID string) (dto.Task, error) {
-	task, err := getTaskForUpdate(ctx, tx, taskID)
-	if err != nil {
-		return dto.Task{}, err
-	}
-
-	var complete int
-	if err := tx.QueryRow(ctx, `
-		select
-			case
-				when count(*) = 0 then 0
-				else (count(*) filter (where done) * 100 / count(*))::int
-			end
-		from requirement
-		where task_id = $1
-	`, taskID).Scan(&complete); err != nil {
-		return dto.Task{}, err
-	}
-
-	if task.Complete == complete {
-		return task, nil
-	}
-
-	if err := archiveTask(ctx, tx, taskID, false); err != nil {
-		return dto.Task{}, err
-	}
-
-	task, err = scanTask(tx.QueryRow(ctx, `
-		update task
-		set complete = $2,
-			modified = now()
-		where id = $1
-		returning
-			id,
-			project_id,
-			parent_id,
-			task_phase,
-			task_type,
-			name,
-			coalesce(description, ''),
-			difficulty,
-			complete,
-			priority,
-			depth,
-			created,
-			modified
-	`, taskID, complete))
+func getTask(ctx context.Context, q queryer, id int) (dto.Task, error) {
+	task, err := scanTask(q.QueryRow(ctx, "select "+taskColumns+" from public.vw_task where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Task{}, ErrNotFound
 	}
-
-	return task, err
-}
-
-func getTask(ctx context.Context, q queryer, id string) (dto.Task, error) {
-	task, err := scanTask(q.QueryRow(ctx, `
-		select
-			id,
-			project_id,
-			parent_id,
-			task_phase,
-			task_type,
-			name,
-			coalesce(description, ''),
-			difficulty,
-			complete,
-			priority,
-			depth,
-			created,
-			modified
-		from task
-		where id = $1
-	`, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Task{}, ErrNotFound
-	}
-
-	return task, err
-}
-
-func getTaskForUpdate(ctx context.Context, tx pgx.Tx, id string) (dto.Task, error) {
-	task, err := scanTask(tx.QueryRow(ctx, `
-		select
-			id,
-			project_id,
-			parent_id,
-			task_phase,
-			task_type,
-			name,
-			coalesce(description, ''),
-			difficulty,
-			complete,
-			priority,
-			depth,
-			created,
-			modified
-		from task
-		where id = $1
-		for update
-	`, id))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Task{}, ErrNotFound
-	}
-
 	return task, err
 }
 
 func scanTask(row pgx.Row) (dto.Task, error) {
 	var task dto.Task
-	var parentID pgtype.UUID
+	var parentID pgtype.Int8
 	err := row.Scan(
-		&task.ID,
-		&task.ProjectID,
-		&parentID,
-		&task.Phase,
-		&task.Type,
-		&task.Name,
-		&task.Description,
-		&task.Difficulty,
-		&task.Complete,
-		&task.Priority,
-		&task.Depth,
-		&task.Created,
-		&task.Modified,
+		&task.ID, &task.Version, &task.TaskType, &task.Name, &task.Description,
+		&task.Difficulty, &task.Priority, &task.TaskPhase, &parentID, &task.ProjectID,
+		&task.DoneReq, &task.TotalReq, &task.Completed, &task.Created, &task.Modified,
 	)
 	if err != nil {
 		return dto.Task{}, err
 	}
 	if parentID.Valid {
-		value := parentID.String()
+		value := int(parentID.Int64)
 		task.ParentID = &value
 	}
-
 	return task, nil
-}
-
-func archiveTask(ctx context.Context, tx pgx.Tx, id string, deleted bool) error {
-	tag, err := tx.Exec(ctx, `
-		insert into task_history (
-			id,
-			version,
-			task_phase,
-			task_type,
-			name,
-			description,
-			difficulty,
-			complete,
-			parent_id,
-			project_id,
-			priority,
-			depth,
-			created,
-			deleted
-		)
-		select
-			t.id,
-			coalesce((select max(th.version) + 1 from task_history th where th.id = t.id), 1),
-			t.task_phase,
-			t.task_type,
-			t.name,
-			t.description,
-			t.difficulty,
-			t.complete,
-			t.parent_id,
-			t.project_id,
-			t.priority,
-			t.depth,
-			t.created,
-			$2
-		from task t
-		where t.id = $1
-	`, id, deleted)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-
-	return nil
 }
 
 type queryer interface {

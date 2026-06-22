@@ -22,20 +22,18 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 		s: s,
 	}
 
-	a.register(a.g)
-	a.register(e.Group("/api").Group("/task"))
+	a.g.POST("/reference", a.references)
+	a.g.POST("/list", a.listTasks)
+	a.g.POST("/get", a.getTask)
+	a.g.POST("/create", a.createTask)
+	a.g.POST("/update", a.updateTask)
+	a.g.POST("/update-difficulty", a.updateDifficulty)
+	a.g.POST("/update-priority", a.updatePriority)
+	a.g.POST("/update-parent", a.updateParent)
+	a.g.POST("/update-phase", a.updatePhase)
+	a.g.POST("/delete", a.deleteTask)
 
 	return a
-}
-
-func (a *Api) register(g *echo.Group) {
-	g.POST("/reference", a.references)
-	g.POST("/list", a.listTasks)
-	g.POST("/get", a.getTask)
-	g.POST("/create", a.createTask)
-	g.POST("/update", a.updateTask)
-	g.POST("/phase", a.changePhase)
-	g.POST("/delete", a.deleteTask)
 }
 
 func (a *Api) references(c *echo.Context) error {
@@ -102,13 +100,49 @@ func (a *Api) updateTask(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) changePhase(c *echo.Context) error {
-	var req dto.TaskPhaseRequest
+func (a *Api) updateDifficulty(c *echo.Context) error {
+	var req dto.TaskUpdateDifficultyRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task difficulty payload")
+	}
+	res, err := a.s.UpdateDifficulty(c.Request().Context(), req)
+	if err != nil {
+		return taskError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *Api) updatePriority(c *echo.Context) error {
+	var req dto.TaskUpdatePriorityRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task priority payload")
+	}
+	res, err := a.s.UpdatePriority(c.Request().Context(), req)
+	if err != nil {
+		return taskError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *Api) updateParent(c *echo.Context) error {
+	var req dto.TaskUpdateParentRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task parent payload")
+	}
+	res, err := a.s.UpdateParent(c.Request().Context(), req)
+	if err != nil {
+		return taskError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *Api) updatePhase(c *echo.Context) error {
+	var req dto.TaskUpdatePhaseRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task phase payload")
 	}
 
-	res, err := a.s.ChangePhase(c.Request().Context(), req)
+	res, err := a.s.UpdatePhase(c.Request().Context(), req)
 	if err != nil {
 		return taskError(err)
 	}
@@ -137,8 +171,6 @@ func taskError(err error) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task reference")
 	case errors.Is(err, ErrNotFound):
 		return echo.NewHTTPError(http.StatusNotFound, "task not found")
-	case errors.Is(err, ErrHasChildren):
-		return echo.NewHTTPError(http.StatusConflict, "task has child tasks")
 	default:
 		return err
 	}

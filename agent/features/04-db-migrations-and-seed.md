@@ -1,4 +1,4 @@
-# Feature 04: Database Seed Scripts
+# Feature 04: Database Init, Migrations, Seed, and Seed Test Data Scripts
 
 ## 1. Purpose
 
@@ -19,25 +19,7 @@ No non-SQL implementation file may be changed by this feature. Any backend, fron
 
 `db/migrations/` is the reserved location for future explicitly requested migrations. This feature does not request a schema migration, so the directory and its contents must remain unchanged.
 
-## 3. Database Object Protection
-
-Existing database objects are strictly read-only unless a future feature explicitly names the object and requests a specific change.
-
-This feature must not create, alter, replace, rename, or drop any:
-
-- database or schema
-- table or column
-- constraint or foreign key
-- index or sequence
-- view or materialized view
-- function or procedure
-- trigger, type, extension, role, or permission
-
-This prohibition includes preventative fixes, cleanup, performance improvements, inferred corrections, and changes to `public.sp_task_requirement_recalculate`, `public.sp_task_to_history`, or `public.sp_requirement_to_history`.
-
-Seed scripts may call an existing procedure exactly as currently defined. They must never recreate, replace, or refactor it. If an existing database object does not support the requested seed operation, stop and report the blocker; do not change the object under this feature.
-
-## 4. `db/seed.sql`
+## 3. `db/seed.sql`
 
 `db/seed.sql` seeds only the required `task_phase` and `task_type` reference rows.
 
@@ -74,7 +56,7 @@ Required `task_type` rows:
 
 These values come from the existing database and must be preserved exactly.
 
-## 5. `db/seed-demo.sql`
+## 4. `db/seed-demo.sql`
 
 `db/seed-demo.sql` provides destructive local demo-data reset and seeding. It is not a production migration.
 
@@ -118,7 +100,7 @@ Create exactly 60 tasks for `demo1`.
 
 After inserting requirements, call the existing `public.sp_task_requirement_recalculate` procedure as needed to populate task counters. Do not manually maintain cached counters and do not define or modify the procedure.
 
-## 6. Verification
+## 5. Verification
 
 Verification for this feature is limited to executing and querying the SQL scripts. It must not require application-code changes.
 
@@ -135,7 +117,7 @@ Verify that:
 - Task and requirement history tables are empty immediately after seeding.
 - `task_phase` and `task_type` retain the required values.
 
-## 7. Acceptance Criteria
+## 6. Acceptance Criteria
 
 - Feature implementation changes only `db/seed.sql` and `db/seed-demo.sql`.
 - No application, configuration, test, or non-SQL file is changed.

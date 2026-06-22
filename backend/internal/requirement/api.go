@@ -22,17 +22,14 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 		s: s,
 	}
 
-	a.register(a.g)
-	a.register(e.Group("/api").Group("/requirement"))
+	a.g.POST("/list", a.listRequirements)
+	a.g.POST("/create", a.createRequirement)
+	a.g.POST("/update", a.updateRequirement)
+	a.g.POST("/update-done", a.updateRequirementDone)
+	a.g.POST("/update-task", a.updateRequirementTask)
+	a.g.POST("/delete", a.deleteRequirement)
 
 	return a
-}
-
-func (a *Api) register(g *echo.Group) {
-	g.POST("/list", a.listRequirements)
-	g.POST("/create", a.createRequirement)
-	g.POST("/update", a.updateRequirement)
-	g.POST("/delete", a.deleteRequirement)
 }
 
 func (a *Api) listRequirements(c *echo.Context) error {
@@ -74,6 +71,30 @@ func (a *Api) updateRequirement(c *echo.Context) error {
 		return requirementError(err)
 	}
 
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *Api) updateRequirementDone(c *echo.Context) error {
+	var req dto.RequirementUpdateDoneRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement done payload")
+	}
+	res, err := a.s.UpdateRequirementDone(c.Request().Context(), req)
+	if err != nil {
+		return requirementError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *Api) updateRequirementTask(c *echo.Context) error {
+	var req dto.RequirementUpdateTaskRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement task payload")
+	}
+	res, err := a.s.UpdateRequirementTask(c.Request().Context(), req)
+	if err != nil {
+		return requirementError(err)
+	}
 	return c.JSON(http.StatusOK, &res)
 }
 

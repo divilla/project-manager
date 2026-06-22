@@ -3,18 +3,25 @@ package dto
 import "time"
 
 type (
+	TaskReferences struct {
+		Phases []ReferenceOption `json:"phases"`
+		Types  []ReferenceOption `json:"types"`
+	}
+
 	Task struct {
-		ID          string    `json:"id"`
-		ProjectID   string    `json:"project_id"`
-		ParentID    *string   `json:"parent_id,omitempty"`
-		Phase       string    `json:"phase"`
-		Type        string    `json:"type"`
+		ID          int       `json:"id"`
+		Version     int16     `json:"version"`
+		TaskType    string    `json:"task_type"`
 		Name        string    `json:"name"`
 		Description string    `json:"description"`
-		Difficulty  int       `json:"difficulty"`
-		Complete    int       `json:"complete"`
-		Priority    int       `json:"priority"`
-		Depth       int       `json:"depth"`
+		Difficulty  int16     `json:"difficulty"`
+		Priority    int16     `json:"priority"`
+		TaskPhase   string    `json:"task_phase"`
+		ParentID    *int      `json:"parent_id,omitempty"`
+		ProjectID   int       `json:"project_id"`
+		DoneReq     int16     `json:"done_req"`
+		TotalReq    int16     `json:"total_req"`
+		Completed   int16     `json:"completed"`
 		Created     time.Time `json:"created"`
 		Modified    time.Time `json:"modified"`
 	}
@@ -24,41 +31,49 @@ type (
 		Requirements []Requirement `json:"requirements"`
 	}
 
-	TaskReferences struct {
-		Phases []ReferenceOption `json:"phases"`
-		Types  []ReferenceOption `json:"types"`
-	}
-
 	TaskListRequest struct {
-		ProjectID string `json:"project_id"`
+		ProjectID int `json:"project_id"`
 	}
 
 	TaskIDRequest struct {
-		ID string `json:"id"`
+		ID int `json:"id"`
 	}
 
 	TaskCreateRequest struct {
-		ProjectID   string `json:"project_id"`
 		Name        string `json:"name"`
 		Description string `json:"description"`
-		Phase       string `json:"phase"`
-		Type        string `json:"type"`
-		Difficulty  int    `json:"difficulty"`
-		Priority    int    `json:"priority"`
-		ParentID    string `json:"parent_id"`
+		TaskPhase   string `json:"task_phase"`
+		TaskType    string `json:"task_type"`
+		Difficulty  int16  `json:"difficulty"`
+		Priority    int16  `json:"priority"`
+		ParentID    *int   `json:"parent_id"`
+		ProjectID   int    `json:"project_id"`
 	}
 
 	TaskUpdateRequest struct {
-		ID          string `json:"id"`
+		ID          int    `json:"id"`
+		TaskType    string `json:"task_type"`
 		Name        string `json:"name"`
 		Description string `json:"description"`
-		Type        string `json:"type"`
-		Difficulty  int    `json:"difficulty"`
-		Priority    int    `json:"priority"`
 	}
 
-	TaskPhaseRequest struct {
-		ID    string `json:"id"`
-		Phase string `json:"phase"`
+	TaskUpdateDifficultyRequest struct {
+		ID         int   `json:"id"`
+		Difficulty int16 `json:"difficulty"`
+	}
+
+	TaskUpdatePriorityRequest struct {
+		ID       int   `json:"id"`
+		Priority int16 `json:"priority"`
+	}
+
+	TaskUpdateParentRequest struct {
+		ID       int  `json:"id"`
+		ParentID *int `json:"parent_id"`
+	}
+
+	TaskUpdatePhaseRequest struct {
+		ID        int    `json:"id"`
+		TaskPhase string `json:"task_phase"`
 	}
 )

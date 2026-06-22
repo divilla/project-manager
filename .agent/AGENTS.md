@@ -37,6 +37,9 @@ make benchmark
 ## Database
 
 - no database objects should be created, altered or dropped (refactored, optimized) under any circumstances, unless there is explicit command to do so in prompt or specification.
+- Use simple, conventional transactions (`Begin`, deferred `Rollback`, and `Commit`) to keep multi-step mutations atomic.
+- Do not introduce project-wide or aggregate locking protocols, advisory locks, isolation-level escalation, or coordinated locking across repository paths unless explicitly requested.
+- Prefer the simpler transaction design when stronger concurrency control would add substantial implementation and maintenance complexity. Accept the documented concurrency trade-off until requirements justify that complexity.
 
 ## Backend Code Architecture
 

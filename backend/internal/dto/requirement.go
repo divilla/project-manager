@@ -1,23 +1,44 @@
 package dto
 
+import "time"
+
 type (
+	Requirement struct {
+		ID         int       `json:"id"`
+		Version    int16     `json:"version"`
+		Definition string    `json:"definition"`
+		Done       bool      `json:"done"`
+		TaskID     int       `json:"task_id"`
+		Created    time.Time `json:"created"`
+		Modified   time.Time `json:"modified"`
+	}
+
 	RequirementListRequest struct {
-		TaskID string `json:"task_id"`
+		TaskID int `json:"task_id"`
 	}
 
 	RequirementIDRequest struct {
-		ID string `json:"id"`
+		ID int `json:"id"`
 	}
 
 	RequirementCreateRequest struct {
-		TaskID     string `json:"task_id"`
 		Definition string `json:"definition"`
+		TaskID     int    `json:"task_id"`
 	}
 
 	RequirementUpdateRequest struct {
-		ID         string `json:"id"`
+		ID         int    `json:"id"`
 		Definition string `json:"definition"`
-		Done       *bool  `json:"done"`
+	}
+
+	RequirementUpdateDoneRequest struct {
+		ID   int  `json:"id"`
+		Done bool `json:"done"`
+	}
+
+	RequirementUpdateTaskRequest struct {
+		ID     int `json:"id"`
+		TaskID int `json:"task_id"`
 	}
 
 	RequirementMutationResponse struct {

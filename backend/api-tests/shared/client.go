@@ -52,7 +52,7 @@ func NewDB(t *testing.T) *pgxpool.Pool {
 
 	databaseURL := os.Getenv("AIPM_DATABASE_URL")
 	if databaseURL == "" {
-		databaseURL = "postgres://postgres:postgres@localhost:5432/project_manager?sslmode=disable"
+		databaseURL = "postgres://postgres:postgres@localhost:5432/project_manager_test?sslmode=disable"
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -67,25 +67,33 @@ func NewDB(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-func AssertHistoryNotDeleted(t *testing.T, db *pgxpool.Pool, table, id string) {
+func AssertHistoryNotDeleted(t *testing.T, db *pgxpool.Pool, table string, id int) {
 	t.Helper()
 
 	AssertHistoryCountAtLeast(t, db, table, id, false, 1)
 }
 
-func AssertHistoryDeleted(t *testing.T, db *pgxpool.Pool, table, id string) {
+func AssertHistoryDeleted(t *testing.T, db *pgxpool.Pool, table string, id int) {
 	t.Helper()
 
 	AssertHistoryCountAtLeast(t, db, table, id, true, 1)
 }
 
-func AssertHistoryCountAtLeast(t *testing.T, db *pgxpool.Pool, table, id string, deleted bool, minimum int) {
+func AssertHistoryCountAtLeast(t *testing.T, db *pgxpool.Pool, table string, id int, deleted bool, minimum int) {
 	t.Helper()
 
 	var count int
 	err := db.QueryRow(context.Background(), "select count(*) from "+table+" where id = $1 and deleted = $2", id, deleted).Scan(&count)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, count, minimum)
+}
+
+func AssertHistoryCount(t *testing.T, db *pgxpool.Pool, table string, id int, deleted bool, expected int) {
+	t.Helper()
+	var count int
+	err := db.QueryRow(context.Background(), "select count(*) from "+table+" where id = $1 and deleted = $2", id, deleted).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, expected, count)
 }
 
 func (c *Client) Get(t *testing.T, path string, out any) int {

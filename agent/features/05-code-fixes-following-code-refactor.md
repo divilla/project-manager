@@ -2,9 +2,11 @@
 
 ## 1. Purpose
 
-Update the application code to use the already-refactored PostgreSQL contract while treating the database schema, data scripts, and all database objects as fixed external dependencies.
+Update the backend, frontend contracts, and application tests to use the already-refactored PostgreSQL database correctly.
 
-This feature owns the backend, frontend, and test changes that were explicitly excluded from Feature 04.
+The current live database and `db/init.sql` are a synchronized, authoritative baseline supplied for this feature. The application must adapt to that contract.
+
+Database evolution and migration delivery remain owned separately by the database owner. Migrations are intentionally deferred and are not part of this feature.
 
 ## 2. Scope Boundary
 
@@ -12,124 +14,331 @@ Allowed implementation areas:
 
 - Go DTOs, repositories, services, and HTTP APIs under `backend/`
 - Vue/TypeScript API contracts and consumers under `frontend/`
-- Go unit and API tests needed to verify application behavior
+- Existing and new Go API tests
+- Documentation needed to describe the authoritative database contract
 
 Forbidden implementation areas:
 
-- `db/init.sql`
 - `db/seed.sql`
 - `db/seed-demo.sql`
 - every file under `db/migrations/`
-- any direct creation or modification of a live database object
+- independent application-driven creation or modification of a live database object
 
-No SQL file may be created, edited, renamed, or deleted by this feature.
+The `db/init.sql` state supplied with this feature describes the database contract; it is not a migration mechanism. Application work must not introduce additional database changes. If an application change needs a different database contract, report the dependency to the database owner rather than changing SQL or live objects.
 
-## 3. Database Object Protection
+## 3. Authoritative Database Contract
 
-The application must adapt to the database as defined; the database must not be adapted to the application.
+The database owner is responsible for database objects and for keeping the live database synchronized with `db/init.sql`. Application implementation must not create, alter, replace, rename, or drop database objects.
 
-Do not create, alter, replace, rename, or drop any table, column, constraint, index, sequence, view, function, procedure, trigger, type, extension, role, or permission.
+The following existing objects must be used exactly as currently defined:
 
-Existing procedures may be invoked exactly as defined, including:
-
+- `public.vw_task`
+- `public.fn_task_descendants`
 - `public.sp_task_to_history`
+- `public.sp_task_phase_recalculate`
 - `public.sp_requirement_to_history`
 - `public.sp_task_requirement_recalculate`
 
-If an existing object appears incorrect or prevents the application change, report the blocker and request a separate explicitly scoped database feature. Do not fix, replace, or work around the object by mutating the database.
+The application may rely on the current signatures and behavior of these objects. If an object appears incorrect or prevents an application change or test from passing, report the blocker to the database owner. Do not independently fix, replace, recreate, or work around it by mutating the database.
 
-## 4. Refactored Application Contract
+In the authoritative contract, `public.sp_task_phase_recalculate(_parent_id bigint)` accepts the immediate affected parent ID, not the mutated task ID. A null parent is valid for a root task and produces no parent-phase update. Callers must capture the relevant parent ID before operations that can remove or re-parent a task.
 
-### Identifiers and Removed Fields
+Use `public.fn_task_descendants(_task_id bigint, _descendants bigint[])` when task mutation logic needs the complete descendant set for a task. Call it with an empty bigint accumulator, for example `select public.fn_task_descendants(6, ARRAY[]::bigint[])`. The returned array contains descendant task IDs only; it does not include the root `_task_id`.
 
-- Adapt repositories to the current identity-based `bigint` IDs.
-- Preserve string IDs at the JSON boundary if required for frontend compatibility, but validate that incoming IDs are positive integers before querying PostgreSQL.
-- Remove database reads and writes for columns that no longer exist, including `task.complete` and `task.depth`.
+## 4. Data Type Audit
 
-### Task Completeness
+Before changing behavior, examine every DTO, repository scan destination, request type, response type, helper, and frontend interface affected by the database refactor. Apply these mappings consistently throughout the codebase:
 
-- Read `task.done_req` and `task.total_req` from the database.
-- Return both counters in task responses.
-- Derive the existing API `complete` percentage without persisting a separate percentage:
+| PostgreSQL type | Go type |
+| --- | --- |
+| `smallint` | `int16` |
+| `bigint` | `int` |
+| `integer` | `int` |
+| `boolean` | `bool` |
+| `text` | `string` |
+| `timestamp with time zone` | `time.Time` |
+| nullable `bigint` | `*int` or an equivalent nullable scan type converted to `*int` |
 
-```text
-complete = 0                              when total_req = 0
-complete = done_req / total_req * 100     otherwise
+Specific fields requiring review include:
+
+- `project.id`
+- `task.id`, `task.parent_id`, and `task.project_id`
+- `task.version`, `task.difficulty`, `task.priority`, `task.done_req`, and `task.total_req`
+- `requirement.id` and `requirement.task_id`
+- `requirement.version`
+- history-table identifiers and versions
+- `task_phase.priority` and `task_type.priority`
+- `vw_task.completed`, which is a PostgreSQL `smallint` and therefore uses Go `int16`
+- all request DTOs that carry an identifier
+
+Remove remaining UUID-specific types, parsing, casts, fixtures, and string-ID assumptions. JSON request and response contracts must use numeric identifiers consistently with their Go DTOs.
+
+Do not change the database to accommodate a mismatched Go type.
+
+## 5. Task Read Contract
+
+Task completion is already calculated by the database view.
+
+- Select tasks from `public.vw_task`, not directly from `public.task`, whenever a task response requires completion.
+- Read the pre-calculated `completed` column from `vw_task` into the task DTO.
+- Expose the field as `completed` in JSON and frontend types.
+- Do not calculate completion in Go or TypeScript.
+- Do not read or write a `completed` column on `public.task`.
+- Keep `done_req` and `total_req` mapped using their PostgreSQL `smallint` type where those counters are part of the task response.
+- After a task mutation, re-select the task from `vw_task` inside the transaction when the response requires the current `completed` value.
+
+## 6. Versioning and History
+
+Both `task.version` and `requirement.version` are PostgreSQL `smallint` values and must use Go `int16`.
+
+Rules:
+
+- Omit `version` from inserts and use the database default.
+- Expose `version` in task and requirement responses as informative state for the frontend.
+- Do not accept `version` in create, update, phase-change, parent-change, or delete requests.
+- Do not use `version` in `WHERE` clauses or for optimistic-concurrency conflicts.
+- Increment `task.version` only when an update actually changes at least one task history-bearing field: `task_type`, `name`, `description`, or `parent_id`.
+- Increment `requirement.version` only when an update actually changes the history-bearing field `definition`.
+- Call the matching history procedure before the update that increments the version, so the procedure archives the current row and current version.
+- Updates that change only non-history fields must not increment `version` and must not call a history procedure.
+- History capture, the mutation, required recalculation procedures, and response reads must remain in one transaction.
+
+Conceptual task history-bearing update shape:
+
+```sql
+update public.task
+set
+    task_type = :task_type,
+    name = :name,
+    description = :description,
+    parent_id = :parent_id,
+    version = version + 1
+where id = :id;
 ```
 
-- After a requirement create, update, toggle, or delete, call the existing `public.sp_task_requirement_recalculate(task_id)` in the same transaction.
-- Return the recalculated task and current requirement list in requirement mutation responses.
+Conceptual requirement history-bearing update shape:
 
-### Versions and Conflicts
+```sql
+update public.requirement
+set
+    definition = :definition,
+    version = version + 1
+where id = :id;
+```
 
-- Return `version` for every task and requirement.
-- Require the current version for task update, phase change, and delete requests.
-- Require the current version for requirement update, toggle, and delete requests.
-- Guard mutations with both `id` and expected `version`.
-- Increment the active row version atomically on successful updates.
-- Treat a stale version as a conflict and return HTTP 409.
-- Treat a missing or negative version as invalid input and return HTTP 400.
+Conceptual non-history update shape:
 
-### History and Transactions
+```sql
+update public.requirement
+set done = :done
+where id = :id;
+```
 
-- Use the existing history procedures rather than recreating their SQL behavior when they apply to a single-row mutation.
-- Archive the current row before an update or delete.
-- Keep history capture, guarded mutation, requirement recalculation, and response reads in one transaction.
-- For project or task-tree deletion, archive all affected tasks and requirements according to the existing history-table contract before deleting active rows.
-- Roll back the entire operation on a stale version or any database failure.
+The application must never assign a caller-provided version or increment a version for a non-history change.
 
-## 5. Backend Work
+## 7. Task Mutation Rules
 
-- Update task and requirement DTOs for `version`, `done_req`, and `total_req`.
-- Remove the obsolete `depth` DTO field and obsolete stored-completeness assumptions.
-- Update task and requirement scans and queries for the current column order and types.
-- Replace UUID-specific handling and casts with `bigint`-compatible handling.
-- Add optimistic concurrency checks to task and requirement mutations.
-- Map stale mutations to HTTP 409 responses.
-- Validate numeric identifiers before sending queries to PostgreSQL.
-- Keep cascade archive/delete operations transactional and lock affected active rows to prevent inconsistent history during concurrent mutations.
-- Do not add an automatic migration runner or schema bootstrap behavior.
+Every task insert, update, and delete must run in an explicit transaction.
 
-## 6. Frontend Work
+### Insert Task
 
-- Add `version`, `done_req`, and `total_req` to frontend task types.
-- Add `version` to frontend requirement types.
-- Remove the obsolete `depth` field.
-- Send the latest task version with update, phase-change, and delete requests.
-- Send the latest requirement version with update, toggle, and delete requests.
-- Replace local task and requirement state with mutation responses so subsequent actions use the new version.
-- Surface backend conflict messages through the existing error UI.
+1. Begin a transaction.
+2. Insert the task without explicitly writing `version`.
+3. Call `public.sp_task_phase_recalculate(parent_id)` after the insert, using the new task's immediate parent ID.
+4. Re-select the task from `public.vw_task` if a task response is returned.
+5. Commit the transaction.
 
-## 7. Tests
+Task history is not written for a newly inserted row.
 
-Update or add application tests that verify:
+### Update Task Details
 
-- bigint identifiers are accepted and malformed identifiers return HTTP 400.
-- task responses derive `complete` from `done_req` and `total_req`.
-- requirement changes propagate counters through multiple task ancestors by invoking the existing procedure.
-- successful task and requirement updates increment their versions.
-- stale task and requirement mutations return HTTP 409 and do not change active or history data.
-- missing versions return HTTP 400.
-- task-tree and project deletion archive affected rows before removal.
-- frontend types and calls include the latest versions.
+`POST /api/v1/task/update` changes only `task_type`, `name`, and `description`.
 
-Tests must use an existing test database contract. They must not create, alter, replace, or drop database objects and must not modify SQL files as test setup.
+Before updating, determine whether any included history-bearing field will actually change.
 
-## 8. Out of Scope
+History-bearing fields are:
 
-- Any database migration or schema correction.
-- Any modification to an existing procedure or function.
+- `task_type`
+- `name`
+- `description`
+- `parent_id`
+
+Required order:
+
+1. Begin a transaction and read the current task.
+2. Determine whether at least one history-bearing field actually changes value.
+3. If a history-bearing field changes, call `public.sp_task_to_history(task_id, false)` before the update.
+4. Apply the business-field update and `version = version + 1` in the same statement only when a history-bearing field changes. Otherwise, apply the non-history update without changing `version`.
+5. Call `public.sp_task_phase_recalculate(parent_id)` after the update, even when the update changes only a field not stored in task history. If `parent_id` changed, recalculate each distinct old and new parent.
+6. Re-select the task from `public.vw_task`.
+7. Commit the transaction.
+
+Do not call `sp_task_to_history` when none of these fields actually changes. Call `sp_task_phase_recalculate` after every successful task update.
+
+### Update Task Difficulty
+
+`POST /api/v1/task/update-difficulty` changes only `difficulty`. It does not call `sp_task_to_history` or increment `version`. It calls `sp_task_phase_recalculate(parent_id)` and returns the refreshed task.
+
+### Update Task Priority
+
+`POST /api/v1/task/update-priority` changes only `priority`. It does not call `sp_task_to_history` or increment `version`. It calls `sp_task_phase_recalculate(parent_id)` and returns the refreshed task.
+
+### Update Task Parent
+
+`POST /api/v1/task/update-parent` is the only endpoint that changes `task.parent_id`.
+
+The request contains:
+
+- `id`: the task ID
+- `parent_id`: the new parent ID, or `null` to make the task root-level
+
+The request does not contain `version`. The `parent_id` field uses `*int` without `omitempty`.
+
+Required order:
+
+1. Begin a transaction and read the current task.
+2. Validate a non-null parent and determine whether `parent_id` actually changes.
+3. If the parent changes, call `public.sp_task_to_history(task_id, false)`.
+4. Update `parent_id` and increment `version` with `version = version + 1` in the same statement.
+5. Recalculate each distinct old and new parent with `public.sp_task_phase_recalculate(parent_id)`.
+6. Re-select the task from `public.vw_task`.
+7. Commit the transaction.
+
+If the requested parent equals the current parent, do not write history or increment `version`.
+
+When the requested parent is non-null, reject it if it appears in `public.fn_task_descendants(id, ARRAY[]::bigint[])`; a task cannot be re-parented under one of its own descendants.
+
+### Update Task Phase
+
+`POST /api/v1/task/update-phase` changes only `task_phase`. It does not call `sp_task_to_history` or increment `version`. It calls `sp_task_phase_recalculate(parent_id)` and returns the refreshed task.
+
+### Delete Task
+
+Required order for every deleted task row, including rows deleted through a task-tree or project operation:
+
+1. Begin or join the surrounding delete transaction.
+2. Read the task and capture its current state.
+3. Call `public.sp_task_to_history(task_id, true)` before deleting the row.
+4. Delete the task.
+5. Call `public.sp_task_phase_recalculate(parent_id)` after the delete using the parent ID captured before deletion.
+6. Commit only after history, delete, and recalculation all succeed.
+
+The application must not duplicate or replace the database-owned stored procedure definitions.
+
+## 8. Requirement Mutation Rules
+
+Every requirement insert, update, and delete must run in an explicit transaction. Capture the relevant `task_id` before any operation that may remove or change it.
+
+### Insert Requirement
+
+1. Begin a transaction.
+2. Insert the requirement without explicitly writing `version`.
+3. Call `public.sp_task_requirement_recalculate(task_id)` after the insert.
+4. Read the recalculated task from `public.vw_task` and read the current requirement list if required by the API response.
+5. Commit the transaction.
+
+Requirement history is not written for a newly inserted row.
+
+### Update Requirement Definition
+
+`POST /api/v1/requirement/update` changes only `definition`.
+
+The history-bearing field is:
+
+- `definition`
+
+Required order:
+
+1. Begin a transaction and read the current requirement.
+2. Determine whether `definition` actually changes value.
+3. If `definition` changes, call `public.sp_requirement_to_history(requirement_id, false)` before the update.
+4. Apply the definition update and `version = version + 1` in the same statement.
+5. Re-read the task from `public.vw_task` and the current requirement list.
+6. Commit the transaction.
+
+If `definition` is unchanged, do not write history or increment `version`.
+
+### Update Requirement Done
+
+`POST /api/v1/requirement/update-done` changes only `done`. It does not call `sp_requirement_to_history` or increment `version`. When `done` actually changes, call `public.sp_task_requirement_recalculate(task_id)` and return the recalculated task and current requirements.
+
+### Update Requirement Task
+
+`POST /api/v1/requirement/update-task` changes only `task_id`. It does not call `sp_requirement_to_history` or increment `version`. When `task_id` actually changes, recalculate both the previous and new task IDs, then return the new task and its current requirements.
+
+### Delete Requirement
+
+1. Begin a transaction and read the requirement.
+2. Capture `task_id`.
+3. Call `public.sp_requirement_to_history(requirement_id, true)` before deleting the row.
+4. Delete the requirement by ID.
+5. Call `public.sp_task_requirement_recalculate(task_id)` after the delete using the captured task ID.
+6. Re-read the recalculated task from `public.vw_task` and the current requirement list.
+7. Commit the transaction.
+
+## 9. DTO, API, and Frontend Work
+
+- Apply the data-type mappings from Section 4 to every affected DTO and scan target.
+- Keep `version` in task and requirement response DTOs as `int16`, but remove it from request DTOs.
+- Ensure task DTOs expose `completed` selected from `vw_task`.
+- Remove obsolete task completion calculations and obsolete fields that are no longer returned by the database contract.
+- Keep request and response field names consistent across Go DTOs, API tests, TypeScript interfaces, and Vue callers.
+- Do not send versions from frontend mutation requests.
+- Replace frontend state with successful mutation responses so displayed version information remains current.
+- Remove `parent_id` from the standard task update request and expose parent changes only through `POST /api/v1/task/update-parent`.
+- Use `POST /api/v1/task/update-difficulty`, `update-priority`, and `update-phase` for their respective task fields.
+- Split requirement mutations across `POST /api/v1/requirement/update`, `update-done`, and `update-task`.
+
+## 10. API Test Order
+
+Testing must be completed in this order:
+
+1. Update all current API tests for the refactored identifiers, `smallint` versions and counters, `vw_task.completed`, request fields, and response fields.
+2. Run the complete existing API-test suite and make it pass before adding new coverage.
+3. Add focused API tests for every rule below.
+4. Run the complete API-test suite again.
+
+Required focused API-test coverage:
+
+- PostgreSQL `smallint` fields scan into and round-trip through Go `int16` fields.
+- PostgreSQL `bigint` identifiers scan into and round-trip through Go `int` fields.
+- Task responses read `completed` from `vw_task`.
+- Task insertion calls `sp_task_phase_recalculate` after the insert and commits the resulting phase aggregation.
+- A task update that changes `task_type`, `name`, `description`, or `parent_id` archives the previous row before updating.
+- A task update that changes no history-bearing field does not create task history.
+- A task update increments `version` only when at least one history-bearing field actually changes.
+- Task phase, difficulty, or priority-only updates leave `version` unchanged and do not create task history.
+- `POST /api/v1/task/update-parent` changes or clears `parent_id`, archives the old task, and increments `version` only when the parent actually changes.
+- Task deletion archives the row before deletion and calls `sp_task_phase_recalculate` after deletion.
+- Requirement insertion calls `sp_task_requirement_recalculate` after the insert.
+- A requirement definition change archives the previous row before updating.
+- A `done`-only requirement update does not create requirement history.
+- A requirement definition change increments `version`; a `done`-only update leaves `version` unchanged.
+- Requirement deletion archives the row before deletion and calls `sp_task_requirement_recalculate` afterward with the captured `task_id`.
+- Requirement insert, update, and delete responses contain the task state read from `vw_task` after recalculation.
+- A forced failure proves each history/mutation/recalculation sequence rolls back as one transaction.
+- Task-tree and project delete paths apply the same per-row history and recalculation rules.
+
+Tests must use the authoritative database contract. Test setup must not create, alter, replace, or drop database objects and must not modify SQL files.
+
+## 11. Out of Scope
+
+- Implementing or deploying database migrations.
+- Application-owned modification of `vw_task` or an existing procedure/function.
 - Reference-data or demo-data changes.
 - Editing Feature 04 or earlier feature documents during implementation.
-- New product behavior unrelated to compatibility with the refactored database.
+- Product behavior unrelated to compatibility with the refactored database.
 
-## 9. Acceptance Criteria
+## 12. Acceptance Criteria
 
-- All application compatibility changes are contained in Feature 05 rather than Feature 04.
-- No SQL file or live database object is changed.
-- Backend queries use current bigint IDs, counters, versions, and history shapes without referencing removed columns.
-- Task and requirement writes are version-guarded and stale writes return HTTP 409.
-- Requirement mutations call the existing recalculation procedure transactionally.
-- Frontend mutations send current versions and retain returned versions.
-- Unit and API tests cover derived completeness, ancestor propagation, history, and stale-write conflicts.
-- Existing backend and frontend checks pass against the already-refactored database contract.
+- All affected PostgreSQL `smallint` values use Go `int16`, and all affected PostgreSQL `bigint` values use Go `int` consistently throughout DTOs and code paths.
+- Task completion is selected as `completed` from `public.vw_task`; it is not calculated in application code.
+- Task history is written before task deletion and before updates that change `task_type`, `name`, `description`, or `parent_id`.
+- Task updates increment `version` with `version = version + 1` only when `task_type`, `name`, `description`, or `parent_id` actually changes.
+- Every task insert, update, and delete calls `sp_task_phase_recalculate` after the mutation in the same transaction.
+- Requirement history is written before requirement deletion and before updates that change `definition`.
+- Requirement updates increment `version` with `version = version + 1` only when `definition` actually changes.
+- Requirement mutations call `sp_task_requirement_recalculate` in the same transaction whenever `done`, `task_id`, insertion, or deletion changes task aggregates.
+- Existing API tests are fixed and passing before new API tests are added.
+- Focused API tests cover every data-type, view, history, versioning, procedure-ordering, and transaction rule in this feature.
+- Application implementation introduces no database change beyond the authoritative baseline supplied by the database owner.

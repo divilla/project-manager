@@ -12,7 +12,6 @@ var (
 	ErrInvalidInput     = errors.New("invalid task input")
 	ErrInvalidReference = errors.New("invalid task reference")
 	ErrNotFound         = errors.New("task not found")
-	ErrHasChildren      = errors.New("task has children")
 )
 
 type Service struct {
@@ -20,9 +19,7 @@ type Service struct {
 }
 
 func NewService(taskRepository Repository) *Service {
-	return &Service{
-		repo: taskRepository,
-	}
+	return &Service{repo: taskRepository}
 }
 
 func (s *Service) References(ctx context.Context) (dto.TaskReferences, error) {
@@ -30,64 +27,72 @@ func (s *Service) References(ctx context.Context) (dto.TaskReferences, error) {
 }
 
 func (s *Service) ListTasks(ctx context.Context, req dto.TaskListRequest) ([]dto.Task, error) {
-	projectID := strings.TrimSpace(req.ProjectID)
-	if projectID == "" {
+	if req.ProjectID <= 0 {
 		return nil, ErrInvalidInput
 	}
-	return s.repo.List(ctx, projectID)
+	return s.repo.List(ctx, req.ProjectID)
 }
 
 func (s *Service) GetTask(ctx context.Context, req dto.TaskIDRequest) (dto.TaskDetail, error) {
-	id := strings.TrimSpace(req.ID)
-	if id == "" {
+	if req.ID <= 0 {
 		return dto.TaskDetail{}, ErrInvalidInput
 	}
-	return s.repo.Get(ctx, id)
+	return s.repo.Get(ctx, req.ID)
 }
 
 func (s *Service) CreateTask(ctx context.Context, req dto.TaskCreateRequest) (dto.Task, error) {
-	req.ProjectID = strings.TrimSpace(req.ProjectID)
 	req.Name = strings.TrimSpace(req.Name)
 	req.Description = strings.TrimSpace(req.Description)
-	req.Phase = strings.TrimSpace(req.Phase)
-	req.Type = strings.TrimSpace(req.Type)
-	req.ParentID = strings.TrimSpace(req.ParentID)
-
-	if req.ProjectID == "" || req.Name == "" {
+	req.TaskPhase = strings.TrimSpace(req.TaskPhase)
+	req.TaskType = strings.TrimSpace(req.TaskType)
+	if req.ProjectID <= 0 || req.Name == "" || (req.ParentID != nil && *req.ParentID <= 0) {
 		return dto.Task{}, ErrInvalidInput
 	}
-
 	return s.repo.Create(ctx, req)
 }
 
 func (s *Service) UpdateTask(ctx context.Context, req dto.TaskUpdateRequest) (dto.Task, error) {
-	req.ID = strings.TrimSpace(req.ID)
 	req.Name = strings.TrimSpace(req.Name)
 	req.Description = strings.TrimSpace(req.Description)
-	req.Type = strings.TrimSpace(req.Type)
-
-	if req.ID == "" || req.Name == "" {
+	req.TaskType = strings.TrimSpace(req.TaskType)
+	if req.ID <= 0 || req.Name == "" {
 		return dto.Task{}, ErrInvalidInput
 	}
-
 	return s.repo.Update(ctx, req)
 }
 
-func (s *Service) ChangePhase(ctx context.Context, req dto.TaskPhaseRequest) (dto.Task, error) {
-	req.ID = strings.TrimSpace(req.ID)
-	req.Phase = strings.TrimSpace(req.Phase)
-
-	if req.ID == "" || req.Phase == "" {
+func (s *Service) UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Task, error) {
+	if req.ID <= 0 || req.Difficulty <= 0 {
 		return dto.Task{}, ErrInvalidInput
 	}
+	return s.repo.UpdateDifficulty(ctx, req)
+}
 
-	return s.repo.ChangePhase(ctx, req.ID, req.Phase)
+func (s *Service) UpdatePriority(ctx context.Context, req dto.TaskUpdatePriorityRequest) (dto.Task, error) {
+	if req.ID <= 0 {
+		return dto.Task{}, ErrInvalidInput
+	}
+	return s.repo.UpdatePriority(ctx, req)
+}
+
+func (s *Service) UpdateParent(ctx context.Context, req dto.TaskUpdateParentRequest) (dto.Task, error) {
+	if req.ID <= 0 || (req.ParentID != nil && *req.ParentID <= 0) {
+		return dto.Task{}, ErrInvalidInput
+	}
+	return s.repo.UpdateParent(ctx, req)
+}
+
+func (s *Service) UpdatePhase(ctx context.Context, req dto.TaskUpdatePhaseRequest) (dto.Task, error) {
+	req.TaskPhase = strings.TrimSpace(req.TaskPhase)
+	if req.ID <= 0 || req.TaskPhase == "" {
+		return dto.Task{}, ErrInvalidInput
+	}
+	return s.repo.UpdatePhase(ctx, req)
 }
 
 func (s *Service) DeleteTask(ctx context.Context, req dto.TaskIDRequest) error {
-	req.ID = strings.TrimSpace(req.ID)
-	if req.ID == "" {
+	if req.ID <= 0 {
 		return ErrInvalidInput
 	}
-	return s.repo.Delete(ctx, req.ID)
+	return s.repo.Delete(ctx, req)
 }

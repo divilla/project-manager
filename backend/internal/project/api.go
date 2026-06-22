@@ -22,18 +22,13 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 		s: s,
 	}
 
-	a.register(a.g)
-	a.register(e.Group("/api").Group("/project"))
+	a.g.POST("/list", a.listProjects)
+	a.g.POST("/get", a.getProject)
+	a.g.POST("/create", a.createProject)
+	a.g.POST("/update", a.updateProject)
+	a.g.POST("/delete", a.deleteProject)
 
 	return a
-}
-
-func (a *Api) register(g *echo.Group) {
-	g.POST("/list", a.listProjects)
-	g.POST("/get", a.getProject)
-	g.POST("/create", a.createProject)
-	g.POST("/update", a.updateProject)
-	g.POST("/delete", a.deleteProject)
 }
 
 func (a *Api) listProjects(c *echo.Context) error {

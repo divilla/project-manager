@@ -5,7 +5,14 @@
         <h1>Projects</h1>
         <p>Project and task board backed by the existing database contract.</p>
       </div>
-      <q-btn color="primary" icon="refresh" label="Refresh" :loading="loading" no-caps @click="loadAll" />
+      <q-btn
+        color="primary"
+        icon="refresh"
+        label="Refresh"
+        :loading="loading"
+        no-caps
+        @click="loadAll"
+      />
     </section>
 
     <q-banner v-if="error" class="status-banner status-banner--error" rounded>
@@ -19,7 +26,14 @@
       <aside class="project-panel">
         <form class="create-row" @submit.prevent="createProjectFromForm">
           <q-input v-model="projectName" dense outlined label="Project name" class="create-input" />
-          <q-btn color="primary" icon="add" type="submit" :disable="!projectName.trim()" round unelevated>
+          <q-btn
+            color="primary"
+            icon="add"
+            type="submit"
+            :disable="!projectName.trim()"
+            round
+            unelevated
+          >
             <q-tooltip>Create project</q-tooltip>
           </q-btn>
         </form>
@@ -41,7 +55,14 @@
                 <q-btn dense flat round icon="edit" @click.stop="startProjectRename(project)">
                   <q-tooltip>Rename project</q-tooltip>
                 </q-btn>
-                <q-btn dense flat round icon="delete" color="negative" @click.stop="removeProject(project)">
+                <q-btn
+                  dense
+                  flat
+                  round
+                  icon="delete"
+                  color="negative"
+                  @click.stop="removeProject(project)"
+                >
                   <q-tooltip>Delete project</q-tooltip>
                 </q-btn>
               </div>
@@ -78,7 +99,14 @@
             :options="phaseOptions"
             class="task-select"
           />
-          <q-btn color="primary" icon="add_task" type="submit" :disable="!taskName.trim()" no-caps label="Task" />
+          <q-btn
+            color="primary"
+            icon="add_task"
+            type="submit"
+            :disable="!taskName.trim()"
+            no-caps
+            label="Task"
+          />
         </form>
 
         <div v-if="!selectedProject" class="empty-state">
@@ -103,12 +131,12 @@
             >
               <q-card-section>
                 <div class="task-card-title">{{ task.name }}</div>
-                <div class="task-card-meta">{{ task.type }} · {{ task.complete }}%</div>
-                <q-linear-progress :value="task.complete / 100" rounded class="q-mt-sm" />
+                <div class="task-card-meta">{{ task.task_type }} · {{ task.completed }}%</div>
+                <q-linear-progress :value="task.completed / 100" rounded class="q-mt-sm" />
               </q-card-section>
               <q-card-actions align="between">
                 <q-select
-                  :model-value="task.phase"
+                  :model-value="task.task_phase"
                   dense
                   borderless
                   emit-value
@@ -118,7 +146,14 @@
                   @click.stop
                   @update:model-value="(phase) => moveTask(task, phase)"
                 />
-                <q-btn dense flat round icon="delete" color="negative" @click.stop="removeTask(task)">
+                <q-btn
+                  dense
+                  flat
+                  round
+                  icon="delete"
+                  color="negative"
+                  @click.stop="removeTask(task)"
+                >
                   <q-tooltip>Delete task</q-tooltip>
                 </q-btn>
               </q-card-actions>
@@ -140,7 +175,13 @@
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Cancel" no-caps v-close-popup />
-          <q-btn color="primary" label="Save" no-caps :disable="!projectEditName.trim()" @click="saveProjectName" />
+          <q-btn
+            color="primary"
+            label="Save"
+            no-caps
+            :disable="!projectEditName.trim()"
+            @click="saveProjectName"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -149,11 +190,19 @@
       <q-card class="dialog-card">
         <q-card-section>
           <div class="text-subtitle1">{{ taskDetail?.task.name }}</div>
-          <div v-if="taskDetail" class="task-card-meta">{{ taskDetail.task.phase }} · {{ taskDetail.task.complete }}%</div>
+          <div v-if="taskDetail" class="task-card-meta">
+            {{ taskDetail.task.task_phase }} · {{ taskDetail.task.completed }}%
+          </div>
         </q-card-section>
         <q-card-section v-if="taskDetail">
           <q-input v-model="taskEditName" outlined label="Task name" class="q-mb-md" />
-          <q-input v-model="taskEditDescription" outlined type="textarea" label="Description" class="q-mb-md" />
+          <q-input
+            v-model="taskEditDescription"
+            outlined
+            type="textarea"
+            label="Description"
+            class="q-mb-md"
+          />
           <q-select
             v-model="taskEditType"
             outlined
@@ -166,7 +215,7 @@
           <div class="requirements-list">
             <div class="requirements-heading">
               <div class="text-subtitle2">Requirements</div>
-              <q-badge color="grey-7" :label="`${taskDetail.task.complete}%`" />
+              <q-badge color="grey-7" :label="`${taskDetail.task.completed}%`" />
             </div>
             <form class="requirement-create-row" @submit.prevent="createRequirementFromForm">
               <q-input
@@ -188,7 +237,11 @@
               </q-btn>
             </form>
             <q-list v-if="taskDetail.requirements.length" bordered separator>
-              <q-item v-for="requirement in taskDetail.requirements" :key="requirement.id" class="requirement-item">
+              <q-item
+                v-for="requirement in taskDetail.requirements"
+                :key="requirement.id"
+                class="requirement-item"
+              >
                 <q-item-section avatar>
                   <q-checkbox
                     :model-value="requirement.done"
@@ -224,10 +277,23 @@
                       </q-btn>
                     </template>
                     <template v-else>
-                      <q-btn dense flat round icon="edit" @click="startRequirementEdit(requirement)">
+                      <q-btn
+                        dense
+                        flat
+                        round
+                        icon="edit"
+                        @click="startRequirementEdit(requirement)"
+                      >
                         <q-tooltip>Edit requirement</q-tooltip>
                       </q-btn>
-                      <q-btn dense flat round icon="delete" color="negative" @click="removeRequirement(requirement)">
+                      <q-btn
+                        dense
+                        flat
+                        round
+                        icon="delete"
+                        color="negative"
+                        @click="removeRequirement(requirement)"
+                      >
                         <q-tooltip>Delete requirement</q-tooltip>
                       </q-btn>
                     </template>
@@ -240,7 +306,13 @@
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Cancel" no-caps v-close-popup />
-          <q-btn color="primary" label="Save" no-caps :disable="!taskEditName.trim()" @click="saveTask" />
+          <q-btn
+            color="primary"
+            label="Save"
+            no-caps
+            :disable="!taskEditName.trim()"
+            @click="saveTask"
+          />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -250,7 +322,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import {
-  changeTaskPhase,
   createProject,
   createRequirement,
   createTask,
@@ -262,8 +333,10 @@ import {
   listProjects,
   listTasks,
   updateRequirement,
+  updateRequirementDone,
   updateProject,
   updateTask,
+  updateTaskPhase,
   type Project,
   type Requirement,
   type RequirementMutation,
@@ -276,7 +349,7 @@ const projects = ref<Project[]>([]);
 const tasks = ref<Task[]>([]);
 const phases = ref<ReferenceOption[]>([]);
 const types = ref<ReferenceOption[]>([]);
-const selectedProjectId = ref('');
+const selectedProjectId = ref(0);
 const projectName = ref('');
 const taskName = ref('');
 const taskType = ref('');
@@ -285,7 +358,7 @@ const loading = ref(false);
 const error = ref('');
 
 const projectDialogOpen = ref(false);
-const projectEditId = ref('');
+const projectEditId = ref(0);
 const projectEditName = ref('');
 
 const taskDialogOpen = ref(false);
@@ -294,25 +367,34 @@ const taskEditName = ref('');
 const taskEditDescription = ref('');
 const taskEditType = ref('');
 const requirementDefinition = ref('');
-const editingRequirementId = ref('');
+const editingRequirementId = ref(0);
 const editingRequirementDefinition = ref('');
 
-const selectedProject = computed(() => projects.value.find((project) => project.id === selectedProjectId.value));
-const phaseOptions = computed(() => phases.value.map((phase) => ({ label: phase.slug, value: phase.slug })));
-const typeOptions = computed(() => types.value.map((type) => ({ label: type.slug, value: type.slug })));
-const boardPhases = computed(() => phases.value.length ? phases.value : uniqueTaskPhases.value);
+const selectedProject = computed(() =>
+  projects.value.find((project) => project.id === selectedProjectId.value),
+);
+const phaseOptions = computed(() =>
+  phases.value.map((phase) => ({ label: phase.slug, value: phase.slug })),
+);
+const typeOptions = computed(() =>
+  types.value.map((type) => ({ label: type.slug, value: type.slug })),
+);
+const boardPhases = computed(() => (phases.value.length ? phases.value : uniqueTaskPhases.value));
 
 const uniqueTaskPhases = computed(() =>
-  [...new Set(tasks.value.map((task) => task.phase))].map((slug, index) => ({ slug, priority: index })),
+  [...new Set(tasks.value.map((task) => task.task_phase))].map((slug, index) => ({
+    slug,
+    priority: index,
+  })),
 );
 
 const tasksByPhase = computed<Record<string, Task[]>>(() => {
   const grouped: Record<string, Task[]> = {};
   for (const phase of boardPhases.value) grouped[phase.slug] = [];
   for (const task of tasks.value) {
-    const group = grouped[task.phase] || [];
+    const group = grouped[task.task_phase] || [];
     group.push(task);
-    grouped[task.phase] = group;
+    grouped[task.task_phase] = group;
   }
   return grouped;
 });
@@ -343,11 +425,11 @@ async function loadAll() {
   }
 }
 
-async function loadTasks(projectId: string) {
+async function loadTasks(projectId: number) {
   tasks.value = await listTasks(projectId);
 }
 
-async function selectProject(projectId: string) {
+async function selectProject(projectId: number) {
   selectedProjectId.value = projectId;
   error.value = '';
   try {
@@ -395,7 +477,7 @@ async function removeProject(project: Project) {
     await deleteProject(project.id);
     projects.value = projects.value.filter((item) => item.id !== project.id);
     if (selectedProjectId.value === project.id) {
-      selectedProjectId.value = projects.value[0]?.id || '';
+      selectedProjectId.value = projects.value[0]?.id || 0;
       tasks.value = [];
       if (selectedProjectId.value) await loadTasks(selectedProjectId.value);
     }
@@ -410,16 +492,16 @@ async function createTaskFromForm() {
 
   try {
     const input: {
-      project_id: string;
+      project_id: number;
       name: string;
-      phase?: string;
-      type?: string;
+      task_phase?: string;
+      task_type?: string;
     } = {
       project_id: selectedProjectId.value,
       name,
     };
-    if (taskPhase.value) input.phase = taskPhase.value;
-    if (taskType.value) input.type = taskType.value;
+    if (taskPhase.value) input.task_phase = taskPhase.value;
+    if (taskType.value) input.task_type = taskType.value;
 
     const task = await createTask(input);
     tasks.value = [...tasks.value, task];
@@ -431,8 +513,9 @@ async function createTaskFromForm() {
 
 async function moveTask(task: Task, phase: string) {
   try {
-    const moved = await changeTaskPhase(task.id, phase);
+    const moved = await updateTaskPhase(task.id, phase);
     tasks.value = tasks.value.map((item) => (item.id === moved.id ? moved : item));
+    await refreshSelectedProjectTasks();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to move task.';
   }
@@ -443,7 +526,7 @@ async function openTask(task: Task) {
     taskDetail.value = await getTask(task.id);
     taskEditName.value = taskDetail.value.task.name;
     taskEditDescription.value = taskDetail.value.task.description;
-    taskEditType.value = taskDetail.value.task.type;
+    taskEditType.value = taskDetail.value.task.task_type;
     requirementDefinition.value = '';
     cancelRequirementEdit();
     taskDialogOpen.value = true;
@@ -460,7 +543,7 @@ async function saveTask() {
       id: taskDetail.value.task.id,
       name: taskEditName.value.trim(),
       description: taskEditDescription.value.trim(),
-      type: taskEditType.value,
+      task_type: taskEditType.value,
     });
     tasks.value = tasks.value.map((item) => (item.id === task.id ? task : item));
     if (taskDetail.value) {
@@ -482,6 +565,7 @@ async function createRequirementFromForm() {
   try {
     const mutation = await createRequirement(taskDetail.value.task.id, definition);
     applyRequirementMutation(mutation);
+    await refreshSelectedProjectTasks();
     requirementDefinition.value = '';
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to create requirement.';
@@ -490,12 +574,9 @@ async function createRequirementFromForm() {
 
 async function toggleRequirement(requirement: Requirement, done: boolean) {
   try {
-    const mutation = await updateRequirement({
-      id: requirement.id,
-      definition: requirement.definition,
-      done,
-    });
+    const mutation = await updateRequirementDone(requirement.id, done);
     applyRequirementMutation(mutation);
+    await refreshSelectedProjectTasks();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to update requirement.';
   }
@@ -507,7 +588,7 @@ function startRequirementEdit(requirement: Requirement) {
 }
 
 function cancelRequirementEdit() {
-  editingRequirementId.value = '';
+  editingRequirementId.value = 0;
   editingRequirementDefinition.value = '';
 }
 
@@ -519,9 +600,9 @@ async function saveRequirement(requirement: Requirement) {
     const mutation = await updateRequirement({
       id: requirement.id,
       definition,
-      done: requirement.done,
     });
     applyRequirementMutation(mutation);
+    await refreshSelectedProjectTasks();
     cancelRequirementEdit();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to update requirement.';
@@ -532,6 +613,7 @@ async function removeRequirement(requirement: Requirement) {
   try {
     const mutation = await deleteRequirement(requirement.id);
     applyRequirementMutation(mutation);
+    await refreshSelectedProjectTasks();
     if (editingRequirementId.value === requirement.id) cancelRequirementEdit();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to delete requirement.';
@@ -548,10 +630,16 @@ function applyRequirementMutation(mutation: RequirementMutation) {
   };
 }
 
+async function refreshSelectedProjectTasks() {
+  if (selectedProjectId.value) {
+    await loadTasks(selectedProjectId.value);
+  }
+}
+
 async function removeTask(task: Task) {
   try {
     await deleteTask(task.id);
-    if (selectedProjectId.value) await loadTasks(selectedProjectId.value);
+    await refreshSelectedProjectTasks();
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to delete task.';
   }

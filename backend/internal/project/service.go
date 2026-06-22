@@ -13,16 +13,12 @@ var (
 	ErrNotFound     = errors.New("project not found")
 )
 
-type (
-	Service struct {
-		repo Repository
-	}
-)
+type Service struct {
+	repo Repository
+}
 
 func NewService(projectRepository Repository) *Service {
-	return &Service{
-		repo: projectRepository,
-	}
+	return &Service{repo: projectRepository}
 }
 
 func (s *Service) ListProjects(ctx context.Context, req dto.ProjectListRequest) ([]dto.Project, error) {
@@ -34,16 +30,14 @@ func (s *Service) ListProjects(ctx context.Context, req dto.ProjectListRequest) 
 	if offset < 0 {
 		offset = 0
 	}
-
 	return s.repo.List(ctx, limit, offset)
 }
 
 func (s *Service) GetProject(ctx context.Context, req dto.ProjectIDRequest) (dto.Project, error) {
-	id := strings.TrimSpace(req.ID)
-	if id == "" {
+	if req.ID <= 0 {
 		return dto.Project{}, ErrInvalidInput
 	}
-	return s.repo.Get(ctx, id)
+	return s.repo.Get(ctx, req.ID)
 }
 
 func (s *Service) CreateProject(ctx context.Context, req dto.ProjectCreateRequest) (dto.Project, error) {
@@ -55,18 +49,16 @@ func (s *Service) CreateProject(ctx context.Context, req dto.ProjectCreateReques
 }
 
 func (s *Service) UpdateProject(ctx context.Context, req dto.ProjectUpdateRequest) (dto.Project, error) {
-	id := strings.TrimSpace(req.ID)
 	name := strings.TrimSpace(req.Name)
-	if id == "" || name == "" {
+	if req.ID <= 0 || name == "" {
 		return dto.Project{}, ErrInvalidInput
 	}
-	return s.repo.Update(ctx, id, name)
+	return s.repo.Update(ctx, req.ID, name)
 }
 
 func (s *Service) DeleteProject(ctx context.Context, req dto.ProjectIDRequest) error {
-	id := strings.TrimSpace(req.ID)
-	if id == "" {
+	if req.ID <= 0 {
 		return ErrInvalidInput
 	}
-	return s.repo.Delete(ctx, id)
+	return s.repo.Delete(ctx, req.ID)
 }

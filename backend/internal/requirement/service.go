@@ -19,53 +19,59 @@ type (
 	}
 
 	Repository interface {
-		List(ctx context.Context, taskID string) ([]dto.Requirement, error)
+		List(ctx context.Context, taskID int) ([]dto.Requirement, error)
 		Create(ctx context.Context, req dto.RequirementCreateRequest) (dto.RequirementMutationResponse, error)
 		Update(ctx context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error)
-		Delete(ctx context.Context, id string) (dto.RequirementMutationResponse, error)
+		UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequest) (dto.RequirementMutationResponse, error)
+		UpdateTask(ctx context.Context, req dto.RequirementUpdateTaskRequest) (dto.RequirementMutationResponse, error)
+		Delete(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error)
 	}
 )
 
 func NewService(requirementRepository Repository) *Service {
-	return &Service{
-		repo: requirementRepository,
-	}
+	return &Service{repo: requirementRepository}
 }
 
 func (s *Service) ListRequirements(ctx context.Context, req dto.RequirementListRequest) ([]dto.Requirement, error) {
-	taskID := strings.TrimSpace(req.TaskID)
-	if taskID == "" {
+	if req.TaskID <= 0 {
 		return nil, ErrInvalidInput
 	}
-
-	return s.repo.List(ctx, taskID)
+	return s.repo.List(ctx, req.TaskID)
 }
 
 func (s *Service) CreateRequirement(ctx context.Context, req dto.RequirementCreateRequest) (dto.RequirementMutationResponse, error) {
-	req.TaskID = strings.TrimSpace(req.TaskID)
 	req.Definition = strings.TrimSpace(req.Definition)
-	if req.TaskID == "" || req.Definition == "" {
+	if req.TaskID <= 0 || req.Definition == "" {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
-
 	return s.repo.Create(ctx, req)
 }
 
 func (s *Service) UpdateRequirement(ctx context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error) {
-	req.ID = strings.TrimSpace(req.ID)
 	req.Definition = strings.TrimSpace(req.Definition)
-	if req.ID == "" || req.Definition == "" {
+	if req.ID <= 0 || req.Definition == "" {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
-
 	return s.repo.Update(ctx, req)
 }
 
-func (s *Service) DeleteRequirement(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error) {
-	id := strings.TrimSpace(req.ID)
-	if id == "" {
+func (s *Service) UpdateRequirementDone(ctx context.Context, req dto.RequirementUpdateDoneRequest) (dto.RequirementMutationResponse, error) {
+	if req.ID <= 0 {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
+	return s.repo.UpdateDone(ctx, req)
+}
 
-	return s.repo.Delete(ctx, id)
+func (s *Service) UpdateRequirementTask(ctx context.Context, req dto.RequirementUpdateTaskRequest) (dto.RequirementMutationResponse, error) {
+	if req.ID <= 0 || req.TaskID <= 0 {
+		return dto.RequirementMutationResponse{}, ErrInvalidInput
+	}
+	return s.repo.UpdateTask(ctx, req)
+}
+
+func (s *Service) DeleteRequirement(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error) {
+	if req.ID <= 0 {
+		return dto.RequirementMutationResponse{}, ErrInvalidInput
+	}
+	return s.repo.Delete(ctx, req)
 }

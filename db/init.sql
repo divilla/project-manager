@@ -3,6 +3,10 @@ drop procedure if exists public.sp_task_phase_recalculate;
 drop procedure if exists public.sp_requirement_to_history;
 drop procedure if exists public.sp_task_to_history;
 
+drop function if exists public.fn_task_descendants;
+
+drop view if exists vw_task;
+
 drop table if exists public.requirement_history;
 drop table if exists public.requirement;
 drop table if exists public.task_history;
@@ -81,6 +85,44 @@ create table public.requirement_history
     primary key (id, version)
 );
 
+create view public.vw_task as
+    SELECT id,
+           version,
+           task_type,
+           name,
+           description,
+           difficulty,
+           priority,
+           task_phase,
+           parent_id,
+           project_id,
+           done_req,
+           total_req,
+           created,
+           modified,
+           CASE
+               WHEN total_req=0 THEN 0::smallint
+               ELSE (100*done_req/total_req)::smallint
+    END AS completed
+    FROM task;
+
+create function fn_task_descendants(_task_id bigint, _descendants bigint[])
+    returns bigint[]
+    language plpgsql
+as
+$$
+declare
+    _row public.task%rowtype;
+begin
+    for _row in select * from task where parent_id=_task_id loop
+        _descendants = _descendants || _row.id;
+        _descendants = fn_task_descendants(_row.id, _descendants);
+    end loop;
+
+    return _descendants;
+end;
+$$;
+
 create procedure public.sp_task_to_history(IN _id bigint, IN _deleted boolean)
     language plpgsql
 as
@@ -111,30 +153,30 @@ begin
 end;
 $$;
 
-create procedure sp_task_phase_recalculate(IN _task_id bigint)
+create procedure sp_task_phase_recalculate(IN _parent_id bigint)
     language plpgsql
 as
 $$
 declare
     _priority smallint;
     _slug text;
-    _parent_id bigint;
 begin
     loop
-        select parent_id into _parent_id from task where id=_task_id;
+        select min(tp.priority) into _priority from task t join task_phase tp on t.task_phase=tp.slug where parent_id=_parent_id;
+
+        if _priority is not null then
+            select slug into _slug from task_phase where priority=_priority;
+
+            update public.task
+            set
+                task_phase=_slug
+            where id=_parent_id;
+        end if;
+
+        select parent_id into _parent_id from task where id=_parent_id;
         if _parent_id is null then
             exit;
         end if;
-
-        select min(tp.priority) into _priority from task t join task_phase tp on t.task_phase=tp.slug where parent_id=_parent_id;
-        select slug into _slug from task_phase where priority=_priority;
-
-        update public.task
-        set
-            task_phase=_slug
-        where id=_parent_id;
-
-        _task_id=_parent_id;
     end loop;
 end;
 $$;
