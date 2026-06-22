@@ -1,5 +1,5 @@
-PKG := "github.com/labstack/echo"
-PKG_LIST := $(shell go list ${PKG}/...)
+PKG := "aipm"
+PKG_LIST := $(shell go list ${PKG}/... | grep -v '/api-tests')
 
 .DEFAULT_GOAL := check
 check: lint vet race ## Check project
@@ -17,6 +17,20 @@ vet: ## Vet the files
 
 test: ## Run tests
 	@go test -short ${PKG_LIST}
+
+api-test: ## Run integration tests
+	@go build -o aipm-server cmd/server/*.go
+	@PORT=18080 ./aipm-server >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
+		trap 'kill $$pid >/dev/null 2>&1 || true; rm -f aipm-server' EXIT; \
+		for _ in $$(seq 1 50); do \
+			if curl -fsS http://localhost:18080/api/v1/health >/dev/null 2>&1; then \
+				AIPM_API_BASE_URL=http://localhost:18080 go test -count=1 ./api-tests/...; \
+				exit $$?; \
+			fi; \
+			sleep 0.1; \
+		done; \
+		cat /tmp/aipm-api-test.log; \
+		exit 1
 
 race: ## Run tests with data race detector
 	@go test -race ${PKG_LIST}

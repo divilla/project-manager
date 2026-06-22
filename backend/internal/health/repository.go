@@ -6,16 +6,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository struct {
-	pool *pgxpool.Pool
-}
+type (
+	Repo struct {
+		pool *pgxpool.Pool
+	}
 
-func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{
+	Repository interface {
+		Ping(ctx context.Context) error
+	}
+)
+
+func NewRepo(pool *pgxpool.Pool) *Repo {
+	return &Repo{
 		pool: pool,
 	}
 }
 
-func (r *Repository) Ping(ctx context.Context) error {
+func (r *Repo) Ping(ctx context.Context) error {
 	return r.pool.Ping(ctx)
 }

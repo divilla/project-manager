@@ -11,11 +11,11 @@ import (
 
 type (
 	Service struct {
-		repo *Repository
+		repo Repository
 	}
 )
 
-func NewService(healthRepository *Repository) *Service {
+func NewService(healthRepository Repository) *Service {
 	return &Service{
 		repo: healthRepository,
 	}

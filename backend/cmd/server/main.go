@@ -8,6 +8,7 @@ import (
 
 	"aipm/internal/health"
 	"aipm/internal/project"
+	"aipm/internal/task"
 	"aipm/pkg/config"
 	"aipm/pkg/db"
 
@@ -52,13 +53,17 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(defaultCORSConfig))
 
-	healthRepository := health.NewRepository(pool)
+	healthRepository := health.NewRepo(pool)
 	healthService := health.NewService(healthRepository)
 	health.NewAPI(e, healthService)
 
-	projectRepository := project.NewRepository(pool)
+	projectRepository := project.NewRepo(pool)
 	projectService := project.NewService(projectRepository)
 	project.NewAPI(e, projectService)
+
+	taskRepository := task.NewRepo(pool)
+	taskService := task.NewService(taskRepository)
+	task.NewAPI(e, taskService)
 
 	if err := e.Start(cfg.Addr()); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error().Err(err).Msg("server stopped")

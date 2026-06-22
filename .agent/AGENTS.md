@@ -38,11 +38,12 @@ make benchmark
 
 ### Core Packages
 
-**Echo (`[Echo](https://github.com/labstack/echo)`)**
-**Zerolog (`[Zero Allocation JSON Logger](https://github.com/rs/zerolog)`)**
-**PGX (`[pgx - PostgreSQL Driver and Toolkit](https://github.com/jackc/pgx)`)**
-**Google UUID (`[uuid](https://github.com/google/uuid)`)**
-**Gookit config (`[Config](https://github.com/gookit/config)`)**
+* **Echo (`[Echo](https://github.com/labstack/echo)`)**
+* **Zerolog (`[Zero Allocation JSON Logger](https://github.com/rs/zerolog)`)**
+* **PGX (`[pgx - PostgreSQL Driver and Toolkit](https://github.com/jackc/pgx)`)**
+* **Google UUID (`[uuid](https://github.com/google/uuid)`)**
+* **Gookit config (`[Config](https://github.com/gookit/config)`)**
+* **Testify (`[Testify - Thou Shalt Write Tests](https://github.com/stretchr/testify)`)**
 
 ## Backend File Organization
 
@@ -50,6 +51,11 @@ make benchmark
 - `backend/cmd`: All the main and starter files
 - `backend/internal/`: All the domain logic with Screaming Architecture is a software design philosophy coined by Robert C. Martin (Uncle Bob) that dictates a system's folder and code structure should immediately communicate its business purpose, rather than the technology stack it uses
 - `backend/pkg`: Package wrappers
+
+## Backend API
+
+- Make all API endpoints POST
+- Only keep /health GET
 
 ## Code Style
 
@@ -61,6 +67,12 @@ make benchmark
 
 - Standard Go testing with `testing` package
 - Use `github.com/stretchr/testify` wherever possible
-- Tests include unit tests, integration tests, and benchmarks
+- Unit tests are for service-layer behavior only (that includes service.go and *_service.go files)
+- Do not write unit tests for API handlers, repositories, config helpers, or other non-service layers.
+- API and cross-layer behavior must be covered by integration tests instead of unit tests.
+- Tests include service unit tests, integration tests, and benchmarks
+- Use `backend/api-tests` folder for all integration tests
+- Add subfolder to `backend/api-tests` for each api group specified in code like `project`, `task`, etc...
 - Race condition testing is required (`make race`)
 - Test files follow `*_test.go` naming convention
+- Build all test types for all the code built by AI or fix existing tests

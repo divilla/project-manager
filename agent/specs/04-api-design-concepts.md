@@ -11,10 +11,18 @@ This document serves as a high-level conceptual specification outlining the acti
 - **Port:** Configured by default to `:8080` (or as set via `PORT` environment variable).
 - **Format:** All requests containing bodies should expect `application/json` format.
 - **CORS:** Cross-Origin Resource Sharing (CORS) is enabled globally for local development origins, including `http://localhost:8000` for the Vite/Quasar frontend.
+- **Health Check Exception:** Health diagnostics are intentionally GET endpoints. Keep `GET /api/v1/health` and `GET /api/health` as GET-only checks; do not change them to POST when implementing resource APIs.
 
 ---
 
 ## 2. Resource Endpoints
+
+### Health
+
+| Endpoint | Verb | Conceptual Intent / Behavior |
+| :--- | :--- | :--- |
+| `/api/v1/health` | `GET` | Returns API/database health for frontend diagnostics. |
+| `/api/health` | `GET` | Compatibility health endpoint with the same response shape. |
 
 ### A. Projects Resource (`/api/projects`)
 Manages high-level projects.

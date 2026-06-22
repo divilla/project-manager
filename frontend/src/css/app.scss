@@ -91,6 +91,118 @@ body {
   color: #5f6b7a;
 }
 
+.projects-shell {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.project-panel,
+.task-board {
+  min-width: 0;
+}
+
+.create-row,
+.task-create-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.create-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.task-select {
+  width: 150px;
+}
+
+.project-list {
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.selected-project {
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.compact-empty {
+  min-height: 140px;
+}
+
+.phase-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.phase-column {
+  min-height: 220px;
+}
+
+.phase-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: #364152;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.task-card {
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.task-card-title {
+  font-weight: 700;
+  color: #202939;
+}
+
+.task-card-meta {
+  margin-top: 4px;
+  color: #697586;
+  font-size: 13px;
+}
+
+.phase-move {
+  max-width: 140px;
+}
+
+.phase-empty {
+  min-height: 72px;
+  border: 1px dashed #cdd5df;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #697586;
+  font-size: 13px;
+}
+
+.dialog-card {
+  width: min(620px, calc(100vw - 32px));
+}
+
+.requirements-list {
+  display: grid;
+  gap: 10px;
+}
+
 @media (max-width: 720px) {
   .desktop-tabs {
     display: none;
@@ -119,5 +231,27 @@ body {
 
   .content-grid > * + * {
     margin-top: 16px;
+  }
+
+  .projects-shell,
+  .phase-board {
+    display: block;
+  }
+
+  .task-create-row,
+  .create-row {
+    align-items: stretch;
+  }
+
+  .task-create-row {
+    flex-direction: column;
+  }
+
+  .task-select {
+    width: 100%;
+  }
+
+  .project-panel {
+    margin-bottom: 20px;
   }
 }

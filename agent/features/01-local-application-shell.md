@@ -35,6 +35,7 @@ If the backend or database is unavailable, the frontend should show a clear non-
 - Load configuration from environment variables and `backend/config/dev.yaml` where appropriate.
 - Start the Echo server on the configured port, defaulting to `:8080`.
 - Expose a basic health endpoint suitable for frontend diagnostics.
+- Keep health diagnostics as `GET /api/v1/health` and `/api/health`; do not convert health checks to POST when applying the prototype's POST-based mutating-resource convention.
 - Provide centralized JSON error handling.
 - Use zerolog for backend logging, including Echo request logging and internal package logs.
 - Enable CORS for local frontend origins.
