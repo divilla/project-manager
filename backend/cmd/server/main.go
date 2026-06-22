@@ -8,6 +8,7 @@ import (
 
 	"aipm/internal/health"
 	"aipm/internal/project"
+	"aipm/internal/requirement"
 	"aipm/internal/task"
 	"aipm/pkg/config"
 	"aipm/pkg/db"
@@ -64,6 +65,10 @@ func main() {
 	taskRepository := task.NewRepo(pool)
 	taskService := task.NewService(taskRepository)
 	task.NewAPI(e, taskService)
+
+	requirementRepository := requirement.NewRepo(pool)
+	requirementService := requirement.NewService(requirementRepository)
+	requirement.NewAPI(e, requirementService)
 
 	if err := e.Start(cfg.Addr()); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error().Err(err).Msg("server stopped")

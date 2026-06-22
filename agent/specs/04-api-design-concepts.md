@@ -61,7 +61,9 @@ Provides granular requirement actions that drive the completeness progress calcu
 | `/api/requirement/update` | `POST`| Updates requirement text or toggles the completion status (`completed = true/false`). *Note: Triggering this endpoint causes the server to instantly recalculate the parent task's completeness percentage.* |
 | `/api/requirement/delete` | `POST`| Deletes a requirement and triggers parent task completeness recalculation. |
 
-Requirement update and delete handlers must archive the current `requirement` row to `requirement_history` before changing the active row. For updates, history records use `deleted = false`. For deletes, history records use `deleted = true`.
+Requirement update and delete handlers must archive the current `requirement` row to `requirement_history` before changing the active row. For updates, history records use `deleted = false`. For deletes, history records use `deleted = true`. If an update payload omits completion state, the active row's current `done` value must be preserved rather than defaulting to false.
+
+Requirement create, update, and delete responses should include the recalculated parent task and current requirement list so the frontend can refresh task completeness without an extra fetch. Requirement ordering must use existing columns only, currently `created` and `definition`; do not add schema migrations or synthetic ordering fields from API work.
 
 ### D. AI Planning & Copilot Resource (`/api/planning`)
 Interfaces with the language model provider to process user intent and produce project assets.

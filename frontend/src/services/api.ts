@@ -80,6 +80,12 @@ export interface TaskDetail {
   requirements: Requirement[];
 }
 
+export interface RequirementMutation {
+  requirement?: Requirement;
+  task: Task;
+  requirements: Requirement[];
+}
+
 export interface TaskReferences {
   phases: ReferenceOption[];
   types: ReferenceOption[];
@@ -142,4 +148,24 @@ export function changeTaskPhase(id: string, phase: string): Promise<Task> {
 
 export function deleteTask(id: string): Promise<void> {
   return post<void>('/api/task/delete', { id });
+}
+
+export function listRequirements(taskId: string): Promise<Requirement[]> {
+  return post<Requirement[]>('/api/requirement/list', { task_id: taskId });
+}
+
+export function createRequirement(taskId: string, definition: string): Promise<RequirementMutation> {
+  return post<RequirementMutation>('/api/requirement/create', { task_id: taskId, definition });
+}
+
+export function updateRequirement(input: {
+  id: string;
+  definition: string;
+  done: boolean;
+}): Promise<RequirementMutation> {
+  return post<RequirementMutation>('/api/requirement/update', input);
+}
+
+export function deleteRequirement(id: string): Promise<RequirementMutation> {
+  return post<RequirementMutation>('/api/requirement/delete', { id });
 }

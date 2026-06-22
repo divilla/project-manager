@@ -164,13 +164,75 @@
             class="q-mb-md"
           />
           <div class="requirements-list">
-            <div class="text-subtitle2">Requirements</div>
+            <div class="requirements-heading">
+              <div class="text-subtitle2">Requirements</div>
+              <q-badge color="grey-7" :label="`${taskDetail.task.complete}%`" />
+            </div>
+            <form class="requirement-create-row" @submit.prevent="createRequirementFromForm">
+              <q-input
+                v-model="requirementDefinition"
+                dense
+                outlined
+                label="Requirement"
+                class="create-input"
+              />
+              <q-btn
+                color="primary"
+                icon="playlist_add"
+                type="submit"
+                :disable="!requirementDefinition.trim()"
+                round
+                unelevated
+              >
+                <q-tooltip>Add requirement</q-tooltip>
+              </q-btn>
+            </form>
             <q-list v-if="taskDetail.requirements.length" bordered separator>
-              <q-item v-for="requirement in taskDetail.requirements" :key="requirement.id">
+              <q-item v-for="requirement in taskDetail.requirements" :key="requirement.id" class="requirement-item">
                 <q-item-section avatar>
-                  <q-icon :name="requirement.done ? 'check_circle' : 'radio_button_unchecked'" />
+                  <q-checkbox
+                    :model-value="requirement.done"
+                    @update:model-value="(done) => toggleRequirement(requirement, Boolean(done))"
+                  />
                 </q-item-section>
-                <q-item-section>{{ requirement.definition }}</q-item-section>
+                <q-item-section>
+                  <q-input
+                    v-if="editingRequirementId === requirement.id"
+                    v-model="editingRequirementDefinition"
+                    dense
+                    outlined
+                    autofocus
+                  />
+                  <span v-else>{{ requirement.definition }}</span>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="item-actions">
+                    <template v-if="editingRequirementId === requirement.id">
+                      <q-btn
+                        dense
+                        flat
+                        round
+                        icon="check"
+                        color="primary"
+                        :disable="!editingRequirementDefinition.trim()"
+                        @click="saveRequirement(requirement)"
+                      >
+                        <q-tooltip>Save requirement</q-tooltip>
+                      </q-btn>
+                      <q-btn dense flat round icon="close" @click="cancelRequirementEdit">
+                        <q-tooltip>Cancel</q-tooltip>
+                      </q-btn>
+                    </template>
+                    <template v-else>
+                      <q-btn dense flat round icon="edit" @click="startRequirementEdit(requirement)">
+                        <q-tooltip>Edit requirement</q-tooltip>
+                      </q-btn>
+                      <q-btn dense flat round icon="delete" color="negative" @click="removeRequirement(requirement)">
+                        <q-tooltip>Delete requirement</q-tooltip>
+                      </q-btn>
+                    </template>
+                  </div>
+                </q-item-section>
               </q-item>
             </q-list>
             <div v-else class="phase-empty">No requirements yet</div>
@@ -190,16 +252,21 @@ import { computed, onMounted, ref } from 'vue';
 import {
   changeTaskPhase,
   createProject,
+  createRequirement,
   createTask,
   deleteProject,
+  deleteRequirement,
   deleteTask,
   getTask,
   getTaskReferences,
   listProjects,
   listTasks,
+  updateRequirement,
   updateProject,
   updateTask,
   type Project,
+  type Requirement,
+  type RequirementMutation,
   type ReferenceOption,
   type Task,
   type TaskDetail,
@@ -226,6 +293,9 @@ const taskDetail = ref<TaskDetail | null>(null);
 const taskEditName = ref('');
 const taskEditDescription = ref('');
 const taskEditType = ref('');
+const requirementDefinition = ref('');
+const editingRequirementId = ref('');
+const editingRequirementDefinition = ref('');
 
 const selectedProject = computed(() => projects.value.find((project) => project.id === selectedProjectId.value));
 const phaseOptions = computed(() => phases.value.map((phase) => ({ label: phase.slug, value: phase.slug })));
@@ -374,6 +444,8 @@ async function openTask(task: Task) {
     taskEditName.value = taskDetail.value.task.name;
     taskEditDescription.value = taskDetail.value.task.description;
     taskEditType.value = taskDetail.value.task.type;
+    requirementDefinition.value = '';
+    cancelRequirementEdit();
     taskDialogOpen.value = true;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to load task.';
@@ -391,10 +463,89 @@ async function saveTask() {
       type: taskEditType.value,
     });
     tasks.value = tasks.value.map((item) => (item.id === task.id ? task : item));
+    if (taskDetail.value) {
+      taskDetail.value = {
+        ...taskDetail.value,
+        task,
+      };
+    }
     taskDialogOpen.value = false;
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to update task.';
   }
+}
+
+async function createRequirementFromForm() {
+  const definition = requirementDefinition.value.trim();
+  if (!taskDetail.value || !definition) return;
+
+  try {
+    const mutation = await createRequirement(taskDetail.value.task.id, definition);
+    applyRequirementMutation(mutation);
+    requirementDefinition.value = '';
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to create requirement.';
+  }
+}
+
+async function toggleRequirement(requirement: Requirement, done: boolean) {
+  try {
+    const mutation = await updateRequirement({
+      id: requirement.id,
+      definition: requirement.definition,
+      done,
+    });
+    applyRequirementMutation(mutation);
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to update requirement.';
+  }
+}
+
+function startRequirementEdit(requirement: Requirement) {
+  editingRequirementId.value = requirement.id;
+  editingRequirementDefinition.value = requirement.definition;
+}
+
+function cancelRequirementEdit() {
+  editingRequirementId.value = '';
+  editingRequirementDefinition.value = '';
+}
+
+async function saveRequirement(requirement: Requirement) {
+  const definition = editingRequirementDefinition.value.trim();
+  if (!definition) return;
+
+  try {
+    const mutation = await updateRequirement({
+      id: requirement.id,
+      definition,
+      done: requirement.done,
+    });
+    applyRequirementMutation(mutation);
+    cancelRequirementEdit();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to update requirement.';
+  }
+}
+
+async function removeRequirement(requirement: Requirement) {
+  try {
+    const mutation = await deleteRequirement(requirement.id);
+    applyRequirementMutation(mutation);
+    if (editingRequirementId.value === requirement.id) cancelRequirementEdit();
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Unable to delete requirement.';
+  }
+}
+
+function applyRequirementMutation(mutation: RequirementMutation) {
+  tasks.value = tasks.value.map((item) => (item.id === mutation.task.id ? mutation.task : item));
+  if (!taskDetail.value || taskDetail.value.task.id !== mutation.task.id) return;
+
+  taskDetail.value = {
+    task: mutation.task,
+    requirements: mutation.requirements,
+  };
 }
 
 async function removeTask(task: Task) {

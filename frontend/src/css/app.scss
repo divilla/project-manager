@@ -203,6 +203,21 @@ body {
   gap: 10px;
 }
 
+.requirements-heading,
+.requirement-create-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.requirements-heading {
+  justify-content: space-between;
+}
+
+.requirement-item {
+  align-items: center;
+}
+
 @media (max-width: 720px) {
   .desktop-tabs {
     display: none;
@@ -245,6 +260,10 @@ body {
 
   .task-create-row {
     flex-direction: column;
+  }
+
+  .requirement-create-row {
+    align-items: stretch;
   }
 
   .task-select {

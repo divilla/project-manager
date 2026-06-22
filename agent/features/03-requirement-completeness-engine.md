@@ -6,7 +6,8 @@ Implement the core product philosophy: completeness is measured from concrete, b
 Each Definition of Done item is represented as a `requirement`.
 
 ## 2. Prototype Scope
-- Add, edit, order, complete, uncomplete, and delete requirements for a task.
+- Add, edit, complete, uncomplete, and delete requirements for a task.
+- Display requirements in a stable order using the existing schema (`created`, then `definition`); do not add an ordering column or migration.
 - Recalculate task completeness whenever requirements change.
 - Return updated completeness values to the frontend immediately after changes.
 - Support dashboard aggregation by phase and project.
@@ -54,7 +55,7 @@ Rules:
 
 ### Add Requirement
 1. User adds requirement text to a task.
-2. Backend stores it with the next `order_index`.
+2. Backend stores it in the existing `requirement` table without adding columns.
 3. Parent task completeness is recalculated.
 4. Requirement appears in the task detail view.
 
@@ -70,6 +71,8 @@ Every create, update, or delete operation should return enough data for the fron
 
 Every update or delete of an existing requirement must write the current row to `requirement_history` before changing the active row. Deletes must write `deleted = true`.
 
+The current database does not include a requirement ordering column. The application must use stable existing-column ordering and must not create migrations or mutate the schema to satisfy ordering.
+
 ## 7. Acceptance Criteria
 - Requirements can be created, edited, completed, uncompleted, and deleted.
 - Task completeness updates after each requirement mutation.
@@ -79,3 +82,4 @@ Every update or delete of an existing requirement must write the current row to 
 - Implementation uses existing database tables/columns only and introduces no migrations.
 - Requirement update/toggle/delete operations preserve the previous current row in `requirement_history`.
 - Requirement deletes write history with `deleted = true`.
+- Requirement mutation responses include the recalculated parent task and current requirement list.
