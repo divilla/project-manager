@@ -36,6 +36,7 @@ If the backend or database is unavailable, the frontend should show a clear non-
 - Start the Echo server on the configured port, defaulting to `:8080`.
 - Expose a basic health endpoint suitable for frontend diagnostics.
 - Provide centralized JSON error handling.
+- Use zerolog for backend logging, including Echo request logging and internal package logs.
 - Enable CORS for local frontend origins.
 
 ## 6. Frontend Responsibilities
@@ -50,5 +51,6 @@ If the backend or database is unavailable, the frontend should show a clear non-
 - The frontend top navigation routes to Home, Planning, Projects, and Help.
 - The frontend can call the backend successfully from the local dev server.
 - Database connection failures are visible in logs and understandable in the UI.
+- Backend code uses zerolog only; no standard-library structured logging package usage remains in the project.
 - No code or agent workflow creates migrations, changes schema, or mutates `task_phase`/`task_type`.
 - No authentication or user-selection UI exists in the prototype.

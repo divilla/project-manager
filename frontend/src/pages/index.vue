@@ -1,20 +1,46 @@
 <template>
-  <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
-      <q-toolbar>
-        <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
+  <q-layout view="hHh Lpr lFf">
+    <q-header class="app-header">
+      <q-toolbar class="app-toolbar">
+        <q-toolbar-title class="app-title">AI Project Manager</q-toolbar-title>
 
-        <q-toolbar-title> Quasar App </q-toolbar-title>
+        <q-tabs :model-value="activeTab" shrink stretch class="desktop-tabs">
+          <q-route-tab name="home" to="/" label="Home" exact />
+          <q-route-tab name="planning" to="/planning" label="Planning" />
+          <q-route-tab name="projects" to="/projects" label="Projects" />
+          <q-route-tab name="help" to="/help" label="Help" />
+        </q-tabs>
 
-        <div>Quasar v{{ $q.version }}</div>
+        <q-btn
+          flat
+          dense
+          round
+          icon="menu"
+          class="mobile-menu"
+          aria-label="Open navigation"
+          @click="drawerOpen = true"
+        />
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
-      <q-list>
-        <q-item-label header> Essential Links </q-item-label>
-
-        <EssentialLink v-for="link in linksList" :key="link.label" v-bind="link" />
+    <q-drawer v-model="drawerOpen" side="right" bordered :width="240">
+      <q-list padding>
+        <q-item clickable to="/" exact @click="drawerOpen = false">
+          <q-item-section avatar><q-icon name="dashboard" /></q-item-section>
+          <q-item-section>Home</q-item-section>
+        </q-item>
+        <q-item clickable to="/planning" @click="drawerOpen = false">
+          <q-item-section avatar><q-icon name="psychology" /></q-item-section>
+          <q-item-section>Planning</q-item-section>
+        </q-item>
+        <q-item clickable to="/projects" @click="drawerOpen = false">
+          <q-item-section avatar><q-icon name="view_kanban" /></q-item-section>
+          <q-item-section>Projects</q-item-section>
+        </q-item>
+        <q-item clickable to="/help" @click="drawerOpen = false">
+          <q-item-section avatar><q-icon name="help" /></q-item-section>
+          <q-item-section>Help</q-item-section>
+        </q-item>
       </q-list>
     </q-drawer>
 
@@ -25,57 +51,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import EssentialLink, { type EssentialLinkProps } from '@/components/EssentialLink.vue';
+import { computed, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
-const linksList: EssentialLinkProps[] = [
-  {
-    label: 'Docs',
-    caption: 'quasar.dev',
-    icon: 'school',
-    link: 'https://quasar.dev',
-  },
-  {
-    label: 'Github',
-    caption: 'github.com/quasarframework',
-    icon: 'code',
-    link: 'https://github.com/quasarframework',
-  },
-  {
-    label: 'Discord Chat Channel',
-    caption: 'chat.quasar.dev',
-    icon: 'chat',
-    link: 'https://chat.quasar.dev',
-  },
-  {
-    label: 'Forum',
-    caption: 'forum.quasar.dev',
-    icon: 'record_voice_over',
-    link: 'https://forum.quasar.dev',
-  },
-  {
-    label: 'Twitter',
-    caption: '@quasarframework',
-    icon: 'rss_feed',
-    link: 'https://twitter.quasar.dev',
-  },
-  {
-    label: 'Facebook',
-    caption: '@QuasarFramework',
-    icon: 'public',
-    link: 'https://facebook.quasar.dev',
-  },
-  {
-    label: 'Quasar Awesome',
-    caption: 'Community Quasar projects',
-    icon: 'favorite',
-    link: 'https://awesome.quasar.dev',
-  },
-];
+const route = useRoute();
+const drawerOpen = ref(false);
 
-const leftDrawerOpen = ref(false);
-
-function toggleLeftDrawer() {
-  leftDrawerOpen.value = !leftDrawerOpen.value;
-}
+const activeTab = computed(() => {
+  if (route.path.startsWith('/planning')) return 'planning';
+  if (route.path.startsWith('/projects')) return 'projects';
+  if (route.path.startsWith('/help')) return 'help';
+  return 'home';
+});
 </script>

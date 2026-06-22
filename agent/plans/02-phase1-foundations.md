@@ -21,7 +21,7 @@ The objective of Phase 1 is to establish the core software engineering scaffoldi
    - `go get github.com/labstack/echo/v4/middleware`
    - `go get github.com/jackc/pgx/v5` (or preferred DB connector).
 3. **Database Driver Setup:** Create a `db` package that opens a connection pool with PostgreSQL using environment variables (e.g. `DATABASE_URL`).
-4. **Echo Server Setup:** Initialize an Echo router in `main.go`, attaching the Logger, Recovery, and CORS middlewares (enabling origins like `http://localhost:8000`).
+4. **Echo Server Setup:** Initialize an Echo router in `main.go`, attaching zerolog request logging, Recovery, and CORS middlewares (enabling origins like `http://localhost:8000`).
 5. **Start Server:** Bind the application to port `8080`.
 
 ### Step 1.3: Core Project & Task APIs

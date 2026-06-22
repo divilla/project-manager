@@ -2,12 +2,11 @@ package project
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
 
 	"aipm/internal/dto"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 )
 
 type Repository struct {
@@ -29,7 +28,6 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]dto.Project
 
 	var ps []dto.Project
 	rows, err := conn.Query(ctx, "select * from project order by name limit $1 offset $2", limit, offset)
-	fmt.Println(rows, err)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +37,7 @@ func (r *Repository) List(ctx context.Context, limit, offset int) ([]dto.Project
 		var p dto.Project
 		err = rows.Scan(&p.Id, &p.Name)
 		if err != nil {
-			slog.Error("failed to scan product search", slog.String("error", err.Error()))
+			log.Error().Err(err).Msg("failed to scan project")
 		}
 		ps = append(ps, p)
 	}

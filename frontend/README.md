@@ -10,8 +10,10 @@ pnpm install
 ### Start the app in development mode (HMR, error reporting, etc.)
 
 ```bash
-quasar dev
+pnpm dev
 ```
+
+The development server is configured to run at `http://localhost:8000`.
 
 ### Build the app for production
 

@@ -60,6 +60,7 @@ make benchmark
 ## Testing
 
 - Standard Go testing with `testing` package
+- Use `github.com/stretchr/testify` wherever possible
 - Tests include unit tests, integration tests, and benchmarks
 - Race condition testing is required (`make race`)
 - Test files follow `*_test.go` naming convention
