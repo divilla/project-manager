@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	ErrInvalidInput = errors.New("invalid project input")
-	ErrNotFound     = errors.New("project not found")
+	ErrInvalidInput    = errors.New("invalid project input")
+	ErrNotFound        = errors.New("project not found")
+	ErrProjectHasTasks = errors.New("project has tasks")
 )
 
 type Service struct {
@@ -23,8 +24,8 @@ func NewService(projectRepository Repository) *Service {
 
 func (s *Service) ListProjects(ctx context.Context, req dto.ProjectListRequest) ([]dto.Project, error) {
 	limit := req.Limit
-	if limit <= 0 || limit > 500 {
-		limit = 100
+	if limit < 0 {
+		limit = 0
 	}
 	offset := req.Offset
 	if offset < 0 {

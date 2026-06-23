@@ -12,7 +12,7 @@ import (
 func TestRequirementDeleteLastItemReturnsZeroCompletedFromView(t *testing.T) {
 	client := shared.NewClient(t)
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 	taskID := createTask(t, client, projectID)
 	requirement := createRequirement(t, client, taskID, "Delete the final requirement transactionally.")
 
@@ -30,7 +30,7 @@ func TestRequirementDeleteLastItemReturnsZeroCompletedFromView(t *testing.T) {
 func TestRequirementDoneUpdateDoesNotIncrementVersion(t *testing.T) {
 	client := shared.NewClient(t)
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 	taskID := createTask(t, client, projectID)
 	requirement := createRequirement(t, client, taskID, "Done changes preserve the version.")
 

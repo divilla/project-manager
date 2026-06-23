@@ -8,13 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type project struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	Created   time.Time `json:"created"`
+	Modified  time.Time `json:"modified"`
+	TaskCount int       `json:"task_count"`
 }
 
 func TestProjectCRUD(t *testing.T) {
@@ -27,8 +31,11 @@ func TestProjectCRUD(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
 	assert.Equal(t, name, created.Name)
+	assert.False(t, created.Created.IsZero())
+	assert.False(t, created.Modified.IsZero())
+	assert.Equal(t, 0, created.TaskCount)
 
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": created.ID}, nil)
+	defer shared.CleanupProject(t, client, created.ID)
 
 	var listed []project
 	status = client.Post(t, "/api/v1/project/list", map[string]int{"limit": 200}, &listed)
@@ -44,6 +51,7 @@ func TestProjectCRUD(t *testing.T) {
 	status = client.Post(t, "/api/v1/project/update", map[string]any{"id": created.ID, "name": updatedName}, &updated)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, updatedName, updated.Name)
+	assert.False(t, updated.Modified.Before(updated.Created))
 
 	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusNoContent, status)
@@ -52,7 +60,7 @@ func TestProjectCRUD(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, status)
 }
 
-func TestProjectDeleteArchivesChildTasksAndRequirements(t *testing.T) {
+func TestProjectDeleteRejectsProjectsWithTasks(t *testing.T) {
 	client := shared.NewClient(t)
 	db := shared.NewDB(t)
 	ctx := context.Background()
@@ -70,6 +78,10 @@ func TestProjectDeleteArchivesChildTasksAndRequirements(t *testing.T) {
 	}, &createdTask)
 	require.Equal(t, http.StatusCreated, status)
 
+	t.Cleanup(func() {
+		shared.CleanupProject(t, client, created.ID)
+	})
+
 	var requirementID int
 	err := db.QueryRow(ctx, `
 		insert into requirement (definition, task_id)
@@ -79,12 +91,24 @@ func TestProjectDeleteArchivesChildTasksAndRequirements(t *testing.T) {
 	require.NoError(t, err)
 
 	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": created.ID}, nil)
-	require.Equal(t, http.StatusNoContent, status)
+	require.Equal(t, http.StatusConflict, status)
 
-	shared.AssertHistoryDeleted(t, db, "task_history", createdTask.ID)
-	shared.AssertHistoryDeleted(t, db, "requirement_history", requirementID)
+	assertRowExists(t, db, "project", created.ID)
+	assertRowExists(t, db, "task", createdTask.ID)
+	assertRowExists(t, db, "requirement", requirementID)
+	shared.AssertHistoryCount(t, db, "task_history", createdTask.ID, true, 0)
+	shared.AssertHistoryCount(t, db, "requirement_history", requirementID, true, 0)
 }
 
 type task struct {
 	ID int `json:"id"`
+}
+
+func assertRowExists(t *testing.T, db *pgxpool.Pool, table string, id int) {
+	t.Helper()
+
+	var exists bool
+	err := db.QueryRow(context.Background(), "select exists(select 1 from "+table+" where id = $1)", id).Scan(&exists)
+	require.NoError(t, err)
+	assert.True(t, exists)
 }

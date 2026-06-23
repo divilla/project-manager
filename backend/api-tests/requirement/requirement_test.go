@@ -44,7 +44,7 @@ func TestRequirementCRUDRecalculatesTaskCompleteness(t *testing.T) {
 	db := shared.NewDB(t)
 
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 	taskID := createTask(t, client, projectID)
 
 	var listed []requirement
@@ -133,7 +133,7 @@ func TestRequirementCRUDRecalculatesTaskCompleteness(t *testing.T) {
 func TestRequirementCountersPropagateToAncestors(t *testing.T) {
 	client := shared.NewClient(t)
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 
 	var parent task
 	status := client.Post(t, "/api/v1/task/create", map[string]any{

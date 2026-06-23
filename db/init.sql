@@ -6,6 +6,7 @@ drop procedure if exists public.sp_task_to_history;
 drop function if exists public.fn_task_descendants;
 
 drop view if exists vw_task;
+drop view if exists vw_project;
 
 drop table if exists public.requirement_history;
 drop table if exists public.requirement;
@@ -17,8 +18,10 @@ drop table if exists public.project;
 
 create table public.project
 (
-    id   bigint generated always as identity primary key,
-    name text not null
+    id          bigint generated always as identity primary key,
+    name        text                                   not null,
+    created     timestamp with time zone default now() not null,
+    modified    timestamp with time zone default now() not null
 );
 
 create table public.task_type
@@ -84,6 +87,22 @@ create table public.requirement_history
     deleted    boolean not null,
     primary key (id, version)
 );
+
+create view vw_project as
+    select
+        p.id,
+        p.name,
+        p.created,
+        p.modified,
+        count(t.*)::int as task_count
+    from project p
+         left join task t on p.id=t.project_id
+    group by
+        p.id,
+        p.name,
+        p.created,
+        p.modified
+    order by p.id;
 
 create view public.vw_task as
     SELECT id,
@@ -217,4 +236,3 @@ begin
     end loop;
 end;
 $$;
-

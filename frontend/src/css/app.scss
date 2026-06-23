@@ -9,14 +9,28 @@ body {
 }
 
 .app-toolbar {
+  position: relative;
   min-height: 64px;
   padding: 0 24px;
 }
 
 .app-title {
+  flex: 0 0 auto;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 0;
+}
+
+.top-project-selector {
+  width: 240px;
+  margin-left: 16px;
+  flex: 0 0 auto;
+}
+
+.desktop-tabs-wrap {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .mobile-menu {
@@ -24,7 +38,7 @@ body {
 }
 
 .app-page {
-  max-width: 1180px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 32px 24px;
 }
@@ -98,6 +112,11 @@ body {
   align-items: start;
 }
 
+.projects-shell--crud {
+  display: block;
+  max-width: none;
+}
+
 .project-panel,
 .task-board {
   min-width: 0;
@@ -126,6 +145,53 @@ body {
   overflow: hidden;
 }
 
+.project-table-header,
+.project-table-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(170px, 220px) minmax(170px, 220px) 72px 88px;
+  align-items: center;
+  column-gap: 16px;
+}
+
+.project-table-header {
+  padding: 10px 16px;
+  background: #f8fafc;
+  color: #5f6b7a;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.project-table-row {
+  min-height: 56px;
+}
+
+.project-table-row .q-item__section {
+  min-width: 0;
+}
+
+.project-name,
+.project-date-cell,
+.project-count-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-count-cell,
+.project-actions-cell {
+  justify-self: end;
+}
+
+.project-table-header span:nth-child(2),
+.project-table-header span:nth-child(3),
+.project-table-header span:nth-child(4),
+.project-date-cell,
+.project-count-cell {
+  justify-self: center;
+  text-align: center;
+}
+
 .selected-project {
   background: #e3f2fd;
   color: #0d47a1;
@@ -143,7 +209,7 @@ body {
 
 .phase-board {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -219,8 +285,13 @@ body {
 }
 
 @media (max-width: 720px) {
-  .desktop-tabs {
+  .desktop-tabs-wrap {
     display: none;
+  }
+
+  .top-project-selector {
+    width: min(46vw, 220px);
+    margin-left: 8px;
   }
 
   .mobile-menu {
@@ -272,5 +343,29 @@ body {
 
   .project-panel {
     margin-bottom: 20px;
+  }
+
+  .project-table-header {
+    display: none;
+  }
+
+  .project-table-row {
+    grid-template-columns: minmax(150px, 1fr) 56px 76px;
+    row-gap: 4px;
+  }
+
+  .project-date-cell {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-title {
+    display: none;
+  }
+
+  .top-project-selector {
+    width: min(58vw, 240px);
+    margin-left: 0;
   }
 }

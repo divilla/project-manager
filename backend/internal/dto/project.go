@@ -1,9 +1,14 @@
 package dto
 
+import "time"
+
 type (
 	Project struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
+		ID        int       `json:"id"`
+		Name      string    `json:"name"`
+		Created   time.Time `json:"created"`
+		Modified  time.Time `json:"modified"`
+		TaskCount int       `json:"task_count"`
 	}
 
 	ProjectListRequest struct {

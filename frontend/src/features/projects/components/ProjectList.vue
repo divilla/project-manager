@@ -1,23 +1,57 @@
 <template>
-  <q-list bordered separator class="project-list">
+  <q-list bordered separator class="project-list project-table">
+    <div class="project-table-header" aria-hidden="true">
+      <span>Name</span>
+      <span>Created</span>
+      <span>Modified</span>
+      <span>Tasks</span>
+      <span></span>
+    </div>
+
     <q-item
       v-for="project in projects"
       :key="project.id"
       clickable
       :active="project.id === selectedProjectId"
       active-class="selected-project"
+      class="project-table-row"
       @click="$emit('select', project.id)"
     >
-      <q-item-section>
-        <q-item-label>{{ project.name }}</q-item-label>
+      <q-item-section class="project-name-cell">
+        <q-item-label class="project-name">{{ project.name }}</q-item-label>
       </q-item-section>
-      <q-item-section side>
+      <q-item-section class="project-date-cell">
+        <q-item-label caption>{{ formatProjectDate(project.created) }}</q-item-label>
+      </q-item-section>
+      <q-item-section class="project-date-cell">
+        <q-item-label caption>{{ formatProjectDate(project.modified) }}</q-item-label>
+      </q-item-section>
+      <q-item-section class="project-count-cell">
+        <q-item-label caption>
+          {{ project.task_count }}
+        </q-item-label>
+      </q-item-section>
+      <q-item-section side class="project-actions-cell">
         <div class="item-actions">
           <q-btn dense flat round icon="edit" @click.stop="$emit('rename', project)">
             <q-tooltip>Rename project</q-tooltip>
           </q-btn>
-          <q-btn dense flat round icon="delete" color="negative" @click.stop="$emit('delete', project)">
-            <q-tooltip>Delete project</q-tooltip>
+          <q-btn
+            dense
+            flat
+            round
+            icon="delete"
+            color="negative"
+            :disable="project.task_count > 0"
+            @click.stop="$emit('delete', project)"
+          >
+            <q-tooltip>
+              {{
+                project.task_count > 0
+                  ? 'Delete all project tasks before deleting this project'
+                  : 'Delete project'
+              }}
+            </q-tooltip>
           </q-btn>
         </div>
       </q-item-section>
@@ -32,6 +66,13 @@
 
 <script setup lang="ts">
 import type { Project } from '../model/project.types';
+
+function formatProjectDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
 
 defineProps<{
   projects: Project[];

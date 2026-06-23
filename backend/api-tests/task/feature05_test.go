@@ -15,7 +15,7 @@ func TestTaskHistoryFieldsAndSmallintRoundTrip(t *testing.T) {
 	client := shared.NewClient(t)
 	db := shared.NewDB(t)
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 
 	parentA := createTaskRecord(t, client, map[string]any{
 		"project_id": projectID,
@@ -73,7 +73,7 @@ func TestTaskHistoryFieldsAndSmallintRoundTrip(t *testing.T) {
 func TestTaskPhaseRecalculationAfterInsertUpdateAndDelete(t *testing.T) {
 	client := shared.NewClient(t)
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 
 	parent := createTaskRecord(t, client, map[string]any{
 		"project_id": projectID,
@@ -112,7 +112,7 @@ func TestTaskPhaseRecalculationAfterInsertUpdateAndDelete(t *testing.T) {
 func TestTaskParentCanBeClearedWithoutChangingOtherFields(t *testing.T) {
 	client := shared.NewClient(t)
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 	parent := createTaskRecord(t, client, map[string]any{"project_id": projectID, "name": uniqueTaskName("parent")})
 	child := createTaskRecord(t, client, map[string]any{"project_id": projectID, "parent_id": parent.ID, "name": uniqueTaskName("child")})
 	updated := updateTaskParentRecord(t, client, child, nil)
@@ -123,7 +123,7 @@ func TestTaskParentCanBeClearedWithoutChangingOtherFields(t *testing.T) {
 func TestTaskParentMoveRecalculatesRequirementCounters(t *testing.T) {
 	client := shared.NewClient(t)
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 
 	parentA := createTaskRecord(t, client, map[string]any{
 		"project_id": projectID,
@@ -165,7 +165,7 @@ func TestTaskParentMoveRecalculatesRequirementCounters(t *testing.T) {
 func TestTaskParentCannotBeDescendant(t *testing.T) {
 	client := shared.NewClient(t)
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 
 	root := createTaskRecord(t, client, map[string]any{
 		"project_id": projectID,

@@ -1,11 +1,7 @@
-import { computed, onMounted, ref } from 'vue';
-import {
-  createProject,
-  deleteProject,
-  listProjects,
-  updateProject,
-} from '@/features/projects/api/projectApi';
+import { computed, onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import type { Project } from '@/features/projects/model/project.types';
+import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 import {
   createTask,
   deleteTask,
@@ -37,12 +33,21 @@ function errorMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
 }
 
-export function useProjectsPage() {
-  const projects = ref<Project[]>([]);
+interface UseProjectsPageOptions {
+  tasksEnabled?: boolean;
+}
+
+export function useProjectsPage(options: UseProjectsPageOptions = {}) {
+  const tasksEnabled = options.tasksEnabled ?? true;
+  const projectSelection = useProjectSelectionStore();
+  const {
+    projects,
+    activeProjectId: selectedProjectId,
+    activeProject: selectedProject,
+  } = storeToRefs(projectSelection);
   const tasks = ref<Task[]>([]);
   const phases = ref<ReferenceOption[]>([]);
   const types = ref<ReferenceOption[]>([]);
-  const selectedProjectId = ref(0);
   const projectName = ref('');
   const taskName = ref('');
   const taskType = ref('');
@@ -62,10 +67,8 @@ export function useProjectsPage() {
   const requirementDefinition = ref('');
   const editingRequirementId = ref(0);
   const editingRequirementDefinition = ref('');
+  let suppressProjectWatch = false;
 
-  const selectedProject = computed(() =>
-    projects.value.find((project) => project.id === selectedProjectId.value),
-  );
   const phaseOptions = computed<SelectOption[]>(() =>
     phases.value.map((phase) => ({ label: phase.slug, value: phase.slug })),
   );
@@ -97,23 +100,30 @@ export function useProjectsPage() {
     error.value = '';
 
     try {
-      const [references, loadedProjects] = await Promise.all([getTaskReferences(), listProjects()]);
-      phases.value = references.phases;
-      types.value = references.types;
-      if (!taskType.value) taskType.value = references.types[0]?.slug || '';
-      if (!taskPhase.value) taskPhase.value = references.phases[0]?.slug || '';
-      projects.value = loadedProjects;
+      suppressProjectWatch = true;
+      if (tasksEnabled) {
+        const [references] = await Promise.all([
+          getTaskReferences(),
+          projectSelection.loadProjects(),
+        ]);
+        phases.value = references.phases;
+        types.value = references.types;
+        if (!taskType.value) taskType.value = references.types[0]?.slug || '';
+        if (!taskPhase.value) taskPhase.value = references.phases[0]?.slug || '';
 
-      if (!selectedProjectId.value && loadedProjects.length) {
-        selectedProjectId.value = loadedProjects[0]!.id;
-      }
-
-      if (selectedProjectId.value) {
-        await loadTasks(selectedProjectId.value);
+        if (selectedProjectId.value) {
+          await loadTasks(selectedProjectId.value);
+        } else {
+          tasks.value = [];
+        }
+      } else {
+        await projectSelection.loadProjects();
+        tasks.value = [];
       }
     } catch (err) {
       error.value = errorMessage(err, 'Unable to load projects.');
     } finally {
+      suppressProjectWatch = false;
       loading.value = false;
     }
   }
@@ -123,12 +133,21 @@ export function useProjectsPage() {
   }
 
   async function selectProject(projectId: number) {
-    selectedProjectId.value = projectId;
+    suppressProjectWatch = true;
+    projectSelection.selectProject(projectId);
     error.value = '';
     try {
-      await loadTasks(projectId);
+      if (!tasksEnabled) {
+        tasks.value = [];
+      } else if (selectedProjectId.value) {
+        await loadTasks(selectedProjectId.value);
+      } else {
+        tasks.value = [];
+      }
     } catch (err) {
       error.value = errorMessage(err, 'Unable to load tasks.');
+    } finally {
+      suppressProjectWatch = false;
     }
   }
 
@@ -137,12 +156,14 @@ export function useProjectsPage() {
     if (!name) return;
 
     try {
-      const project = await createProject(name);
-      projects.value = [...projects.value, project].sort((a, b) => a.name.localeCompare(b.name));
+      suppressProjectWatch = true;
+      const project = await projectSelection.createProject(name);
       projectName.value = '';
-      await selectProject(project.id);
+      if (tasksEnabled) await loadTasks(project.id);
     } catch (err) {
       error.value = errorMessage(err, 'Unable to create project.');
+    } finally {
+      suppressProjectWatch = false;
     }
   }
 
@@ -157,8 +178,7 @@ export function useProjectsPage() {
     if (!projectEditId.value || !name) return;
 
     try {
-      const project = await updateProject(projectEditId.value, name);
-      projects.value = projects.value.map((item) => (item.id === project.id ? project : item));
+      await projectSelection.renameProject(projectEditId.value, name);
       projectDialogOpen.value = false;
     } catch (err) {
       error.value = errorMessage(err, 'Unable to update project.');
@@ -166,16 +186,30 @@ export function useProjectsPage() {
   }
 
   async function removeProject(project: Project) {
+    if (project.task_count > 0) {
+      error.value = 'Delete all project tasks before deleting this project.';
+      return;
+    }
+
+    if (
+      typeof window !== 'undefined' &&
+      !window.confirm(`Delete project "${project.name}"? This cannot be undone.`)
+    ) {
+      return;
+    }
+
     try {
-      await deleteProject(project.id);
-      projects.value = projects.value.filter((item) => item.id !== project.id);
-      if (selectedProjectId.value === project.id) {
-        selectedProjectId.value = projects.value[0]?.id || 0;
+      const wasSelected = selectedProjectId.value === project.id;
+      suppressProjectWatch = true;
+      await projectSelection.removeProject(project);
+      if (tasksEnabled && wasSelected) {
         tasks.value = [];
         if (selectedProjectId.value) await loadTasks(selectedProjectId.value);
       }
     } catch (err) {
       error.value = errorMessage(err, 'Unable to delete project.');
+    } finally {
+      suppressProjectWatch = false;
     }
   }
 
@@ -193,6 +227,7 @@ export function useProjectsPage() {
 
       const task = await createTask(input);
       tasks.value = [...tasks.value, task];
+      await projectSelection.loadProjects();
       taskName.value = '';
     } catch (err) {
       error.value = errorMessage(err, 'Unable to create task.');
@@ -328,6 +363,7 @@ export function useProjectsPage() {
     try {
       await deleteTask(task.id);
       await refreshSelectedProjectTasks();
+      await projectSelection.loadProjects();
     } catch (err) {
       error.value = errorMessage(err, 'Unable to delete task.');
     }
@@ -335,6 +371,21 @@ export function useProjectsPage() {
 
   onMounted(() => {
     void loadAll();
+  });
+
+  watch(selectedProjectId, (projectId) => {
+    if (!tasksEnabled) return;
+    if (suppressProjectWatch) return;
+    error.value = '';
+
+    if (!projectId) {
+      tasks.value = [];
+      return;
+    }
+
+    void loadTasks(projectId).catch((err: unknown) => {
+      error.value = errorMessage(err, 'Unable to load tasks.');
+    });
   });
 
   return {

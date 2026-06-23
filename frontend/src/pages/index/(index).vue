@@ -11,7 +11,7 @@
         label="Refresh"
         :loading="loading"
         no-caps
-        @click="loadHealth"
+        @click="loadHome"
       />
     </section>
 
@@ -33,9 +33,13 @@
       <q-card flat bordered>
         <q-card-section>
           <div class="text-subtitle1">Project Completeness</div>
-          <div class="empty-state">
+          <div v-if="activeProject" class="empty-state">
             <q-icon name="donut_large" size="40px" />
-            <span>Dashboard metrics will appear after project and task APIs are connected.</span>
+            <span>{{ activeProject.name }} has {{ activeProject.task_count }} tracked tasks.</span>
+          </div>
+          <div v-else class="empty-state">
+            <q-icon name="folder_open" size="40px" />
+            <span>Create a project to enable dashboard metrics.</span>
           </div>
         </q-card-section>
       </q-card>
@@ -43,9 +47,16 @@
       <q-card flat bordered>
         <q-card-section>
           <div class="text-subtitle1">Phase Summary</div>
-          <div class="empty-state">
+          <div v-if="activeProjectId" class="empty-state">
             <q-icon name="view_column" size="40px" />
-            <span>Task phases will be loaded from the existing database reference data.</span>
+            <span
+              >Phase metrics will load for project #{{ activeProjectId }} when dashboard APIs are
+              available.</span
+            >
+          </div>
+          <div v-else class="empty-state">
+            <q-icon name="view_column" size="40px" />
+            <span>No active project selected.</span>
           </div>
         </q-card-section>
       </q-card>
@@ -55,18 +66,23 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
+import { storeToRefs } from 'pinia';
+import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 import { getHealth, type HealthResponse } from '@/services/api';
 
+const projectSelection = useProjectSelectionStore();
+const { activeProject, activeProjectId } = storeToRefs(projectSelection);
 const health = ref<HealthResponse | null>(null);
 const loading = ref(false);
 const error = ref('');
 
-async function loadHealth() {
+async function loadHome() {
   loading.value = true;
   error.value = '';
 
   try {
-    health.value = await getHealth();
+    const [response] = await Promise.all([getHealth(), projectSelection.loadProjects()]);
+    health.value = response;
   } catch (err) {
     health.value = null;
     error.value = err instanceof Error ? err.message : 'Unable to reach the backend.';
@@ -76,6 +92,6 @@ async function loadHealth() {
 }
 
 onMounted(() => {
-  void loadHealth();
+  void loadHome();
 });
 </script>

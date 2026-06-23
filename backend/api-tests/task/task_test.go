@@ -59,7 +59,7 @@ func TestTaskCRUDAndReferences(t *testing.T) {
 	require.NotEmpty(t, refs.Types)
 
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 
 	taskName := fmt.Sprintf("api-test-task-%d", time.Now().UnixNano())
 	var created task
@@ -131,7 +131,7 @@ func TestTaskCreateRejectsInvalidReferences(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status)
 
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 
 	status = client.Post(t, "/api/v1/task/create", map[string]any{
 		"project_id": projectID,
@@ -147,7 +147,7 @@ func TestTaskDeleteArchivesAndRemovesChildTaskTree(t *testing.T) {
 	ctx := context.Background()
 
 	projectID := createProject(t, client)
-	defer client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	defer shared.CleanupProject(t, client, projectID)
 
 	var parent task
 	status := client.Post(t, "/api/v1/task/create", map[string]any{

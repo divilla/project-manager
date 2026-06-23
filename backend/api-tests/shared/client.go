@@ -22,6 +22,11 @@ type Client struct {
 	http    *http.Client
 }
 
+type cleanupTask struct {
+	ID       int  `json:"id"`
+	ParentID *int `json:"parent_id"`
+}
+
 func NewClient(t *testing.T) *Client {
 	t.Helper()
 
@@ -94,6 +99,29 @@ func AssertHistoryCount(t *testing.T, db *pgxpool.Pool, table string, id int, de
 	err := db.QueryRow(context.Background(), "select count(*) from "+table+" where id = $1 and deleted = $2", id, deleted).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, expected, count)
+}
+
+func CleanupProject(t *testing.T, client *Client, projectID int) {
+	t.Helper()
+
+	var tasks []cleanupTask
+	status := client.Post(t, "/api/v1/task/list", map[string]any{"project_id": projectID}, &tasks)
+	if status == http.StatusOK {
+		for _, task := range tasks {
+			if task.ParentID != nil {
+				continue
+			}
+			status = client.Post(t, "/api/v1/task/delete", map[string]any{"id": task.ID}, nil)
+			assert.Contains(t, []int{http.StatusNoContent, http.StatusNotFound}, status)
+		}
+		for _, task := range tasks {
+			status = client.Post(t, "/api/v1/task/delete", map[string]any{"id": task.ID}, nil)
+			assert.Contains(t, []int{http.StatusNoContent, http.StatusNotFound}, status)
+		}
+	}
+
+	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": projectID}, nil)
+	assert.Contains(t, []int{http.StatusNoContent, http.StatusNotFound}, status)
 }
 
 func (c *Client) Get(t *testing.T, path string, out any) int {

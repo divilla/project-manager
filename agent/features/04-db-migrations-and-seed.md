@@ -19,7 +19,18 @@ No non-SQL implementation file may be changed by this feature. Any backend, fron
 
 `db/migrations/` is the reserved location for future explicitly requested migrations. This feature does not request a schema migration, so the directory and its contents must remain unchanged.
 
-## 3. `db/seed.sql`
+## 3. Operational Backup Notes
+
+Database backup and restore helpers live in `db/backup/`.
+
+- `backup.sh` creates a compressed full backup of the `project_manager` database.
+- `backup-test.sh` creates a compressed full backup of the `project_manager_test` database.
+- `restore.sh <backup.sql.gz>` restores a compressed backup into `project_manager`.
+- `restore-test.sh <backup.sql.gz>` restores a compressed backup into `project_manager_test`.
+
+The backup files are timestamped `.sql.gz` dumps created with `pg_dump -c`, so restoring them can drop and recreate database objects in the target database. Use the production and test restore scripts carefully to avoid restoring into the wrong database.
+
+## 4. `db/seed.sql`
 
 `db/seed.sql` seeds only the required `task_phase` and `task_type` reference rows.
 
@@ -56,7 +67,7 @@ Required `task_type` rows:
 
 These values come from the existing database and must be preserved exactly.
 
-## 4. `db/seed-demo.sql`
+## 5. `db/seed-demo.sql`
 
 `db/seed-demo.sql` provides destructive local demo-data reset and seeding. It is not a production migration.
 
@@ -100,7 +111,7 @@ Create exactly 60 tasks for `demo1`.
 
 After inserting requirements, call the existing `public.sp_task_requirement_recalculate` procedure as needed to populate task counters. Do not manually maintain cached counters and do not define or modify the procedure.
 
-## 5. Verification
+## 6. Verification
 
 Verification for this feature is limited to executing and querying the SQL scripts. It must not require application-code changes.
 
@@ -117,7 +128,7 @@ Verify that:
 - Task and requirement history tables are empty immediately after seeding.
 - `task_phase` and `task_type` retain the required values.
 
-## 6. Acceptance Criteria
+## 7. Acceptance Criteria
 
 - Feature implementation changes only `db/seed.sql` and `db/seed-demo.sql`.
 - No application, configuration, test, or non-SQL file is changed.

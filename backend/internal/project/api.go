@@ -111,6 +111,8 @@ func projectError(err error) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid project payload")
 	case errors.Is(err, ErrNotFound):
 		return echo.NewHTTPError(http.StatusNotFound, "project not found")
+	case errors.Is(err, ErrProjectHasTasks):
+		return echo.NewHTTPError(http.StatusConflict, "project has tasks and cannot be deleted")
 	default:
 		return err
 	}

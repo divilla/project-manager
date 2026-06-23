@@ -40,6 +40,7 @@ declare module 'vue-router/auto-routes' {
       | '//help'
       | '//planning'
       | '//projects'
+      | '//tasks'
     >,
     '//(index)': RouteRecordInfo<
       '//(index)',
@@ -65,6 +66,13 @@ declare module 'vue-router/auto-routes' {
     '//projects': RouteRecordInfo<
       '//projects',
       '/projects',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '//tasks': RouteRecordInfo<
+      '//tasks',
+      '/tasks',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -96,6 +104,7 @@ declare module 'vue-router/auto-routes' {
         | '//help'
         | '//planning'
         | '//projects'
+        | '//tasks'
       views:
         | 'default'
       pathParamNames:
@@ -128,6 +137,14 @@ declare module 'vue-router/auto-routes' {
     'src/pages/index/projects.vue': {
       routes:
         | '//projects'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/index/tasks.vue': {
+      routes:
+        | '//tasks'
       views:
         | never
       pathParamNames:
