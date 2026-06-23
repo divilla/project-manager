@@ -1,7 +1,7 @@
 import type { Task, TaskDetail, TaskReferences } from './task.types';
 
 export function taskFixture(overrides: Partial<Task> = {}): Task {
-  return {
+  const task: Task = {
     id: 1,
     version: 0,
     project_id: 1,
@@ -9,6 +9,7 @@ export function taskFixture(overrides: Partial<Task> = {}): Task {
     task_type: 'task',
     name: 'Task',
     description: '',
+    description_html: '',
     difficulty: 1,
     done_req: 0,
     total_req: 0,
@@ -16,8 +17,8 @@ export function taskFixture(overrides: Partial<Task> = {}): Task {
     priority: 0,
     created: '2026-01-01T00:00:00Z',
     modified: '2026-01-01T00:00:00Z',
-    ...overrides,
   };
+  return { ...task, ...overrides };
 }
 
 export function taskDetailFixture(overrides: Partial<TaskDetail> = {}): TaskDetail {

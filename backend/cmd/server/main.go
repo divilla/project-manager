@@ -10,8 +10,10 @@ import (
 	"aipm/internal/project"
 	"aipm/internal/requirement"
 	"aipm/internal/task"
+	"aipm/internal/taskview"
 	"aipm/pkg/config"
 	"aipm/pkg/db"
+	"aipm/pkg/markdown"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -54,6 +56,10 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(defaultCORSConfig))
 
+	markdownParser := markdown.NewGoldmarkParser()
+	htmlSanitizer := markdown.NewBluemondaySanitizer()
+	taskRenderer := taskview.NewTaskRenderer(markdownParser, htmlSanitizer)
+
 	healthRepository := health.NewRepo(pool)
 	healthService := health.NewService(healthRepository)
 	health.NewAPI(e, healthService)
@@ -63,11 +69,11 @@ func main() {
 	project.NewAPI(e, projectService)
 
 	taskRepository := task.NewRepo(pool)
-	taskService := task.NewService(taskRepository)
+	taskService := task.NewService(taskRepository, taskRenderer)
 	task.NewAPI(e, taskService)
 
 	requirementRepository := requirement.NewRepo(pool)
-	requirementService := requirement.NewService(requirementRepository)
+	requirementService := requirement.NewService(requirementRepository, taskRenderer)
 	requirement.NewAPI(e, requirementService)
 
 	if err := e.Start(cfg.Addr()); err != nil && !errors.Is(err, http.ErrServerClosed) {

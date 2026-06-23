@@ -34,6 +34,18 @@ go test -race ./...
 make benchmark
 ```
 
+## GitHub PR Reviews
+
+When explicitly asked to review a PR, the agent may post the review comment with `gh`, but only for repositories owned by the user's GitHub account `divilla`.
+
+Strong constraints:
+
+- Do not post PR comments unless the user explicitly requested a review.
+- Do not post PR comments on repositories outside the `divilla` account/organization.
+- Before posting, verify the PR repository owner is `divilla` with `gh pr view` or equivalent GitHub metadata.
+- Prefer a single concise PR comment for review findings unless the user asks for line-specific review comments.
+- Never post comments for casual code questions, implementation tasks, or third-party repository reviews.
+
 ## Database
 
 - no database objects should be created, altered or dropped (refactored, optimized) under any circumstances, unless there is explicit command to do so in prompt or specification.

@@ -33,9 +33,9 @@
       <q-card flat bordered>
         <q-card-section>
           <div class="text-subtitle1">Project Completeness</div>
-          <div v-if="activeProject" class="empty-state">
+          <div v-if="currentProject" class="empty-state">
             <q-icon name="donut_large" size="40px" />
-            <span>{{ activeProject.name }} has {{ activeProject.task_count }} tracked tasks.</span>
+            <span>{{ currentProject.name }} has {{ currentProject.task_count }} tracked tasks.</span>
           </div>
           <div v-else class="empty-state">
             <q-icon name="folder_open" size="40px" />
@@ -47,10 +47,10 @@
       <q-card flat bordered>
         <q-card-section>
           <div class="text-subtitle1">Phase Summary</div>
-          <div v-if="activeProjectId" class="empty-state">
+          <div v-if="currentProjectId" class="empty-state">
             <q-icon name="view_column" size="40px" />
             <span
-              >Phase metrics will load for project #{{ activeProjectId }} when dashboard APIs are
+              >Phase metrics will load for project #{{ currentProjectId }} when dashboard APIs are
               available.</span
             >
           </div>
@@ -71,7 +71,7 @@ import { useProjectSelectionStore } from '@/features/projects/model/projectSelec
 import { getHealth, type HealthResponse } from '@/services/api';
 
 const projectSelection = useProjectSelectionStore();
-const { activeProject, activeProjectId } = storeToRefs(projectSelection);
+const { currentProject, currentProjectId } = storeToRefs(projectSelection);
 const health = ref<HealthResponse | null>(null);
 const loading = ref(false);
 const error = ref('');

@@ -14,6 +14,7 @@ export interface Task {
   task_type: string;
   name: string;
   description: string;
+  description_html: string;
   difficulty: number;
   done_req: number;
   total_req: number;
@@ -33,6 +34,15 @@ export interface TaskReferences {
   types: ReferenceOption[];
 }
 
+export interface TaskRenderedDescription {
+  id: number;
+  description_html: string;
+}
+
+export interface TaskRenderedDescriptionsResponse {
+  descriptions: TaskRenderedDescription[];
+}
+
 export interface TaskCreateInput {
   project_id: number;
   name: string;
@@ -41,6 +51,7 @@ export interface TaskCreateInput {
   task_type?: string;
   difficulty?: number;
   priority?: number;
+  parent_id?: number;
 }
 
 export interface TaskUpdateInput {

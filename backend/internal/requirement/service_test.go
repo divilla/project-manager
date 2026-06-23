@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"aipm/internal/dto"
+	"aipm/internal/taskview"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,7 @@ func TestServiceRejectsInvalidRequirementInput(t *testing.T) {
 
 func TestServiceNormalizesRequirementRequests(t *testing.T) {
 	repo := &fakeRequirementRepository{}
-	service := NewService(repo)
+	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
 	_, err := service.ListRequirements(context.Background(), dto.RequirementListRequest{TaskID: 2})
 	require.NoError(t, err)
@@ -42,6 +43,30 @@ func TestServiceNormalizesRequirementRequests(t *testing.T) {
 	assert.Equal(t, 3, repo.id)
 }
 
+func TestServiceRendersMutationTaskDescriptionHTML(t *testing.T) {
+	repo := &fakeRequirementRepository{}
+	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
+
+	mutation, err := service.CreateRequirement(context.Background(), dto.RequirementCreateRequest{
+		TaskID:     2,
+		Definition: "Requirement",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "clean(parsed(**Task**))", mutation.Task.DescriptionHTML)
+}
+
+type fakeMarkdownParser struct{}
+
+func (fakeMarkdownParser) Parse(source string) string {
+	return "parsed(" + source + ")"
+}
+
+type fakeMarkdownSanitizer struct{}
+
+func (fakeMarkdownSanitizer) Parse(source string) string {
+	return "clean(" + source + ")"
+}
+
 type fakeRequirementRepository struct {
 	id        int
 	taskID    int
@@ -56,7 +81,10 @@ func (r *fakeRequirementRepository) List(_ context.Context, taskID int) ([]dto.R
 func (r *fakeRequirementRepository) Create(_ context.Context, req dto.RequirementCreateRequest) (dto.RequirementMutationResponse, error) {
 	r.createReq = req
 	requirement := dto.Requirement{ID: 3, TaskID: req.TaskID, Definition: req.Definition}
-	return dto.RequirementMutationResponse{Requirement: &requirement}, nil
+	return dto.RequirementMutationResponse{
+		Requirement: &requirement,
+		Task:        dto.Task{ID: req.TaskID, Description: "**Task**"},
+	}, nil
 }
 func (r *fakeRequirementRepository) Update(_ context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error) {
 	r.updateReq = req

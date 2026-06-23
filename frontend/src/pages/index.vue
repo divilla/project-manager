@@ -4,8 +4,6 @@
       <q-toolbar class="app-toolbar">
         <q-toolbar-title class="app-title">AI Project Manager</q-toolbar-title>
 
-        <ProjectSelector dark :show-hint="false" class="top-project-selector" />
-
         <div class="desktop-tabs-wrap">
           <q-tabs :model-value="activeTab" shrink stretch class="desktop-tabs">
             <q-route-tab name="home" to="/" label="Home" exact />
@@ -17,6 +15,18 @@
         </div>
 
         <q-space />
+
+        <q-toggle
+          v-model="darkMode"
+          dense
+          color="grey-4"
+          checked-icon="dark_mode"
+          unchecked-icon="light_mode"
+          class="top-dark-toggle"
+          aria-label="Toggle dark mode"
+        />
+
+        <ProjectSelector dark :show-hint="false" class="top-project-selector" />
 
         <q-btn
           flat
@@ -62,17 +72,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useQuasar } from 'quasar';
 import { useRoute, useRouter } from 'vue-router';
 import ProjectSelector from '@/features/projects/components/ProjectSelector.vue';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
+import { refreshProjectScope } from '@/features/projects/services/projectScopeRefresh';
+import {
+  PROJECT_CHANGE_LOADING_PATH,
+  projectChangeTargetPath,
+} from '@/router/projectChangeRedirect';
 
+const $q = useQuasar();
 const route = useRoute();
 const router = useRouter();
 const drawerOpen = ref(false);
+const darkMode = computed({
+  get: () => $q.dark.isActive,
+  set: (value) => {
+    $q.dark.set(value);
+  },
+});
 const projectSelection = useProjectSelectionStore();
-const { projects, hasLoaded } = storeToRefs(projectSelection);
+const { projects, hasLoaded, currentProjectId } = storeToRefs(projectSelection);
+const projectChangeRedirectReady = ref(false);
+let projectSwitchToken = 0;
 
 const activeTab = computed(() => {
   if (route.path.startsWith('/planning')) return 'planning';
@@ -86,8 +111,59 @@ onMounted(() => {
   void projectSelection.loadProjects().catch(() => undefined);
 });
 
+watch(
+  hasLoaded,
+  async (loaded) => {
+    if (!loaded) return;
+
+    await nextTick();
+    projectChangeRedirectReady.value = true;
+  },
+  { immediate: true },
+);
+
+watch(currentProjectId, () => {
+  if (!projectChangeRedirectReady.value) return;
+
+  const token = ++projectSwitchToken;
+  const loadingTarget = typeof route.query.to === 'string' ? route.query.to : '';
+  const targetPath =
+    projectSelection.routeDrivenTargetPath ||
+    (route.path === PROJECT_CHANGE_LOADING_PATH && loadingTarget
+      ? loadingTarget
+      : projectChangeTargetPath(route.path));
+
+  void (async () => {
+    projectSelection.setSwitchingProject(true);
+    try {
+      if (route.path !== PROJECT_CHANGE_LOADING_PATH) {
+        await router.replace({
+          path: PROJECT_CHANGE_LOADING_PATH,
+          query: { to: targetPath },
+        });
+      }
+
+      await refreshProjectScope().catch(() => undefined);
+      if (token !== projectSwitchToken) return;
+
+      const finalPath = projects.value.length ? targetPath : '/projects';
+      await router.replace(finalPath);
+    } finally {
+      if (token === projectSwitchToken) {
+        projectSelection.clearRouteDrivenProjectSwitch();
+        projectSelection.setSwitchingProject(false);
+      }
+    }
+  })();
+});
+
 watch([hasLoaded, projects, () => route.path], () => {
-  if (hasLoaded.value && !projects.value.length && route.path !== '/projects') {
+  if (
+    hasLoaded.value &&
+    !projects.value.length &&
+    route.path !== '/projects' &&
+    route.path !== PROJECT_CHANGE_LOADING_PATH
+  ) {
     void router.push('/projects');
   }
 });

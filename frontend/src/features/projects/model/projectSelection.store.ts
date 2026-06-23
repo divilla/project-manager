@@ -8,12 +8,16 @@ import {
 } from '../api/projectApi';
 import type { Project } from './project.types';
 
-const ACTIVE_PROJECT_STORAGE_KEY = 'aipm.activeProjectId';
+const CURRENT_PROJECT_STORAGE_KEY = 'aipm.currentProjectId';
+const LEGACY_ACTIVE_PROJECT_STORAGE_KEY = 'aipm.activeProjectId';
 
 function readPersistedProjectId() {
   if (typeof localStorage === 'undefined') return 0;
 
-  const value = Number(localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY));
+  const value = Number(
+    localStorage.getItem(CURRENT_PROJECT_STORAGE_KEY) ??
+      localStorage.getItem(LEGACY_ACTIVE_PROJECT_STORAGE_KEY),
+  );
   return Number.isInteger(value) && value > 0 ? value : 0;
 }
 
@@ -21,11 +25,13 @@ function writePersistedProjectId(projectId: number) {
   if (typeof localStorage === 'undefined') return;
 
   if (projectId > 0) {
-    localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, String(projectId));
+    localStorage.setItem(CURRENT_PROJECT_STORAGE_KEY, String(projectId));
+    localStorage.removeItem(LEGACY_ACTIVE_PROJECT_STORAGE_KEY);
     return;
   }
 
-  localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY);
+  localStorage.removeItem(CURRENT_PROJECT_STORAGE_KEY);
+  localStorage.removeItem(LEGACY_ACTIVE_PROJECT_STORAGE_KEY);
 }
 
 function lowestProjectId(items: Project[]) {
@@ -34,13 +40,15 @@ function lowestProjectId(items: Project[]) {
 
 export const useProjectSelectionStore = defineStore('projectSelection', () => {
   const projects = ref<Project[]>([]);
-  const activeProjectId = ref(readPersistedProjectId());
+  const currentProjectId = ref(readPersistedProjectId());
   const loading = ref(false);
   const error = ref('');
   const hasLoaded = ref(false);
+  const isSwitchingProject = ref(false);
+  const routeDrivenTargetPath = ref('');
 
-  const activeProject = computed(
-    () => projects.value.find((project) => project.id === activeProjectId.value) || null,
+  const currentProject = computed(
+    () => projects.value.find((project) => project.id === currentProjectId.value) || null,
   );
   const projectOptions = computed(() =>
     projects.value.map((project) => ({ label: project.name, value: project.id })),
@@ -52,10 +60,10 @@ export const useProjectSelectionStore = defineStore('projectSelection', () => {
   }
 
   function selectProject(projectId: number) {
-    activeProjectId.value = projects.value.some((project) => project.id === projectId)
+    currentProjectId.value = projects.value.some((project) => project.id === projectId)
       ? projectId
       : 0;
-    writePersistedProjectId(activeProjectId.value);
+    writePersistedProjectId(currentProjectId.value);
   }
 
   function validateActiveProject() {
@@ -64,8 +72,8 @@ export const useProjectSelectionStore = defineStore('projectSelection', () => {
       return;
     }
 
-    if (projects.value.some((project) => project.id === activeProjectId.value)) {
-      writePersistedProjectId(activeProjectId.value);
+    if (projects.value.some((project) => project.id === currentProjectId.value)) {
+      writePersistedProjectId(currentProjectId.value);
       return;
     }
 
@@ -111,19 +119,36 @@ export const useProjectSelectionStore = defineStore('projectSelection', () => {
     setProjects(projects.value.filter((item) => item.id !== project.id));
   }
 
+  function setSwitchingProject(value: boolean) {
+    isSwitchingProject.value = value;
+  }
+
+  function beginRouteDrivenProjectSwitch(targetPath: string) {
+    routeDrivenTargetPath.value = targetPath;
+  }
+
+  function clearRouteDrivenProjectSwitch() {
+    routeDrivenTargetPath.value = '';
+  }
+
   return {
     projects,
-    activeProjectId,
-    activeProject,
+    currentProjectId,
+    currentProject,
     projectOptions,
     loading,
     error,
     hasLoaded,
+    isSwitchingProject,
+    routeDrivenTargetPath,
     loadProjects,
     selectProject,
     createProject,
     renameProject,
     removeProject,
+    setSwitchingProject,
+    beginRouteDrivenProjectSwitch,
+    clearRouteDrivenProjectSwitch,
     validateActiveProject,
   };
 });

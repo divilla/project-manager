@@ -9,9 +9,9 @@
 
     <q-card flat bordered>
       <q-card-section>
-        <div v-if="activeProject" class="empty-state">
+        <div v-if="currentProject" class="empty-state">
           <q-icon name="psychology" size="44px" />
-          <span>Planning workspace is scoped to {{ activeProject.name }}.</span>
+          <span>Planning workspace is scoped to {{ currentProject.name }}.</span>
           <q-btn color="primary" label="Commit tasks" no-caps disabled />
         </div>
         <div v-else class="empty-state">
@@ -30,7 +30,7 @@ import { storeToRefs } from 'pinia';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 
 const projectSelection = useProjectSelectionStore();
-const { activeProject } = storeToRefs(projectSelection);
+const { currentProject } = storeToRefs(projectSelection);
 
 onMounted(() => {
   if (!projectSelection.hasLoaded) {

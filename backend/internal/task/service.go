@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"aipm/internal/dto"
+	"aipm/internal/taskview"
 )
 
 var (
@@ -15,11 +16,12 @@ var (
 )
 
 type Service struct {
-	repo Repository
+	repo     Repository
+	renderer taskview.TaskRenderer
 }
 
-func NewService(taskRepository Repository) *Service {
-	return &Service{repo: taskRepository}
+func NewService(taskRepository Repository, renderer taskview.TaskRenderer) *Service {
+	return &Service{repo: taskRepository, renderer: renderer}
 }
 
 func (s *Service) References(ctx context.Context) (dto.TaskReferences, error) {
@@ -37,7 +39,37 @@ func (s *Service) GetTask(ctx context.Context, req dto.TaskIDRequest) (dto.TaskD
 	if req.ID <= 0 {
 		return dto.TaskDetail{}, ErrInvalidInput
 	}
-	return s.repo.Get(ctx, req.ID)
+	detail, err := s.repo.Get(ctx, req.ID)
+	if err != nil {
+		return dto.TaskDetail{}, err
+	}
+	detail.Task = s.renderer.RenderTask(detail.Task)
+	return detail, nil
+}
+
+func (s *Service) RenderedDescriptions(ctx context.Context, req dto.TaskRenderedDescriptionsRequest) (dto.TaskRenderedDescriptionsResponse, error) {
+	ids, err := normalizeTaskIDs(req.IDs)
+	if err != nil {
+		return dto.TaskRenderedDescriptionsResponse{}, err
+	}
+	if len(ids) == 0 {
+		return dto.TaskRenderedDescriptionsResponse{Descriptions: []dto.TaskRenderedDescription{}}, nil
+	}
+
+	tasks, err := s.repo.Descriptions(ctx, ids)
+	if err != nil {
+		return dto.TaskRenderedDescriptionsResponse{}, err
+	}
+
+	descriptions := make([]dto.TaskRenderedDescription, 0, len(tasks))
+	for _, task := range tasks {
+		task = s.renderer.RenderTask(task)
+		descriptions = append(descriptions, dto.TaskRenderedDescription{
+			ID:              task.ID,
+			DescriptionHTML: task.DescriptionHTML,
+		})
+	}
+	return dto.TaskRenderedDescriptionsResponse{Descriptions: descriptions}, nil
 }
 
 func (s *Service) CreateTask(ctx context.Context, req dto.TaskCreateRequest) (dto.Task, error) {
@@ -48,7 +80,11 @@ func (s *Service) CreateTask(ctx context.Context, req dto.TaskCreateRequest) (dt
 	if req.ProjectID <= 0 || req.Name == "" || (req.ParentID != nil && *req.ParentID <= 0) {
 		return dto.Task{}, ErrInvalidInput
 	}
-	return s.repo.Create(ctx, req)
+	task, err := s.repo.Create(ctx, req)
+	if err != nil {
+		return dto.Task{}, err
+	}
+	return s.renderer.RenderTask(task), nil
 }
 
 func (s *Service) UpdateTask(ctx context.Context, req dto.TaskUpdateRequest) (dto.Task, error) {
@@ -58,28 +94,44 @@ func (s *Service) UpdateTask(ctx context.Context, req dto.TaskUpdateRequest) (dt
 	if req.ID <= 0 || req.Name == "" {
 		return dto.Task{}, ErrInvalidInput
 	}
-	return s.repo.Update(ctx, req)
+	task, err := s.repo.Update(ctx, req)
+	if err != nil {
+		return dto.Task{}, err
+	}
+	return s.renderer.RenderTask(task), nil
 }
 
 func (s *Service) UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Task, error) {
 	if req.ID <= 0 || req.Difficulty <= 0 {
 		return dto.Task{}, ErrInvalidInput
 	}
-	return s.repo.UpdateDifficulty(ctx, req)
+	task, err := s.repo.UpdateDifficulty(ctx, req)
+	if err != nil {
+		return dto.Task{}, err
+	}
+	return s.renderer.RenderTask(task), nil
 }
 
 func (s *Service) UpdatePriority(ctx context.Context, req dto.TaskUpdatePriorityRequest) (dto.Task, error) {
 	if req.ID <= 0 {
 		return dto.Task{}, ErrInvalidInput
 	}
-	return s.repo.UpdatePriority(ctx, req)
+	task, err := s.repo.UpdatePriority(ctx, req)
+	if err != nil {
+		return dto.Task{}, err
+	}
+	return s.renderer.RenderTask(task), nil
 }
 
 func (s *Service) UpdateParent(ctx context.Context, req dto.TaskUpdateParentRequest) (dto.Task, error) {
 	if req.ID <= 0 || (req.ParentID != nil && *req.ParentID <= 0) {
 		return dto.Task{}, ErrInvalidInput
 	}
-	return s.repo.UpdateParent(ctx, req)
+	task, err := s.repo.UpdateParent(ctx, req)
+	if err != nil {
+		return dto.Task{}, err
+	}
+	return s.renderer.RenderTask(task), nil
 }
 
 func (s *Service) UpdatePhase(ctx context.Context, req dto.TaskUpdatePhaseRequest) (dto.Task, error) {
@@ -87,7 +139,11 @@ func (s *Service) UpdatePhase(ctx context.Context, req dto.TaskUpdatePhaseReques
 	if req.ID <= 0 || req.TaskPhase == "" {
 		return dto.Task{}, ErrInvalidInput
 	}
-	return s.repo.UpdatePhase(ctx, req)
+	task, err := s.repo.UpdatePhase(ctx, req)
+	if err != nil {
+		return dto.Task{}, err
+	}
+	return s.renderer.RenderTask(task), nil
 }
 
 func (s *Service) DeleteTask(ctx context.Context, req dto.TaskIDRequest) error {
@@ -95,4 +151,20 @@ func (s *Service) DeleteTask(ctx context.Context, req dto.TaskIDRequest) error {
 		return ErrInvalidInput
 	}
 	return s.repo.Delete(ctx, req)
+}
+
+func normalizeTaskIDs(ids []int) ([]int, error) {
+	normalized := make([]int, 0, len(ids))
+	seen := make(map[int]struct{}, len(ids))
+	for _, id := range ids {
+		if id <= 0 {
+			return nil, ErrInvalidInput
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		normalized = append(normalized, id)
+	}
+	return normalized, nil
 }

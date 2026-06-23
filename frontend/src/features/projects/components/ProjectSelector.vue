@@ -1,10 +1,10 @@
 <template>
   <q-select
-    :model-value="activeProjectId || null"
+    :model-value="currentProjectId || null"
     :options="projectOptions"
     :dark="dark"
-    :disable="!projects.length"
-    :loading="loading"
+    :disable="!projects.length || isSwitchingProject"
+    :loading="loading || isSwitchingProject"
     dense
     outlined
     emit-value
@@ -33,6 +33,7 @@ withDefaults(
 );
 
 const projectSelection = useProjectSelectionStore();
-const { projects, activeProjectId, projectOptions, loading } = storeToRefs(projectSelection);
+const { projects, currentProjectId, projectOptions, loading, isSwitchingProject } =
+  storeToRefs(projectSelection);
 const { selectProject } = projectSelection;
 </script>

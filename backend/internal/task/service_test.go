@@ -2,9 +2,11 @@ package task
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"aipm/internal/dto"
+	"aipm/internal/taskview"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +30,7 @@ func TestServiceRejectsInvalidTaskInput(t *testing.T) {
 
 func TestServiceNormalizesTaskRequests(t *testing.T) {
 	repo := &fakeTaskRepository{}
-	service := NewService(repo)
+	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 	parentID := 4
 
 	_, err := service.ListTasks(context.Background(), dto.TaskListRequest{ProjectID: 1})
@@ -64,12 +66,59 @@ func TestServiceNormalizesTaskRequests(t *testing.T) {
 	assert.Equal(t, 2, repo.id)
 }
 
+func TestServiceRendersTaskDescriptionHTML(t *testing.T) {
+	repo := &fakeTaskRepository{}
+	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
+
+	detail, err := service.GetTask(context.Background(), dto.TaskIDRequest{ID: 2})
+	require.NoError(t, err)
+	assert.Equal(t, "clean(parsed(**Task**))", detail.Task.DescriptionHTML)
+}
+
+func TestServiceRendersBatchTaskDescriptions(t *testing.T) {
+	repo := &fakeTaskRepository{}
+	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
+
+	response, err := service.RenderedDescriptions(context.Background(), dto.TaskRenderedDescriptionsRequest{
+		IDs: []int{3, 2, 3},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []int{3, 2}, repo.descriptionIDs)
+	require.Equal(t, 2, len(response.Descriptions))
+	assert.Equal(t, 3, response.Descriptions[0].ID)
+	assert.Equal(t, "clean(parsed(**Task 3**))", response.Descriptions[0].DescriptionHTML)
+	assert.Equal(t, 2, response.Descriptions[1].ID)
+	assert.Equal(t, "clean(parsed(**Task 2**))", response.Descriptions[1].DescriptionHTML)
+}
+
+func TestServiceRejectsInvalidRenderedDescriptionIDs(t *testing.T) {
+	service := &Service{}
+
+	_, err := service.RenderedDescriptions(context.Background(), dto.TaskRenderedDescriptionsRequest{
+		IDs: []int{1, 0},
+	})
+	require.ErrorIs(t, err, ErrInvalidInput)
+}
+
+type fakeMarkdownParser struct{}
+
+func (fakeMarkdownParser) Parse(source string) string {
+	return "parsed(" + source + ")"
+}
+
+type fakeMarkdownSanitizer struct{}
+
+func (fakeMarkdownSanitizer) Parse(source string) string {
+	return "clean(" + source + ")"
+}
+
 type fakeTaskRepository struct {
-	projectID int
-	id        int
-	taskPhase string
-	createReq dto.TaskCreateRequest
-	updateReq dto.TaskUpdateRequest
+	projectID      int
+	id             int
+	taskPhase      string
+	descriptionIDs []int
+	createReq      dto.TaskCreateRequest
+	updateReq      dto.TaskUpdateRequest
 }
 
 func (r *fakeTaskRepository) References(context.Context) (dto.TaskReferences, error) {
@@ -81,15 +130,23 @@ func (r *fakeTaskRepository) List(_ context.Context, projectID int) ([]dto.Task,
 }
 func (r *fakeTaskRepository) Get(_ context.Context, id int) (dto.TaskDetail, error) {
 	r.id = id
-	return dto.TaskDetail{Task: dto.Task{ID: id}}, nil
+	return dto.TaskDetail{Task: dto.Task{ID: id, Description: "**Task**"}}, nil
+}
+func (r *fakeTaskRepository) Descriptions(_ context.Context, ids []int) ([]dto.Task, error) {
+	r.descriptionIDs = ids
+	tasks := make([]dto.Task, 0, len(ids))
+	for _, id := range ids {
+		tasks = append(tasks, dto.Task{ID: id, Description: "**Task " + strconv.Itoa(id) + "**"})
+	}
+	return tasks, nil
 }
 func (r *fakeTaskRepository) Create(_ context.Context, req dto.TaskCreateRequest) (dto.Task, error) {
 	r.createReq = req
-	return dto.Task{ID: 2, ProjectID: req.ProjectID, Name: req.Name}, nil
+	return dto.Task{ID: 2, ProjectID: req.ProjectID, Name: req.Name, Description: req.Description}, nil
 }
 func (r *fakeTaskRepository) Update(_ context.Context, req dto.TaskUpdateRequest) (dto.Task, error) {
 	r.updateReq = req
-	return dto.Task{ID: req.ID, Name: req.Name}, nil
+	return dto.Task{ID: req.ID, Name: req.Name, Description: req.Description}, nil
 }
 func (r *fakeTaskRepository) UpdateDifficulty(_ context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Task, error) {
 	r.id = req.ID

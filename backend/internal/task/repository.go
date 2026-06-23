@@ -20,6 +20,7 @@ type (
 		References(ctx context.Context) (dto.TaskReferences, error)
 		List(ctx context.Context, projectID int) ([]dto.Task, error)
 		Get(ctx context.Context, id int) (dto.TaskDetail, error)
+		Descriptions(ctx context.Context, ids []int) ([]dto.Task, error)
 		Create(ctx context.Context, req dto.TaskCreateRequest) (dto.Task, error)
 		Update(ctx context.Context, req dto.TaskUpdateRequest) (dto.Task, error)
 		UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Task, error)
@@ -96,6 +97,29 @@ func (r *Repo) Get(ctx context.Context, id int) (dto.TaskDetail, error) {
 		return dto.TaskDetail{}, err
 	}
 	return dto.TaskDetail{Task: task, Requirements: requirements}, nil
+}
+
+func (r *Repo) Descriptions(ctx context.Context, ids []int) ([]dto.Task, error) {
+	rows, err := r.pool.Query(ctx, `
+		select requested.id::integer, coalesce(task.description, '')
+		from unnest($1::bigint[]) with ordinality as requested(id, ord)
+		join public.task task on task.id = requested.id
+		order by requested.ord
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tasks := make([]dto.Task, 0, len(ids))
+	for rows.Next() {
+		var task dto.Task
+		if err := rows.Scan(&task.ID, &task.Description); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, rows.Err()
 }
 
 func (r *Repo) Create(ctx context.Context, req dto.TaskCreateRequest) (dto.Task, error) {

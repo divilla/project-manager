@@ -155,7 +155,20 @@ Frontend behavior must preserve these invariants:
 - If a future backend response returns all affected task rows, the frontend may merge those rows instead of reloading the whole list.
 - Open dialogs should remain responsive and should continue showing the mutation response for the directly edited task.
 
-## 7. Migration Steps
+## 7. Confirmation Dialogs
+
+Confirmation dialogs must use consistent Quasar button labels and styling across the application:
+
+- Never use a button labeled `Confirm` in a confirmation dialog.
+- Confirmation dialogs always use `Cancel` for the cancel action and `OK` for the accepting action.
+- `Cancel` is always flat and has no explicit color.
+- `OK` is always not flat.
+- `OK` uses `color="negative"` for dangerous actions such as delete.
+- `OK` uses `color="primary"` for non-dangerous confirmations.
+- Confirmation dialogs that guard destructive actions must be persistent, so clicking the modal surrounding area does not close the dialog.
+- Destructive delete confirmation UI is provided by `frontend/src/shared/ui/DeleteConfirmationDialog.vue` so any page can reuse the same title, persistence, labels, and button styling.
+
+## 8. Migration Steps
 
 1. Add `shared/api/httpClient.ts` and move the common `post` behavior out of `services/api.ts`.
 2. Split DTO and API functions from `services/api.ts` into feature API and model files.
@@ -168,7 +181,7 @@ Frontend behavior must preserve these invariants:
 
 Each step should keep the UI functional and typecheckable.
 
-## 8. Enforcement
+## 9. Enforcement
 
 Add lightweight enforcement after the first extraction is complete:
 
@@ -185,7 +198,7 @@ features -> may import shared
 pages -> may import features and shared
 ```
 
-## 9. Frontend Testing Strategy
+## 10. Frontend Testing Strategy
 
 Frontend tests should verify behavior at the right architectural level without duplicating Quasar, Vue, or browser behavior.
 
@@ -309,7 +322,7 @@ Frontend CI should run, in order:
 3. Vitest unit and component tests
 4. Playwright E2E tests for critical workflows, when the controlled backend or network mock is available
 
-## 10. Acceptance Criteria
+## 11. Acceptance Criteria
 
 - `projects.vue` no longer owns raw API calls for projects, tasks, or requirements.
 - Project, task, and requirement API calls are split into feature modules.

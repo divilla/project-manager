@@ -48,6 +48,13 @@ type taskDetail struct {
 	Requirements []any `json:"requirements"`
 }
 
+type renderedDescriptionsResponse struct {
+	Descriptions []struct {
+		ID              int    `json:"id"`
+		DescriptionHTML string `json:"description_html"`
+	} `json:"descriptions"`
+}
+
 func TestTaskCRUDAndReferences(t *testing.T) {
 	client := shared.NewClient(t)
 	db := shared.NewDB(t)
@@ -84,6 +91,15 @@ func TestTaskCRUDAndReferences(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, created.ID, detail.Task.ID)
 	assert.Empty(t, detail.Requirements)
+
+	var rendered renderedDescriptionsResponse
+	status = client.Post(t, "/api/v1/task/rendered-descriptions", map[string]any{
+		"ids": []int{created.ID},
+	}, &rendered)
+	require.Equal(t, http.StatusOK, status)
+	require.Len(t, rendered.Descriptions, 1)
+	assert.Equal(t, created.ID, rendered.Descriptions[0].ID)
+	assert.Contains(t, rendered.Descriptions[0].DescriptionHTML, "<p>Created by task API integration test.</p>")
 
 	var updated task
 	status = client.Post(t, "/api/v1/task/update", map[string]any{

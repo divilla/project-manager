@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"aipm/internal/dto"
+	"aipm/internal/taskview"
 )
 
 var (
@@ -15,7 +16,8 @@ var (
 
 type (
 	Service struct {
-		repo Repository
+		repo     Repository
+		renderer taskview.TaskRenderer
 	}
 
 	Repository interface {
@@ -28,8 +30,8 @@ type (
 	}
 )
 
-func NewService(requirementRepository Repository) *Service {
-	return &Service{repo: requirementRepository}
+func NewService(requirementRepository Repository, renderer taskview.TaskRenderer) *Service {
+	return &Service{repo: requirementRepository, renderer: renderer}
 }
 
 func (s *Service) ListRequirements(ctx context.Context, req dto.RequirementListRequest) ([]dto.Requirement, error) {
@@ -44,7 +46,11 @@ func (s *Service) CreateRequirement(ctx context.Context, req dto.RequirementCrea
 	if req.TaskID <= 0 || req.Definition == "" {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
-	return s.repo.Create(ctx, req)
+	mutation, err := s.repo.Create(ctx, req)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	return s.renderMutation(mutation), nil
 }
 
 func (s *Service) UpdateRequirement(ctx context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error) {
@@ -52,26 +58,46 @@ func (s *Service) UpdateRequirement(ctx context.Context, req dto.RequirementUpda
 	if req.ID <= 0 || req.Definition == "" {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
-	return s.repo.Update(ctx, req)
+	mutation, err := s.repo.Update(ctx, req)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	return s.renderMutation(mutation), nil
 }
 
 func (s *Service) UpdateRequirementDone(ctx context.Context, req dto.RequirementUpdateDoneRequest) (dto.RequirementMutationResponse, error) {
 	if req.ID <= 0 {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
-	return s.repo.UpdateDone(ctx, req)
+	mutation, err := s.repo.UpdateDone(ctx, req)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	return s.renderMutation(mutation), nil
 }
 
 func (s *Service) UpdateRequirementTask(ctx context.Context, req dto.RequirementUpdateTaskRequest) (dto.RequirementMutationResponse, error) {
 	if req.ID <= 0 || req.TaskID <= 0 {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
-	return s.repo.UpdateTask(ctx, req)
+	mutation, err := s.repo.UpdateTask(ctx, req)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	return s.renderMutation(mutation), nil
 }
 
 func (s *Service) DeleteRequirement(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error) {
 	if req.ID <= 0 {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
-	return s.repo.Delete(ctx, req)
+	mutation, err := s.repo.Delete(ctx, req)
+	if err != nil {
+		return dto.RequirementMutationResponse{}, err
+	}
+	return s.renderMutation(mutation), nil
+}
+
+func (s *Service) renderMutation(mutation dto.RequirementMutationResponse) dto.RequirementMutationResponse {
+	return s.renderer.RenderMutation(mutation)
 }

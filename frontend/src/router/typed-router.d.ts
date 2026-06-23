@@ -38,9 +38,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | '//(index)'
       | '//help'
+      | '//loading'
       | '//planning'
       | '//projects'
-      | '//tasks'
+      | '//tasks/(index)'
+      | '//tasks/[id]'
+      | '//tasks/create/[parentId]'
+      | '//tasks/edit/[taskId]'
     >,
     '//(index)': RouteRecordInfo<
       '//(index)',
@@ -52,6 +56,13 @@ declare module 'vue-router/auto-routes' {
     '//help': RouteRecordInfo<
       '//help',
       '/help',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '//loading': RouteRecordInfo<
+      '//loading',
+      '/loading',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -70,11 +81,32 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
-    '//tasks': RouteRecordInfo<
-      '//tasks',
+    '//tasks/(index)': RouteRecordInfo<
+      '//tasks/(index)',
       '/tasks',
       Record<never, never>,
       Record<never, never>,
+      | never
+    >,
+    '//tasks/[id]': RouteRecordInfo<
+      '//tasks/[id]',
+      '/tasks/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
+      | never
+    >,
+    '//tasks/create/[parentId]': RouteRecordInfo<
+      '//tasks/create/[parentId]',
+      '/tasks/create/:parentId',
+      { parentId: ParamValue<true> },
+      { parentId: ParamValue<false> },
+      | never
+    >,
+    '//tasks/edit/[taskId]': RouteRecordInfo<
+      '//tasks/edit/[taskId]',
+      '/tasks/edit/:taskId',
+      { taskId: ParamValue<true> },
+      { taskId: ParamValue<false> },
       | never
     >,
     '/[...path]': RouteRecordInfo<
@@ -102,9 +134,13 @@ declare module 'vue-router/auto-routes' {
         | '/'
         | '//(index)'
         | '//help'
+        | '//loading'
         | '//planning'
         | '//projects'
-        | '//tasks'
+        | '//tasks/(index)'
+        | '//tasks/[id]'
+        | '//tasks/create/[parentId]'
+        | '//tasks/edit/[taskId]'
       views:
         | 'default'
       pathParamNames:
@@ -126,6 +162,14 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | never
     }
+    'src/pages/index/loading.vue': {
+      routes:
+        | '//loading'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
     'src/pages/index/planning.vue': {
       routes:
         | '//planning'
@@ -142,13 +186,37 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | never
     }
-    'src/pages/index/tasks.vue': {
+    'src/pages/index/tasks/(index).vue': {
       routes:
-        | '//tasks'
+        | '//tasks/(index)'
       views:
         | never
       pathParamNames:
         | never
+    }
+    'src/pages/index/tasks/[id].vue': {
+      routes:
+        | '//tasks/[id]'
+      views:
+        | never
+      pathParamNames:
+        | 'id'
+    }
+    'src/pages/index/tasks/create/[parentId].vue': {
+      routes:
+        | '//tasks/create/[parentId]'
+      views:
+        | never
+      pathParamNames:
+        | 'parentId'
+    }
+    'src/pages/index/tasks/edit/[taskId].vue': {
+      routes:
+        | '//tasks/edit/[taskId]'
+      views:
+        | never
+      pathParamNames:
+        | 'taskId'
     }
     'src/pages/[...path].vue': {
       routes:

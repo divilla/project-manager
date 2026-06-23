@@ -1,5 +1,12 @@
 import { post } from '@/shared/api/httpClient';
-import type { Task, TaskCreateInput, TaskDetail, TaskReferences, TaskUpdateInput } from '../model/task.types';
+import type {
+  Task,
+  TaskCreateInput,
+  TaskDetail,
+  TaskReferences,
+  TaskRenderedDescriptionsResponse,
+  TaskUpdateInput,
+} from '../model/task.types';
 
 export function getTaskReferences(): Promise<TaskReferences> {
   return post<TaskReferences>('/api/v1/task/reference');
@@ -11,6 +18,10 @@ export function listTasks(projectId: number): Promise<Task[]> {
 
 export function getTask(id: number): Promise<TaskDetail> {
   return post<TaskDetail>('/api/v1/task/get', { id });
+}
+
+export function getRenderedTaskDescriptions(ids: number[]): Promise<TaskRenderedDescriptionsResponse> {
+  return post<TaskRenderedDescriptionsResponse>('/api/v1/task/rendered-descriptions', { ids });
 }
 
 export function createTask(input: TaskCreateInput): Promise<Task> {

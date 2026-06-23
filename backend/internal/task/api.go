@@ -25,6 +25,7 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 	a.g.POST("/reference", a.references)
 	a.g.POST("/list", a.listTasks)
 	a.g.POST("/get", a.getTask)
+	a.g.POST("/rendered-descriptions", a.renderedDescriptions)
 	a.g.POST("/create", a.createTask)
 	a.g.POST("/update", a.updateTask)
 	a.g.POST("/update-difficulty", a.updateDifficulty)
@@ -65,6 +66,20 @@ func (a *Api) getTask(c *echo.Context) error {
 	}
 
 	res, err := a.s.GetTask(c.Request().Context(), req)
+	if err != nil {
+		return taskError(err)
+	}
+
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *Api) renderedDescriptions(c *echo.Context) error {
+	var req dto.TaskRenderedDescriptionsRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid task rendered descriptions payload")
+	}
+
+	res, err := a.s.RenderedDescriptions(c.Request().Context(), req)
 	if err != nil {
 		return taskError(err)
 	}

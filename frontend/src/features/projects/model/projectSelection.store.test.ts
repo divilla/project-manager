@@ -42,7 +42,7 @@ describe('projectSelection store', () => {
   });
 
   it('selects the persisted project when it still exists', async () => {
-    localStorage.setItem('aipm.activeProjectId', '5');
+    localStorage.setItem('aipm.currentProjectId', '5');
     vi.mocked(listProjects).mockResolvedValue([
       projectFixture({ id: 10, name: 'Later', task_count: 0 }),
       projectFixture({ id: 5, name: 'Persisted', task_count: 0 }),
@@ -51,8 +51,22 @@ describe('projectSelection store', () => {
     const store = useProjectSelectionStore();
     await store.loadProjects();
 
-    expect(store.activeProjectId).toBe(5);
-    expect(store.activeProject?.name).toBe('Persisted');
+    expect(store.currentProjectId).toBe(5);
+    expect(store.currentProject?.name).toBe('Persisted');
+  });
+
+  it('migrates the legacy active project key to the current project key', async () => {
+    localStorage.setItem('aipm.activeProjectId', '5');
+    vi.mocked(listProjects).mockResolvedValue([
+      projectFixture({ id: 5, name: 'Persisted', task_count: 0 }),
+    ]);
+
+    const store = useProjectSelectionStore();
+    await store.loadProjects();
+
+    expect(store.currentProjectId).toBe(5);
+    expect(localStorage.getItem('aipm.currentProjectId')).toBe('5');
+    expect(localStorage.getItem('aipm.activeProjectId')).toBeNull();
   });
 
   it('loads the complete project list in one request', async () => {
@@ -66,8 +80,28 @@ describe('projectSelection store', () => {
     expect(store.projects).toEqual([project]);
   });
 
+  it('tracks when project-scoped data is being switched', () => {
+    const store = useProjectSelectionStore();
+
+    store.setSwitchingProject(true);
+    expect(store.isSwitchingProject).toBe(true);
+
+    store.setSwitchingProject(false);
+    expect(store.isSwitchingProject).toBe(false);
+  });
+
+  it('tracks a route-driven project switch target', () => {
+    const store = useProjectSelectionStore();
+
+    store.beginRouteDrivenProjectSwitch('/tasks/42');
+    expect(store.routeDrivenTargetPath).toBe('/tasks/42');
+
+    store.clearRouteDrivenProjectSwitch();
+    expect(store.routeDrivenTargetPath).toBe('');
+  });
+
   it('repairs invalid persisted selections by choosing the lowest project id', async () => {
-    localStorage.setItem('aipm.activeProjectId', '99');
+    localStorage.setItem('aipm.currentProjectId', '99');
     vi.mocked(listProjects).mockResolvedValue([
       projectFixture({ id: 10, name: 'Later', task_count: 0 }),
       projectFixture({ id: 5, name: 'First', task_count: 0 }),
@@ -76,20 +110,20 @@ describe('projectSelection store', () => {
     const store = useProjectSelectionStore();
     await store.loadProjects();
 
-    expect(store.activeProjectId).toBe(5);
-    expect(localStorage.getItem('aipm.activeProjectId')).toBe('5');
+    expect(store.currentProjectId).toBe(5);
+    expect(localStorage.getItem('aipm.currentProjectId')).toBe('5');
   });
 
   it('clears selection when no projects exist', async () => {
-    localStorage.setItem('aipm.activeProjectId', '5');
+    localStorage.setItem('aipm.currentProjectId', '5');
     vi.mocked(listProjects).mockResolvedValue([]);
 
     const store = useProjectSelectionStore();
     await store.loadProjects();
 
-    expect(store.activeProjectId).toBe(0);
-    expect(store.activeProject).toBeNull();
-    expect(localStorage.getItem('aipm.activeProjectId')).toBeNull();
+    expect(store.currentProjectId).toBe(0);
+    expect(store.currentProject).toBeNull();
+    expect(localStorage.getItem('aipm.currentProjectId')).toBeNull();
   });
 
   it('selects a created project', async () => {
@@ -100,10 +134,10 @@ describe('projectSelection store', () => {
     await store.createProject('Created');
 
     expect(createProject).toHaveBeenCalledWith('Created');
-    expect(store.activeProjectId).toBe(9);
+    expect(store.currentProjectId).toBe(9);
   });
 
-  it('falls back to the lowest remaining id after deleting the active project', async () => {
+  it('falls back to the lowest remaining id after deleting the current project', async () => {
     vi.mocked(listProjects).mockResolvedValue([
       projectFixture({ id: 8, name: 'Second', task_count: 0 }),
       projectFixture({ id: 3, name: 'First', task_count: 0 }),
@@ -115,6 +149,6 @@ describe('projectSelection store', () => {
     await store.removeProject(projectFixture({ id: 8, name: 'Second', task_count: 0 }));
 
     expect(deleteProject).toHaveBeenCalledWith(8);
-    expect(store.activeProjectId).toBe(3);
+    expect(store.currentProjectId).toBe(3);
   });
 });

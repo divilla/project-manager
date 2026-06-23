@@ -27,7 +27,7 @@
         <ProjectCreateForm v-model="projectName" @create="createProjectFromForm" />
         <ProjectList
           :projects="projects"
-          :selected-project-id="selectedProjectId"
+          :selected-project-id="currentProjectId"
           :loading="loading"
           @select="selectProject"
           @rename="startProjectRename"
@@ -41,6 +41,8 @@
       v-model:name="projectEditName"
       @save="saveProjectName"
     />
+
+    <DeleteConfirmationDialog v-model:open="confirmationDialogOpen" @confirm="confirm" />
   </q-page>
 </template>
 
@@ -49,20 +51,23 @@ import ProjectCreateForm from '@/features/projects/components/ProjectCreateForm.
 import ProjectList from '@/features/projects/components/ProjectList.vue';
 import ProjectRenameDialog from '@/features/projects/components/ProjectRenameDialog.vue';
 import { useProjectsPage } from '@/features/projects/composables/useProjectsPage';
+import DeleteConfirmationDialog from '@/shared/ui/DeleteConfirmationDialog.vue';
 
 const {
   projects,
-  selectedProjectId,
+  currentProjectId,
   projectName,
   loading,
   error,
   projectDialogOpen,
   projectEditName,
+  confirmationDialogOpen,
   loadAll,
   selectProject,
   createProjectFromForm,
   startProjectRename,
   saveProjectName,
   removeProject,
+  confirm,
 } = useProjectsPage({ tasksEnabled: false });
 </script>
