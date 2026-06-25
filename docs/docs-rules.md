@@ -1,9 +1,8 @@
-# Specs - specifications
+# Docs - Documentation
 
-- Specifications are all contained in folder `specs`
-- Specifications precisely define the desired external behavior and constraints
-- Specifications are single-source-of-truth for developers - they support every decision relevant to project
-- Specifications must not be overly detailed and a single spec file has a maximum of 300 lines
+- Documentation are all contained in folder `docs`
+- Documentation is single-source-of-truth for developers - they support every decision relevant to project
+- Documentation must not be overly detailed and a single spec file has a maximum of 300 lines
 
 ```
 specs/

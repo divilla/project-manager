@@ -19,13 +19,13 @@ This file provides guidance to Agent when working with code in this repository. 
 - Areas are also folders of main repository
 - Areas are defined in `agent/areas.md`
 
-### Specs
+### Documentation
 
-- Specs are all stored in folder `specs`
-- Specs precisely define the desired external behavior and constraints
-- Specs are single-source-of-truth for developers - they support every decision relevant to project
-- Specs must not be overly detailed and a single spec file has a maximum of 300 lines
-- Specs requirements and architecture is defined in `agent/specs-requirements-and-architecture.md`
+- Documentation is all stored in folder `docs`
+- Documentation precisely defines the desired external behavior and constraints
+- Documentation are single-source-of-truth for developers - they support every decision relevant to project
+- Documentation must not be overly detailed and a single doc file has a maximum of 300 lines
+- Documentation rules are defined in `docs/docs-rules.md`
 
 ### Changes
 
