@@ -14,15 +14,15 @@ func NewTaskRenderer(parser markdown.Parser, sanitizer markdown.Sanitizer) TaskR
 	return TaskRenderer{parser: parser, sanitizer: sanitizer}
 }
 
-func (r TaskRenderer) RenderTask(task dto.Task) dto.Task {
-	if r.parser == nil || r.sanitizer == nil || task.Description == "" {
+func (r TaskRenderer) RenderTask(task dto.Change) dto.Change {
+	if r.parser == nil || r.sanitizer == nil || task.Body == "" {
 		return task
 	}
-	task.DescriptionHTML = r.sanitizer.Parse(r.parser.Parse(task.Description))
+	task.BodyHTML = r.sanitizer.Parse(r.parser.Parse(task.Body))
 	return task
 }
 
 func (r TaskRenderer) RenderMutation(mutation dto.RequirementMutationResponse) dto.RequirementMutationResponse {
-	mutation.Task = r.RenderTask(mutation.Task)
+	mutation.Change = r.RenderTask(mutation.Change)
 	return mutation
 }

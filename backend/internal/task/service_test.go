@@ -14,17 +14,17 @@ import (
 
 func TestServiceRejectsInvalidTaskInput(t *testing.T) {
 	service := &Service{}
-	_, err := service.ListTasks(context.Background(), dto.TaskListRequest{})
+	_, err := service.ListTasks(context.Background(), dto.ChangeListRequest{})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.GetTask(context.Background(), dto.TaskIDRequest{})
+	_, err = service.GetTask(context.Background(), dto.ChangeIDRequest{})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.CreateTask(context.Background(), dto.TaskCreateRequest{ProjectID: 1, Name: "   "})
+	_, err = service.CreateTask(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, Title: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.UpdateTask(context.Background(), dto.TaskUpdateRequest{ID: 2, Name: "   "})
+	_, err = service.UpdateTask(context.Background(), dto.ChangeUpdateRequest{ID: 2, Name: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.UpdatePhase(context.Background(), dto.TaskUpdatePhaseRequest{ID: 2, TaskPhase: "   "})
+	_, err = service.UpdatePhase(context.Background(), dto.ChangeUpdatePhaseRequest{ID: 2, ChangePhase: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	err = service.DeleteTask(context.Background(), dto.TaskIDRequest{})
+	err = service.DeleteTask(context.Background(), dto.ChangeIDRequest{})
 	require.ErrorIs(t, err, ErrInvalidInput)
 }
 
@@ -33,35 +33,35 @@ func TestServiceNormalizesTaskRequests(t *testing.T) {
 	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 	parentID := 4
 
-	_, err := service.ListTasks(context.Background(), dto.TaskListRequest{ProjectID: 1})
+	_, err := service.ListTasks(context.Background(), dto.ChangeListRequest{ProjectID: 1})
 	require.NoError(t, err)
 	assert.Equal(t, 1, repo.projectID)
-	_, err = service.GetTask(context.Background(), dto.TaskIDRequest{ID: 2})
+	_, err = service.GetTask(context.Background(), dto.ChangeIDRequest{ID: 2})
 	require.NoError(t, err)
 	assert.Equal(t, 2, repo.id)
 
-	_, err = service.CreateTask(context.Background(), dto.TaskCreateRequest{
-		ProjectID: 1, Name: " Task Name ", Description: " Description ",
-		TaskPhase: " backlog ", TaskType: " task ", ParentID: &parentID,
+	_, err = service.CreateTask(context.Background(), dto.ChangeCreateRequest{
+		ProjectID: 1, Title: " Task Name ", Body: " Description ",
+		ChangePhase: " backlog ", ChangeTypes: " task ", ParentID: &parentID,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "Task Name", repo.createReq.Name)
-	assert.Equal(t, "Description", repo.createReq.Description)
-	assert.Equal(t, "backlog", repo.createReq.TaskPhase)
-	assert.Equal(t, "task", repo.createReq.TaskType)
+	assert.Equal(t, "Task Name", repo.createReq.Title)
+	assert.Equal(t, "Description", repo.createReq.Body)
+	assert.Equal(t, "backlog", repo.createReq.ChangePhase)
+	assert.Equal(t, "task", repo.createReq.ChangeTypes)
 
-	_, err = service.UpdateTask(context.Background(), dto.TaskUpdateRequest{
-		ID: 2, Name: " Updated Task ", Description: " Updated Description ", TaskType: " feature ",
+	_, err = service.UpdateTask(context.Background(), dto.ChangeUpdateRequest{
+		ID: 2, Name: " Updated Task ", Description: " Updated Description ", ChangeTypes: " feature ",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Updated Task", repo.updateReq.Name)
 	assert.Equal(t, "Updated Description", repo.updateReq.Description)
-	assert.Equal(t, "feature", repo.updateReq.TaskType)
+	assert.Equal(t, "feature", repo.updateReq.ChangeTypes)
 
-	_, err = service.UpdatePhase(context.Background(), dto.TaskUpdatePhaseRequest{ID: 2, TaskPhase: " review "})
+	_, err = service.UpdatePhase(context.Background(), dto.ChangeUpdatePhaseRequest{ID: 2, ChangePhase: " review "})
 	require.NoError(t, err)
 	assert.Equal(t, "review", repo.taskPhase)
-	err = service.DeleteTask(context.Background(), dto.TaskIDRequest{ID: 2})
+	err = service.DeleteTask(context.Background(), dto.ChangeIDRequest{ID: 2})
 	require.NoError(t, err)
 	assert.Equal(t, 2, repo.id)
 }
@@ -70,16 +70,16 @@ func TestServiceRendersTaskDescriptionHTML(t *testing.T) {
 	repo := &fakeTaskRepository{}
 	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
-	detail, err := service.GetTask(context.Background(), dto.TaskIDRequest{ID: 2})
+	detail, err := service.GetTask(context.Background(), dto.ChangeIDRequest{ID: 2})
 	require.NoError(t, err)
-	assert.Equal(t, "clean(parsed(**Task**))", detail.Task.DescriptionHTML)
+	assert.Equal(t, "clean(parsed(**Task**))", detail.Change.BodyHTML)
 }
 
 func TestServiceRendersBatchTaskDescriptions(t *testing.T) {
 	repo := &fakeTaskRepository{}
 	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
-	response, err := service.RenderedDescriptions(context.Background(), dto.TaskRenderedDescriptionsRequest{
+	response, err := service.RenderedDescriptions(context.Background(), dto.ChangeRenderedDescriptionsRequest{
 		IDs: []int{3, 2, 3},
 	})
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func TestServiceRendersBatchTaskDescriptions(t *testing.T) {
 func TestServiceRejectsInvalidRenderedDescriptionIDs(t *testing.T) {
 	service := &Service{}
 
-	_, err := service.RenderedDescriptions(context.Background(), dto.TaskRenderedDescriptionsRequest{
+	_, err := service.RenderedDescriptions(context.Background(), dto.ChangeRenderedDescriptionsRequest{
 		IDs: []int{1, 0},
 	})
 	require.ErrorIs(t, err, ErrInvalidInput)
@@ -117,54 +117,54 @@ type fakeTaskRepository struct {
 	id             int
 	taskPhase      string
 	descriptionIDs []int
-	createReq      dto.TaskCreateRequest
-	updateReq      dto.TaskUpdateRequest
+	createReq      dto.ChangeCreateRequest
+	updateReq      dto.ChangeUpdateRequest
 }
 
-func (r *fakeTaskRepository) References(context.Context) (dto.TaskReferences, error) {
-	return dto.TaskReferences{}, nil
+func (r *fakeTaskRepository) References(context.Context) (dto.ChangeReferences, error) {
+	return dto.ChangeReferences{}, nil
 }
-func (r *fakeTaskRepository) List(_ context.Context, projectID int) ([]dto.Task, error) {
+func (r *fakeTaskRepository) List(_ context.Context, projectID int) ([]dto.Change, error) {
 	r.projectID = projectID
-	return []dto.Task{}, nil
+	return []dto.Change{}, nil
 }
-func (r *fakeTaskRepository) Get(_ context.Context, id int) (dto.TaskDetail, error) {
+func (r *fakeTaskRepository) Get(_ context.Context, id int) (dto.ChangeDetail, error) {
 	r.id = id
-	return dto.TaskDetail{Task: dto.Task{ID: id, Description: "**Task**"}}, nil
+	return dto.ChangeDetail{Change: dto.Change{ID: id, Body: "**Task**"}}, nil
 }
-func (r *fakeTaskRepository) Descriptions(_ context.Context, ids []int) ([]dto.Task, error) {
+func (r *fakeTaskRepository) Descriptions(_ context.Context, ids []int) ([]dto.Change, error) {
 	r.descriptionIDs = ids
-	tasks := make([]dto.Task, 0, len(ids))
+	tasks := make([]dto.Change, 0, len(ids))
 	for _, id := range ids {
-		tasks = append(tasks, dto.Task{ID: id, Description: "**Task " + strconv.Itoa(id) + "**"})
+		tasks = append(tasks, dto.Change{ID: id, Body: "**Task " + strconv.Itoa(id) + "**"})
 	}
 	return tasks, nil
 }
-func (r *fakeTaskRepository) Create(_ context.Context, req dto.TaskCreateRequest) (dto.Task, error) {
+func (r *fakeTaskRepository) Create(_ context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	r.createReq = req
-	return dto.Task{ID: 2, ProjectID: req.ProjectID, Name: req.Name, Description: req.Description}, nil
+	return dto.Change{ID: 2, ProjectID: req.ProjectID, Name: req.Title, Body: req.Body}, nil
 }
-func (r *fakeTaskRepository) Update(_ context.Context, req dto.TaskUpdateRequest) (dto.Task, error) {
+func (r *fakeTaskRepository) Update(_ context.Context, req dto.ChangeUpdateRequest) (dto.Change, error) {
 	r.updateReq = req
-	return dto.Task{ID: req.ID, Name: req.Name, Description: req.Description}, nil
+	return dto.Change{ID: req.ID, Name: req.Name, Body: req.Description}, nil
 }
-func (r *fakeTaskRepository) UpdateDifficulty(_ context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Task, error) {
+func (r *fakeTaskRepository) UpdateDifficulty(_ context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Change, error) {
 	r.id = req.ID
-	return dto.Task{ID: req.ID, Difficulty: req.Difficulty}, nil
+	return dto.Change{ID: req.ID, Difficulty: req.Difficulty}, nil
 }
-func (r *fakeTaskRepository) UpdatePriority(_ context.Context, req dto.TaskUpdatePriorityRequest) (dto.Task, error) {
+func (r *fakeTaskRepository) UpdatePriority(_ context.Context, req dto.TaskUpdatePriorityRequest) (dto.Change, error) {
 	r.id = req.ID
-	return dto.Task{ID: req.ID, Priority: req.Priority}, nil
+	return dto.Change{ID: req.ID, Priority: req.Priority}, nil
 }
-func (r *fakeTaskRepository) UpdateParent(_ context.Context, req dto.TaskUpdateParentRequest) (dto.Task, error) {
+func (r *fakeTaskRepository) UpdateParent(_ context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {
 	r.id = req.ID
-	return dto.Task{ID: req.ID, ParentID: req.ParentID}, nil
+	return dto.Change{ID: req.ID, EpicID: req.EpicID}, nil
 }
-func (r *fakeTaskRepository) UpdatePhase(_ context.Context, req dto.TaskUpdatePhaseRequest) (dto.Task, error) {
-	r.id, r.taskPhase = req.ID, req.TaskPhase
-	return dto.Task{ID: req.ID, TaskPhase: req.TaskPhase}, nil
+func (r *fakeTaskRepository) UpdatePhase(_ context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error) {
+	r.id, r.taskPhase = req.ID, req.ChangePhase
+	return dto.Change{ID: req.ID, ChangesPhase: req.ChangePhase}, nil
 }
-func (r *fakeTaskRepository) Delete(_ context.Context, req dto.TaskIDRequest) error {
+func (r *fakeTaskRepository) Delete(_ context.Context, req dto.ChangeIDRequest) error {
 	r.id = req.ID
 	return nil
 }

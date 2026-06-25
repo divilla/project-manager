@@ -17,17 +17,17 @@ type (
 	}
 
 	Repository interface {
-		References(ctx context.Context) (dto.TaskReferences, error)
-		List(ctx context.Context, projectID int) ([]dto.Task, error)
-		Get(ctx context.Context, id int) (dto.TaskDetail, error)
-		Descriptions(ctx context.Context, ids []int) ([]dto.Task, error)
-		Create(ctx context.Context, req dto.TaskCreateRequest) (dto.Task, error)
-		Update(ctx context.Context, req dto.TaskUpdateRequest) (dto.Task, error)
-		UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Task, error)
-		UpdatePriority(ctx context.Context, req dto.TaskUpdatePriorityRequest) (dto.Task, error)
-		UpdateParent(ctx context.Context, req dto.TaskUpdateParentRequest) (dto.Task, error)
-		UpdatePhase(ctx context.Context, req dto.TaskUpdatePhaseRequest) (dto.Task, error)
-		Delete(ctx context.Context, req dto.TaskIDRequest) error
+		References(ctx context.Context) (dto.ChangeReferences, error)
+		List(ctx context.Context, projectID int) ([]dto.Change, error)
+		Get(ctx context.Context, id int) (dto.ChangeDetail, error)
+		Descriptions(ctx context.Context, ids []int) ([]dto.Change, error)
+		Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error)
+		Update(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Change, error)
+		UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Change, error)
+		UpdatePriority(ctx context.Context, req dto.TaskUpdatePriorityRequest) (dto.Change, error)
+		UpdateParent(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error)
+		UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error)
+		Delete(ctx context.Context, req dto.ChangeIDRequest) error
 	}
 )
 
@@ -52,19 +52,19 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
-func (r *Repo) References(ctx context.Context) (dto.TaskReferences, error) {
+func (r *Repo) References(ctx context.Context) (dto.ChangeReferences, error) {
 	phases, err := r.referenceOptions(ctx, "task_phase")
 	if err != nil {
-		return dto.TaskReferences{}, err
+		return dto.ChangeReferences{}, err
 	}
 	types, err := r.referenceOptions(ctx, "task_type")
 	if err != nil {
-		return dto.TaskReferences{}, err
+		return dto.ChangeReferences{}, err
 	}
-	return dto.TaskReferences{Phases: phases, Types: types}, nil
+	return dto.ChangeReferences{Phases: phases, Types: types}, nil
 }
 
-func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Task, error) {
+func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Change, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+taskColumns+`
 		from public.vw_task
@@ -76,7 +76,7 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Task, error) {
 	}
 	defer rows.Close()
 
-	tasks := make([]dto.Task, 0)
+	tasks := make([]dto.Change, 0)
 	for rows.Next() {
 		task, err := scanTask(rows)
 		if err != nil {
@@ -87,19 +87,19 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Task, error) {
 	return tasks, rows.Err()
 }
 
-func (r *Repo) Get(ctx context.Context, id int) (dto.TaskDetail, error) {
+func (r *Repo) Get(ctx context.Context, id int) (dto.ChangeDetail, error) {
 	task, err := getTask(ctx, r.pool, id)
 	if err != nil {
-		return dto.TaskDetail{}, err
+		return dto.ChangeDetail{}, err
 	}
 	requirements, err := listRequirements(ctx, r.pool, id)
 	if err != nil {
-		return dto.TaskDetail{}, err
+		return dto.ChangeDetail{}, err
 	}
-	return dto.TaskDetail{Task: task, Requirements: requirements}, nil
+	return dto.ChangeDetail{Change: task, Requirements: requirements}, nil
 }
 
-func (r *Repo) Descriptions(ctx context.Context, ids []int) ([]dto.Task, error) {
+func (r *Repo) Descriptions(ctx context.Context, ids []int) ([]dto.Change, error) {
 	rows, err := r.pool.Query(ctx, `
 		select requested.id::integer, coalesce(task.description, '')
 		from unnest($1::bigint[]) with ordinality as requested(id, ord)
@@ -111,10 +111,10 @@ func (r *Repo) Descriptions(ctx context.Context, ids []int) ([]dto.Task, error) 
 	}
 	defer rows.Close()
 
-	tasks := make([]dto.Task, 0, len(ids))
+	tasks := make([]dto.Change, 0, len(ids))
 	for rows.Next() {
-		var task dto.Task
-		if err := rows.Scan(&task.ID, &task.Description); err != nil {
+		var task dto.Change
+		if err := rows.Scan(&task.ID, &task.Body); err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, task)
@@ -122,29 +122,29 @@ func (r *Repo) Descriptions(ctx context.Context, ids []int) ([]dto.Task, error) 
 	return tasks, rows.Err()
 }
 
-func (r *Repo) Create(ctx context.Context, req dto.TaskCreateRequest) (dto.Task, error) {
+func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	if err := r.ensureProject(ctx, req.ProjectID); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
-	if req.TaskPhase != "" {
-		if err := r.ensureReference(ctx, "task_phase", req.TaskPhase); err != nil {
-			return dto.Task{}, err
+	if req.ChangePhase != "" {
+		if err := r.ensureReference(ctx, "task_phase", req.ChangePhase); err != nil {
+			return dto.Change{}, err
 		}
 	}
-	if req.TaskType != "" {
-		if err := r.ensureReference(ctx, "task_type", req.TaskType); err != nil {
-			return dto.Task{}, err
+	if req.ChangeTypes != "" {
+		if err := r.ensureReference(ctx, "task_type", req.ChangeTypes); err != nil {
+			return dto.Change{}, err
 		}
 	}
 	if req.ParentID != nil {
 		if err := r.ensureParentTask(ctx, req.ProjectID, *req.ParentID); err != nil {
-			return dto.Task{}, err
+			return dto.Change{}, err
 		}
 	}
 
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	defer tx.Rollback(ctx)
 
@@ -158,49 +158,49 @@ func (r *Repo) Create(ctx context.Context, req dto.TaskCreateRequest) (dto.Task,
 			coalesce(nullif($5, ''), 'task'), case when $6 > 0 then $6 else 1 end, $7, $8
 		)
 		returning id
-	`, req.ProjectID, req.Name, req.Description, req.TaskPhase, req.TaskType, req.Difficulty, req.Priority, req.ParentID).Scan(&id)
+	`, req.ProjectID, req.Title, req.Body, req.ChangePhase, req.ChangeTypes, req.Difficulty, req.Priority, req.ParentID).Scan(&id)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_task_phase_recalculate($1)", req.ParentID); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	task, err := getTask(ctx, tx, id)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return task, nil
 }
 
-func (r *Repo) Update(ctx context.Context, req dto.TaskUpdateRequest) (dto.Task, error) {
-	if req.TaskType != "" {
-		if err := r.ensureReference(ctx, "task_type", req.TaskType); err != nil {
-			return dto.Task{}, err
+func (r *Repo) Update(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Change, error) {
+	if req.ChangeTypes != "" {
+		if err := r.ensureReference(ctx, "task_type", req.ChangeTypes); err != nil {
+			return dto.Change{}, err
 		}
 	}
 
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	defer tx.Rollback(ctx)
 
 	current, err := getTaskState(ctx, tx, req.ID)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 
 	taskType := current.TaskType
-	if req.TaskType != "" {
-		taskType = req.TaskType
+	if req.ChangeTypes != "" {
+		taskType = req.ChangeTypes
 	}
 	historyChanged := taskType != current.TaskType || req.Name != current.Name || req.Description != current.Description
 	if historyChanged {
 		if _, err := tx.Exec(ctx, "call public.sp_task_to_history($1, false)", req.ID); err != nil {
-			return dto.Task{}, err
+			return dto.Change{}, err
 		}
 	}
 
@@ -225,143 +225,143 @@ func (r *Repo) Update(ctx context.Context, req dto.TaskUpdateRequest) (dto.Task,
 	}
 	tag, err := tx.Exec(ctx, query, req.ID, req.Name, req.Description, taskType)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if tag.RowsAffected() == 0 {
-		return dto.Task{}, ErrNotFound
+		return dto.Change{}, ErrNotFound
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_task_phase_recalculate($1)", current.ParentID); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return finishTaskMutation(ctx, tx, req.ID)
 }
 
-func (r *Repo) UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Task, error) {
+func (r *Repo) UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	defer tx.Rollback(ctx)
 	current, err := getTaskState(ctx, tx, req.ID)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	tag, err := tx.Exec(ctx, "update public.task set difficulty = $2, modified = now() where id = $1", req.ID, req.Difficulty)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if tag.RowsAffected() == 0 {
-		return dto.Task{}, ErrNotFound
+		return dto.Change{}, ErrNotFound
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_task_phase_recalculate($1)", current.ParentID); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return finishTaskMutation(ctx, tx, req.ID)
 }
 
-func (r *Repo) UpdatePriority(ctx context.Context, req dto.TaskUpdatePriorityRequest) (dto.Task, error) {
+func (r *Repo) UpdatePriority(ctx context.Context, req dto.TaskUpdatePriorityRequest) (dto.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	defer tx.Rollback(ctx)
 	current, err := getTaskState(ctx, tx, req.ID)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	tag, err := tx.Exec(ctx, "update public.task set priority = $2, modified = now() where id = $1", req.ID, req.Priority)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if tag.RowsAffected() == 0 {
-		return dto.Task{}, ErrNotFound
+		return dto.Change{}, ErrNotFound
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_task_phase_recalculate($1)", current.ParentID); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return finishTaskMutation(ctx, tx, req.ID)
 }
 
-func (r *Repo) UpdateParent(ctx context.Context, req dto.TaskUpdateParentRequest) (dto.Task, error) {
+func (r *Repo) UpdateParent(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	defer tx.Rollback(ctx)
 	current, err := getTaskState(ctx, tx, req.ID)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
-	if req.ParentID != nil {
-		if *req.ParentID == req.ID {
-			return dto.Task{}, ErrInvalidReference
+	if req.EpicID != nil {
+		if *req.EpicID == req.ID {
+			return dto.Change{}, ErrInvalidReference
 		}
-		if err := ensureParentTask(ctx, tx, current.ProjectID, *req.ParentID); err != nil {
-			return dto.Task{}, err
+		if err := ensureParentTask(ctx, tx, current.ProjectID, *req.EpicID); err != nil {
+			return dto.Change{}, err
 		}
-		isDescendant, err := isTaskDescendant(ctx, tx, req.ID, *req.ParentID)
+		isDescendant, err := isTaskDescendant(ctx, tx, req.ID, *req.EpicID)
 		if err != nil {
-			return dto.Task{}, err
+			return dto.Change{}, err
 		}
 		if isDescendant {
-			return dto.Task{}, ErrInvalidReference
+			return dto.Change{}, ErrInvalidReference
 		}
 	}
-	if equalIntPointers(current.ParentID, req.ParentID) {
+	if equalIntPointers(current.ParentID, req.EpicID) {
 		return finishTaskMutation(ctx, tx, req.ID)
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_task_to_history($1, false)", req.ID); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	tag, err := tx.Exec(ctx, `
 		update public.task
 		set parent_id = $2, version = version + 1, modified = now()
 		where id = $1
-	`, req.ID, req.ParentID)
+	`, req.ID, req.EpicID)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if tag.RowsAffected() == 0 {
-		return dto.Task{}, ErrNotFound
+		return dto.Change{}, ErrNotFound
 	}
 	if err := recalculateTaskRequirements(ctx, tx, current.ParentID, &req.ID); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
-	for _, parentID := range uniqueParentIDs(current.ParentID, req.ParentID) {
+	for _, parentID := range uniqueParentIDs(current.ParentID, req.EpicID) {
 		if _, err := tx.Exec(ctx, "call public.sp_task_phase_recalculate($1)", parentID); err != nil {
-			return dto.Task{}, err
+			return dto.Change{}, err
 		}
 	}
 	return finishTaskMutation(ctx, tx, req.ID)
 }
 
-func (r *Repo) UpdatePhase(ctx context.Context, req dto.TaskUpdatePhaseRequest) (dto.Task, error) {
-	if err := r.ensureReference(ctx, "task_phase", req.TaskPhase); err != nil {
-		return dto.Task{}, err
+func (r *Repo) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error) {
+	if err := r.ensureReference(ctx, "task_phase", req.ChangePhase); err != nil {
+		return dto.Change{}, err
 	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	defer tx.Rollback(ctx)
 	current, err := getTaskState(ctx, tx, req.ID)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
-	tag, err := tx.Exec(ctx, "update public.task set task_phase = $2, modified = now() where id = $1", req.ID, req.TaskPhase)
+	tag, err := tx.Exec(ctx, "update public.task set task_phase = $2, modified = now() where id = $1", req.ID, req.ChangePhase)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if tag.RowsAffected() == 0 {
-		return dto.Task{}, ErrNotFound
+		return dto.Change{}, ErrNotFound
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_task_phase_recalculate($1)", current.ParentID); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return finishTaskMutation(ctx, tx, req.ID)
 }
 
-func (r *Repo) Delete(ctx context.Context, req dto.TaskIDRequest) error {
+func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -468,10 +468,10 @@ func ensureParentTask(ctx context.Context, q queryer, projectID, parentID int) e
 	return nil
 }
 
-func getTask(ctx context.Context, q queryer, id int) (dto.Task, error) {
+func getTask(ctx context.Context, q queryer, id int) (dto.Change, error) {
 	task, err := scanTask(q.QueryRow(ctx, "select "+taskColumns+" from public.vw_task where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Task{}, ErrNotFound
+		return dto.Change{}, ErrNotFound
 	}
 	return task, err
 }
@@ -488,7 +488,7 @@ func listRequirements(ctx context.Context, q queryer, taskID int) ([]dto.Require
 	requirements := make([]dto.Requirement, 0)
 	for rows.Next() {
 		var item dto.Requirement
-		if err := rows.Scan(&item.ID, &item.Version, &item.Definition, &item.Done, &item.TaskID, &item.Created, &item.Modified); err != nil {
+		if err := rows.Scan(&item.ID, &item.Version, &item.Definition, &item.Done, &item.ChangeID, &item.Created, &item.Modified); err != nil {
 			return nil, err
 		}
 		requirements = append(requirements, item)
@@ -496,20 +496,20 @@ func listRequirements(ctx context.Context, q queryer, taskID int) ([]dto.Require
 	return requirements, rows.Err()
 }
 
-func scanTask(row pgx.Row) (dto.Task, error) {
-	var task dto.Task
+func scanTask(row pgx.Row) (dto.Change, error) {
+	var task dto.Change
 	var parentID pgtype.Int8
 	err := row.Scan(
-		&task.ID, &task.Version, &task.TaskType, &task.Name, &task.Description,
-		&task.Difficulty, &task.Priority, &task.TaskPhase, &parentID, &task.ProjectID,
+		&task.ID, &task.Version, &task.ChangeTypes, &task.Name, &task.Body,
+		&task.Difficulty, &task.Priority, &task.ChangesPhase, &parentID, &task.ProjectID,
 		&task.DoneReq, &task.TotalReq, &task.Completed, &task.Created, &task.Modified,
 	)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if parentID.Valid {
 		value := int(parentID.Int64)
-		task.ParentID = &value
+		task.EpicID = &value
 	}
 	return task, nil
 }
@@ -542,13 +542,13 @@ func getTaskState(ctx context.Context, tx pgx.Tx, id int) (taskState, error) {
 	return state, nil
 }
 
-func finishTaskMutation(ctx context.Context, tx pgx.Tx, id int) (dto.Task, error) {
+func finishTaskMutation(ctx context.Context, tx pgx.Tx, id int) (dto.Change, error) {
 	task, err := getTask(ctx, tx, id)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return task, nil
 }

@@ -116,6 +116,6 @@ func (r *Repo) Delete(ctx context.Context, id int) error {
 
 func scanProject(row pgx.Row) (dto.Project, error) {
 	var project dto.Project
-	err := row.Scan(&project.ID, &project.Name, &project.Created, &project.Modified, &project.TaskCount)
+	err := row.Scan(&project.ID, &project.Name, &project.Created, &project.Modified, &project.ChangeCount)
 	return project, err
 }
