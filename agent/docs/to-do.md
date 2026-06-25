@@ -41,3 +41,10 @@ Why I prefer this:
 The key is: do not make the PR body too thin. “See spec file” alone is bad. The PR body should explain what changed, why, where the spec is, and what deserves reviewer attention. The detailed acceptance rules belong in the markdown spec.
 
 ### Maybe add requirements - definition of done to PR...
+
+
+High: frontend/src/pages/index/tasks/create/[parentId].vue:164 creates child tasks under activeProjectId, not the loaded parent task’s project. If the user deep-links to /tasks/create/:parentId, or views a task from project B while the persisted selector is project A, the request sends project_id: A with parent_id from B and backend validation rejects it. Use parentTask.value?.project_id ?? activeProjectId.value, and preferably select the parent’s project after loading it.
+
+That scenario must never happen. First guardrails should be that on changing project in the top menu - everything on every single screen should be refreshed.
+Second, we have and will have more pages like tasks/create/[parentId], tasks/[taskId], and so on. You should wire an event on after project changes - the user must be redirected from any such page to /tasks or /projects are whatever, to an index page of the current topic.
+Can you do it like this?
