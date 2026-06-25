@@ -50,18 +50,18 @@ func (r *Repo) Create(ctx context.Context, req dto.RequirementCreateRequest) (dt
 	}
 	defer tx.Rollback(ctx)
 
-	if err := ensureTaskExists(ctx, tx, req.TaskID); err != nil {
+	if err := ensureTaskExists(ctx, tx, req.ChangeID); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
 		insert into public.requirement (definition, task_id)
 		values ($1, $2)
 		returning id, version, definition, done, task_id, created, modified
-	`, req.Definition, req.TaskID))
+	`, req.Definition, req.ChangeID))
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	return finishMutation(ctx, tx, requirement.TaskID, []int{requirement.TaskID}, &requirement)
+	return finishMutation(ctx, tx, requirement.ChangeID, []int{requirement.ChangeID}, &requirement)
 }
 
 func (r *Repo) Update(ctx context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error) {
@@ -76,7 +76,7 @@ func (r *Repo) Update(ctx context.Context, req dto.RequirementUpdateRequest) (dt
 		return dto.RequirementMutationResponse{}, err
 	}
 	if req.Definition == current.Definition {
-		return finishMutation(ctx, tx, current.TaskID, nil, &current)
+		return finishMutation(ctx, tx, current.ChangeID, nil, &current)
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_requirement_to_history($1, false)", req.ID); err != nil {
 		return dto.RequirementMutationResponse{}, err
@@ -96,7 +96,7 @@ func (r *Repo) Update(ctx context.Context, req dto.RequirementUpdateRequest) (dt
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	return finishMutation(ctx, tx, current.TaskID, nil, &requirement)
+	return finishMutation(ctx, tx, current.ChangeID, nil, &requirement)
 }
 
 func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequest) (dto.RequirementMutationResponse, error) {
@@ -110,7 +110,7 @@ func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequ
 		return dto.RequirementMutationResponse{}, err
 	}
 	if req.Done == current.Done {
-		return finishMutation(ctx, tx, current.TaskID, nil, &current)
+		return finishMutation(ctx, tx, current.ChangeID, nil, &current)
 	}
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
 		update public.requirement
@@ -121,10 +121,10 @@ func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequ
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	return finishMutation(ctx, tx, current.TaskID, []int{current.TaskID}, &requirement)
+	return finishMutation(ctx, tx, current.ChangeID, []int{current.ChangeID}, &requirement)
 }
 
-func (r *Repo) UpdateTask(ctx context.Context, req dto.RequirementUpdateTaskRequest) (dto.RequirementMutationResponse, error) {
+func (r *Repo) UpdateTask(ctx context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
@@ -137,8 +137,8 @@ func (r *Repo) UpdateTask(ctx context.Context, req dto.RequirementUpdateTaskRequ
 	if err := ensureTaskExists(ctx, tx, req.TaskID); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	if req.TaskID == current.TaskID {
-		return finishMutation(ctx, tx, current.TaskID, nil, &current)
+	if req.TaskID == current.ChangeID {
+		return finishMutation(ctx, tx, current.ChangeID, nil, &current)
 	}
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
 		update public.requirement
@@ -149,7 +149,7 @@ func (r *Repo) UpdateTask(ctx context.Context, req dto.RequirementUpdateTaskRequ
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	return finishMutation(ctx, tx, req.TaskID, []int{current.TaskID, req.TaskID}, &requirement)
+	return finishMutation(ctx, tx, req.TaskID, []int{current.ChangeID, req.TaskID}, &requirement)
 }
 
 func (r *Repo) Delete(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error) {
@@ -173,7 +173,7 @@ func (r *Repo) Delete(ctx context.Context, req dto.RequirementIDRequest) (dto.Re
 	if tag.RowsAffected() == 0 {
 		return dto.RequirementMutationResponse{}, ErrNotFound
 	}
-	return finishMutation(ctx, tx, current.TaskID, []int{current.TaskID}, nil)
+	return finishMutation(ctx, tx, current.ChangeID, []int{current.ChangeID}, nil)
 }
 
 func finishMutation(ctx context.Context, tx pgx.Tx, responseTaskID int, affectedTaskIDs []int, requirement *dto.Requirement) (dto.RequirementMutationResponse, error) {
@@ -193,7 +193,7 @@ func finishMutation(ctx context.Context, tx pgx.Tx, responseTaskID int, affected
 	if err := tx.Commit(ctx); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	return dto.RequirementMutationResponse{Requirement: requirement, Task: task, Requirements: requirements}, nil
+	return dto.RequirementMutationResponse{Requirement: requirement, Change: task, Requirements: requirements}, nil
 }
 
 func getRequirement(ctx context.Context, tx pgx.Tx, id int) (dto.Requirement, error) {
@@ -245,33 +245,33 @@ func scanRequirement(row pgx.Row) (dto.Requirement, error) {
 	var requirement dto.Requirement
 	err := row.Scan(
 		&requirement.ID, &requirement.Version, &requirement.Definition, &requirement.Done,
-		&requirement.TaskID, &requirement.Created, &requirement.Modified,
+		&requirement.ChangeID, &requirement.Created, &requirement.Modified,
 	)
 	return requirement, err
 }
 
-func getTask(ctx context.Context, q queryer, id int) (dto.Task, error) {
+func getTask(ctx context.Context, q queryer, id int) (dto.Change, error) {
 	task, err := scanTask(q.QueryRow(ctx, "select "+taskColumns+" from public.vw_task where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return dto.Task{}, ErrNotFound
+		return dto.Change{}, ErrNotFound
 	}
 	return task, err
 }
 
-func scanTask(row pgx.Row) (dto.Task, error) {
-	var task dto.Task
+func scanTask(row pgx.Row) (dto.Change, error) {
+	var task dto.Change
 	var parentID pgtype.Int8
 	err := row.Scan(
-		&task.ID, &task.Version, &task.TaskType, &task.Name, &task.Description,
-		&task.Difficulty, &task.Priority, &task.TaskPhase, &parentID, &task.ProjectID,
+		&task.ID, &task.Version, &task.ChangeTypes, &task.Name, &task.Body,
+		&task.Difficulty, &task.Priority, &task.ChangesPhase, &parentID, &task.ProjectID,
 		&task.DoneReq, &task.TotalReq, &task.Completed, &task.Created, &task.Modified,
 	)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	if parentID.Valid {
 		value := int(parentID.Int64)
-		task.ParentID = &value
+		task.EpicID = &value
 	}
 	return task, nil
 }

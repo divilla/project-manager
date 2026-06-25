@@ -24,129 +24,129 @@ func NewService(taskRepository Repository, renderer taskview.TaskRenderer) *Serv
 	return &Service{repo: taskRepository, renderer: renderer}
 }
 
-func (s *Service) References(ctx context.Context) (dto.TaskReferences, error) {
+func (s *Service) References(ctx context.Context) (dto.ChangeReferences, error) {
 	return s.repo.References(ctx)
 }
 
-func (s *Service) ListTasks(ctx context.Context, req dto.TaskListRequest) ([]dto.Task, error) {
+func (s *Service) ListTasks(ctx context.Context, req dto.ChangeListRequest) ([]dto.Change, error) {
 	if req.ProjectID <= 0 {
 		return nil, ErrInvalidInput
 	}
 	return s.repo.List(ctx, req.ProjectID)
 }
 
-func (s *Service) GetTask(ctx context.Context, req dto.TaskIDRequest) (dto.TaskDetail, error) {
+func (s *Service) GetTask(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeDetail, error) {
 	if req.ID <= 0 {
-		return dto.TaskDetail{}, ErrInvalidInput
+		return dto.ChangeDetail{}, ErrInvalidInput
 	}
 	detail, err := s.repo.Get(ctx, req.ID)
 	if err != nil {
-		return dto.TaskDetail{}, err
+		return dto.ChangeDetail{}, err
 	}
-	detail.Task = s.renderer.RenderTask(detail.Task)
+	detail.Change = s.renderer.RenderTask(detail.Change)
 	return detail, nil
 }
 
-func (s *Service) RenderedDescriptions(ctx context.Context, req dto.TaskRenderedDescriptionsRequest) (dto.TaskRenderedDescriptionsResponse, error) {
+func (s *Service) RenderedDescriptions(ctx context.Context, req dto.ChangeRenderedDescriptionsRequest) (dto.ChangeRenderedDescriptionsResponse, error) {
 	ids, err := normalizeTaskIDs(req.IDs)
 	if err != nil {
-		return dto.TaskRenderedDescriptionsResponse{}, err
+		return dto.ChangeRenderedDescriptionsResponse{}, err
 	}
 	if len(ids) == 0 {
-		return dto.TaskRenderedDescriptionsResponse{Descriptions: []dto.TaskRenderedDescription{}}, nil
+		return dto.ChangeRenderedDescriptionsResponse{Descriptions: []dto.ChangeRenderedDescription{}}, nil
 	}
 
 	tasks, err := s.repo.Descriptions(ctx, ids)
 	if err != nil {
-		return dto.TaskRenderedDescriptionsResponse{}, err
+		return dto.ChangeRenderedDescriptionsResponse{}, err
 	}
 
-	descriptions := make([]dto.TaskRenderedDescription, 0, len(tasks))
+	descriptions := make([]dto.ChangeRenderedDescription, 0, len(tasks))
 	for _, task := range tasks {
 		task = s.renderer.RenderTask(task)
-		descriptions = append(descriptions, dto.TaskRenderedDescription{
+		descriptions = append(descriptions, dto.ChangeRenderedDescription{
 			ID:              task.ID,
-			DescriptionHTML: task.DescriptionHTML,
+			DescriptionHTML: task.BodyHTML,
 		})
 	}
-	return dto.TaskRenderedDescriptionsResponse{Descriptions: descriptions}, nil
+	return dto.ChangeRenderedDescriptionsResponse{Descriptions: descriptions}, nil
 }
 
-func (s *Service) CreateTask(ctx context.Context, req dto.TaskCreateRequest) (dto.Task, error) {
-	req.Name = strings.TrimSpace(req.Name)
-	req.Description = strings.TrimSpace(req.Description)
-	req.TaskPhase = strings.TrimSpace(req.TaskPhase)
-	req.TaskType = strings.TrimSpace(req.TaskType)
-	if req.ProjectID <= 0 || req.Name == "" || (req.ParentID != nil && *req.ParentID <= 0) {
-		return dto.Task{}, ErrInvalidInput
+func (s *Service) CreateTask(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
+	req.Title = strings.TrimSpace(req.Title)
+	req.Body = strings.TrimSpace(req.Body)
+	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
+	req.ChangeTypes = strings.TrimSpace(req.ChangeTypes)
+	if req.ProjectID <= 0 || req.Title == "" || (req.ParentID != nil && *req.ParentID <= 0) {
+		return dto.Change{}, ErrInvalidInput
 	}
 	task, err := s.repo.Create(ctx, req)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return s.renderer.RenderTask(task), nil
 }
 
-func (s *Service) UpdateTask(ctx context.Context, req dto.TaskUpdateRequest) (dto.Task, error) {
+func (s *Service) UpdateTask(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Change, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	req.Description = strings.TrimSpace(req.Description)
-	req.TaskType = strings.TrimSpace(req.TaskType)
+	req.ChangeTypes = strings.TrimSpace(req.ChangeTypes)
 	if req.ID <= 0 || req.Name == "" {
-		return dto.Task{}, ErrInvalidInput
+		return dto.Change{}, ErrInvalidInput
 	}
 	task, err := s.repo.Update(ctx, req)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return s.renderer.RenderTask(task), nil
 }
 
-func (s *Service) UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Task, error) {
+func (s *Service) UpdateDifficulty(ctx context.Context, req dto.TaskUpdateDifficultyRequest) (dto.Change, error) {
 	if req.ID <= 0 || req.Difficulty <= 0 {
-		return dto.Task{}, ErrInvalidInput
+		return dto.Change{}, ErrInvalidInput
 	}
 	task, err := s.repo.UpdateDifficulty(ctx, req)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return s.renderer.RenderTask(task), nil
 }
 
-func (s *Service) UpdatePriority(ctx context.Context, req dto.TaskUpdatePriorityRequest) (dto.Task, error) {
+func (s *Service) UpdatePriority(ctx context.Context, req dto.TaskUpdatePriorityRequest) (dto.Change, error) {
 	if req.ID <= 0 {
-		return dto.Task{}, ErrInvalidInput
+		return dto.Change{}, ErrInvalidInput
 	}
 	task, err := s.repo.UpdatePriority(ctx, req)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return s.renderer.RenderTask(task), nil
 }
 
-func (s *Service) UpdateParent(ctx context.Context, req dto.TaskUpdateParentRequest) (dto.Task, error) {
-	if req.ID <= 0 || (req.ParentID != nil && *req.ParentID <= 0) {
-		return dto.Task{}, ErrInvalidInput
+func (s *Service) UpdateParent(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {
+	if req.ID <= 0 || (req.EpicID != nil && *req.EpicID <= 0) {
+		return dto.Change{}, ErrInvalidInput
 	}
 	task, err := s.repo.UpdateParent(ctx, req)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return s.renderer.RenderTask(task), nil
 }
 
-func (s *Service) UpdatePhase(ctx context.Context, req dto.TaskUpdatePhaseRequest) (dto.Task, error) {
-	req.TaskPhase = strings.TrimSpace(req.TaskPhase)
-	if req.ID <= 0 || req.TaskPhase == "" {
-		return dto.Task{}, ErrInvalidInput
+func (s *Service) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error) {
+	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
+	if req.ID <= 0 || req.ChangePhase == "" {
+		return dto.Change{}, ErrInvalidInput
 	}
 	task, err := s.repo.UpdatePhase(ctx, req)
 	if err != nil {
-		return dto.Task{}, err
+		return dto.Change{}, err
 	}
 	return s.renderer.RenderTask(task), nil
 }
 
-func (s *Service) DeleteTask(ctx context.Context, req dto.TaskIDRequest) error {
+func (s *Service) DeleteTask(ctx context.Context, req dto.ChangeIDRequest) error {
 	if req.ID <= 0 {
 		return ErrInvalidInput
 	}

@@ -1,50 +1,56 @@
 # AGENTS.md
 
-This file provides guidance to Agent when working with code in this repository.
+This file provides guidance to Agent when working with code in this repository. Use the
+`project-manager-change-workflow` skill for Change workflow prompts:
 
-## About This Project Backend
+- `make-change new NAME`
+- `make-change commit`
+- `make-change implement`
+- `make-change pr`
 
-Echo is a high performance, minimalist Go web framework. This is the main repository for Echo v4, which is available as a Go module at `github.com/labstack/echo/v4`.
+## Artifacts
 
-## Backend Development Commands
+### Epics
 
-The project uses a Makefile for common development tasks:
+- Epic is a non-hierarchical group of Changes
+- Epic represents a large business or product capability
+- Epics are defined in `agent/epics.md`
 
-- `make check` - Run linting, vetting, and race condition tests (default target)
-- `make init` - Install required linting tools (golint, staticcheck)
-- `make lint` - Run staticcheck and golint
-- `make vet` - Run go vet
-- `make test` - Run short tests
-- `make race` - Run tests with race detector
-- `make benchmark` - Run benchmarks
+### Areas
 
-Example commands for development:
-```bash
-# Setup development environment
-make init
+- Areas are subsystems of this project
+- Areas are also folders of the main repository
+- Areas are defined in `agent/areas.md`
 
-# Run all checks (lint, vet, race)
-make check
+### Documentation
 
-# Run specific tests
-go test ./middleware/...
-go test -race ./...
+- Documentation is stored in the `docs` folder
+- Documentation precisely defines the desired external behavior and constraints
+- Documentation is the single source of truth for developers and supports every decision relevant to the project
+- Documentation must not be overly detailed and a single doc file has a maximum of 300 lines
+- Documentation rules are defined in `docs/docs-rules.md`
 
-# Run benchmarks
-make benchmark
-```
+### Changes
+
+- A Change is the basic unit of work in this workflow.
+- Change files are stored as `agent/changes/001-change-name.md`.
+- Change files must use the standard structure from the Change workflow:
+  Goal, Scope, Requirements, Acceptance Criteria, Non-Goals, Design Notes,
+  Relevant Specs, Verification, Review Focus, and Follow-Ups.
+- Change branches use `changes/001-change-name`.
+- If implementation or PR work starts on a branch other than `changes/<change-name>`, stop and alert the user.
+- Change lifecycle: backlog -> branch/rejected -> pull-request -> stage/rejected -> master/rejected.
+- The Change file is the PR contract. Do not implement before the user says `make-change implement`.
+- Keep implementation scoped to the active Change. Record useful out-of-scope work as Follow-Ups instead of expanding the PR.
 
 ## GitHub PR Reviews
 
-When explicitly asked to review a PR, the agent may post the review comment with `gh`, but only for repositories owned by the user's GitHub account `divilla`.
+When explicitly asked to review a PR, the agent must post the review comment with `gh`, but only for repositories owned by the user's GitHub account `divilla`.
 
 Strong constraints:
 
 - Do not post PR comments unless the user explicitly requested a review.
 - Do not post PR comments on repositories outside the `divilla` account/organization.
-- Before posting, verify the PR repository owner is `divilla` with `gh pr view` or equivalent GitHub metadata.
-- Prefer a single concise PR comment for review findings unless the user asks for line-specific review comments.
-- Never post comments for casual code questions, implementation tasks, or third-party repository reviews.
 
 ## Database
 
@@ -53,30 +59,55 @@ Strong constraints:
 - Do not introduce project-wide or aggregate locking protocols, advisory locks, isolation-level escalation, or coordinated locking across repository paths unless explicitly requested.
 - Prefer the simpler transaction design when stronger concurrency control would add substantial implementation and maintenance complexity. Accept the documented concurrency trade-off until requirements justify that complexity.
 
+## About Backend
+
+Backend is a classic http API server operating on port 8080 by default.
+
+Example endpoint:
+```bash
+    curl localhost:8080/api/v1/health
+```
+
+## Backend Make Commands
+
+The project uses a Makefile for common development tasks:
+
+- `(cd backend && make check)` - Run linting, vetting, and race condition tests (default target)
+- `(cd backend && make init)` - Install required linting tools (golint, staticcheck)
+- `(cd backend && make lint)` - Run staticcheck and golint
+- `(cd backend && make vet)` - Run go vet
+- `(cd backend && make test)` - Run short tests
+- `(cd backend && make api-test)` - Run API integration tests
+- `(cd backend && make race)` - Run tests with race detector
+- `(cd backend && make benchmark)` - Run benchmarks
+- `pnpm --dir frontend test` - Run frontend unit tests
+- `pnpm --dir frontend typecheck` - Run frontend type checking
+- `pnpm --dir frontend build` - Build the frontend
+
 ## Backend Code Architecture
-
-### Core Packages
-
-* **Echo (`[Echo](https://github.com/labstack/echo)`)**
-* **Zerolog (`[Zero Allocation JSON Logger](https://github.com/rs/zerolog)`)**
-* **PGX (`[pgx - PostgreSQL Driver and Toolkit](https://github.com/jackc/pgx)`)**
-* **Google UUID (`[uuid](https://github.com/google/uuid)`)**
-* **Gookit config (`[Config](https://github.com/gookit/config)`)**
-* **Testify (`[Testify - Thou Shalt Write Tests](https://github.com/stretchr/testify)`)**
-
-## Backend File Organization
 
 - `backend/`: Backend working directory
 - `backend/cmd`: All the main and starter files
-- `backend/internal/`: All the domain logic with Screaming Architecture is a software design philosophy coined by Robert C. Martin (Uncle Bob) that dictates a system's folder and code structure should immediately communicate its business purpose, rather than the technology stack it uses
-- `backend/pkg`: Package wrappers
+- `backend/internal/`: All the domain logic with Screaming Architecture
+- `backend/internal/project`: Code structure immediately communicates its business purpose
+- `backend/pkg`: Package and other wrappers
+
+### Core External Packages
+
+* [Echo](https://github.com/labstack/echo)
+* [Zero Allocation JSON Logger](https://github.com/rs/zerolog)
+* [pgx - PostgreSQL Driver and Toolkit](https://github.com/jackc/pgx)
+* [Config](https://github.com/gookit/config)
+* [Testify - Thou Shalt Write Tests](https://github.com/stretchr/testify)
+
+Always use core external packages for all the relevant code built. Warn when core external packages are not used where they might have been used.
 
 ## Backend API
 
 - Make all API endpoints POST
 - Only keep /health GET
 
-## Code Style
+## Backend Code Style
 
 - Go code uses tabs for indentation (per .editorconfig)
 - Follows standard Go conventions and formatting

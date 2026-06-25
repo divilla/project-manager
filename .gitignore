@@ -8,6 +8,7 @@
 *.so
 *.dylib
 backend/aipm-server
+codex-resume.sh
 
 # Test binary, built with `go test -c`
 *.test

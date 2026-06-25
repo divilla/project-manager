@@ -15,7 +15,7 @@ func TestServiceRejectsInvalidRequirementInput(t *testing.T) {
 	service := &Service{}
 	_, err := service.ListRequirements(context.Background(), dto.RequirementListRequest{})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.CreateRequirement(context.Background(), dto.RequirementCreateRequest{TaskID: 2, Definition: "   "})
+	_, err = service.CreateRequirement(context.Background(), dto.RequirementCreateRequest{ChangeID: 2, Definition: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdateRequirement(context.Background(), dto.RequirementUpdateRequest{ID: 3, Definition: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
@@ -27,10 +27,10 @@ func TestServiceNormalizesRequirementRequests(t *testing.T) {
 	repo := &fakeRequirementRepository{}
 	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
-	_, err := service.ListRequirements(context.Background(), dto.RequirementListRequest{TaskID: 2})
+	_, err := service.ListRequirements(context.Background(), dto.RequirementListRequest{ChangeID: 2})
 	require.NoError(t, err)
 	assert.Equal(t, 2, repo.taskID)
-	_, err = service.CreateRequirement(context.Background(), dto.RequirementCreateRequest{TaskID: 2, Definition: " Add API test "})
+	_, err = service.CreateRequirement(context.Background(), dto.RequirementCreateRequest{ChangeID: 2, Definition: " Add API test "})
 	require.NoError(t, err)
 	assert.Equal(t, "Add API test", repo.createReq.Definition)
 	_, err = service.UpdateRequirement(context.Background(), dto.RequirementUpdateRequest{
@@ -48,11 +48,11 @@ func TestServiceRendersMutationTaskDescriptionHTML(t *testing.T) {
 	service := NewService(repo, taskview.NewTaskRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
 	mutation, err := service.CreateRequirement(context.Background(), dto.RequirementCreateRequest{
-		TaskID:     2,
+		ChangeID:   2,
 		Definition: "Requirement",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "clean(parsed(**Task**))", mutation.Task.DescriptionHTML)
+	assert.Equal(t, "clean(parsed(**Task**))", mutation.Change.BodyHTML)
 }
 
 type fakeMarkdownParser struct{}
@@ -80,10 +80,10 @@ func (r *fakeRequirementRepository) List(_ context.Context, taskID int) ([]dto.R
 }
 func (r *fakeRequirementRepository) Create(_ context.Context, req dto.RequirementCreateRequest) (dto.RequirementMutationResponse, error) {
 	r.createReq = req
-	requirement := dto.Requirement{ID: 3, TaskID: req.TaskID, Definition: req.Definition}
+	requirement := dto.Requirement{ID: 3, ChangeID: req.ChangeID, Definition: req.Definition}
 	return dto.RequirementMutationResponse{
 		Requirement: &requirement,
-		Task:        dto.Task{ID: req.TaskID, Description: "**Task**"},
+		Change:      dto.Change{ID: req.ChangeID, Body: "**Task**"},
 	}, nil
 }
 func (r *fakeRequirementRepository) Update(_ context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error) {
@@ -94,7 +94,7 @@ func (r *fakeRequirementRepository) UpdateDone(_ context.Context, req dto.Requir
 	r.id = req.ID
 	return dto.RequirementMutationResponse{}, nil
 }
-func (r *fakeRequirementRepository) UpdateTask(_ context.Context, req dto.RequirementUpdateTaskRequest) (dto.RequirementMutationResponse, error) {
+func (r *fakeRequirementRepository) UpdateTask(_ context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error) {
 	r.id, r.taskID = req.ID, req.TaskID
 	return dto.RequirementMutationResponse{}, nil
 }

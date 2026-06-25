@@ -46,7 +46,7 @@ func (a *Api) references(c *echo.Context) error {
 }
 
 func (a *Api) listTasks(c *echo.Context) error {
-	var req dto.TaskListRequest
+	var req dto.ChangeListRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task list payload")
 	}
@@ -60,7 +60,7 @@ func (a *Api) listTasks(c *echo.Context) error {
 }
 
 func (a *Api) getTask(c *echo.Context) error {
-	var req dto.TaskIDRequest
+	var req dto.ChangeIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task get payload")
 	}
@@ -74,7 +74,7 @@ func (a *Api) getTask(c *echo.Context) error {
 }
 
 func (a *Api) renderedDescriptions(c *echo.Context) error {
-	var req dto.TaskRenderedDescriptionsRequest
+	var req dto.ChangeRenderedDescriptionsRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task rendered descriptions payload")
 	}
@@ -88,7 +88,7 @@ func (a *Api) renderedDescriptions(c *echo.Context) error {
 }
 
 func (a *Api) createTask(c *echo.Context) error {
-	var req dto.TaskCreateRequest
+	var req dto.ChangeCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task create payload")
 	}
@@ -102,7 +102,7 @@ func (a *Api) createTask(c *echo.Context) error {
 }
 
 func (a *Api) updateTask(c *echo.Context) error {
-	var req dto.TaskUpdateRequest
+	var req dto.ChangeUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task update payload")
 	}
@@ -140,7 +140,7 @@ func (a *Api) updatePriority(c *echo.Context) error {
 }
 
 func (a *Api) updateParent(c *echo.Context) error {
-	var req dto.TaskUpdateParentRequest
+	var req dto.ChangeUpdateEpicRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task parent payload")
 	}
@@ -152,7 +152,7 @@ func (a *Api) updateParent(c *echo.Context) error {
 }
 
 func (a *Api) updatePhase(c *echo.Context) error {
-	var req dto.TaskUpdatePhaseRequest
+	var req dto.ChangeUpdatePhaseRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task phase payload")
 	}
@@ -166,7 +166,7 @@ func (a *Api) updatePhase(c *echo.Context) error {
 }
 
 func (a *Api) deleteTask(c *echo.Context) error {
-	var req dto.TaskIDRequest
+	var req dto.ChangeIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid task delete payload")
 	}

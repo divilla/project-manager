@@ -8,13 +8,13 @@ type (
 		Version    int16     `json:"version"`
 		Definition string    `json:"definition"`
 		Done       bool      `json:"done"`
-		TaskID     int       `json:"task_id"`
+		ChangeID   int       `json:"change_id"`
 		Created    time.Time `json:"created"`
 		Modified   time.Time `json:"modified"`
 	}
 
 	RequirementListRequest struct {
-		TaskID int `json:"task_id"`
+		ChangeID int `json:"change_id"`
 	}
 
 	RequirementIDRequest struct {
@@ -23,7 +23,7 @@ type (
 
 	RequirementCreateRequest struct {
 		Definition string `json:"definition"`
-		TaskID     int    `json:"task_id"`
+		ChangeID   int    `json:"change_id"`
 	}
 
 	RequirementUpdateRequest struct {
@@ -36,14 +36,14 @@ type (
 		Done bool `json:"done"`
 	}
 
-	RequirementUpdateTaskRequest struct {
+	RequirementUpdateChangeRequest struct {
 		ID     int `json:"id"`
 		TaskID int `json:"task_id"`
 	}
 
 	RequirementMutationResponse struct {
 		Requirement  *Requirement  `json:"requirement,omitempty"`
-		Task         Task          `json:"task"`
+		Change       Change        `json:"change"`
 		Requirements []Requirement `json:"requirements"`
 	}
 )

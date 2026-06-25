@@ -87,7 +87,7 @@ func (a *Api) updateRequirementDone(c *echo.Context) error {
 }
 
 func (a *Api) updateRequirementTask(c *echo.Context) error {
-	var req dto.RequirementUpdateTaskRequest
+	var req dto.RequirementUpdateChangeRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement task payload")
 	}
