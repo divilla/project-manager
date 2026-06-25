@@ -1,12 +1,67 @@
 # AGENTS.md
 
-This file provides guidance to Agent when working with code in this repository.
+This file provides guidance to Agent when working with code in this repository. Uses skills:
+- `new change NAME`
+- `commit change`
+- `implement change`
 
-## About This Project Backend
+## Artifacts
 
-Echo is a high performance, minimalist Go web framework. This is the main repository for Echo v4, which is available as a Go module at `github.com/labstack/echo/v4`.
+### Epics
 
-## Backend Development Commands
+- Epic is non-hierarchical group of Changes
+- Epic represents large business/product capatibility
+- Epics are defined in `agent/epics.md`
+
+### Areas
+
+- Areas are subsytems of this project and they 
+- Areas are also folders of main repository
+- Areas are defined in `agent/areas.md`
+
+### Specs
+
+- Specs are all stored in folder `specs`
+- Specs precisely define the desired external behavior and constraints
+- Specs are single-source-of-truth for developers - they support every decision relevant to project
+- Specs must not be overly detailed and a single spec file has a maximum of 300 lines
+- Specs requirements and architecture is defined in `agent/specs-requirements-and-architecture.md`
+
+### Changes
+
+- change is a basic unit-of-work (to-do item) in this workflow
+- changes are stored in files: `agent/changes/001-change-name.md`
+- change files must have exact structure identical to `agent/change-example` - only Goal and Requirements are a mandatory sections - order must be obeyed
+- change must have and is indentified in agent with a branch named `change/001-change-name` 
+- if during implementation a current branch is set to something other then `change/ddd-xxx` alert user
+- change lifecycle: backlog -> branch/rejected -> pull-request -> stage/rejected -> master/rejected
+
+## GitHub PR Reviews
+
+When explicitly asked to review a PR, the agent must post the review comment with `gh`, but only for repositories owned by the user's GitHub account `divilla`.
+
+Strong constraints:
+
+- Do not post PR comments unless the user explicitly requested a review.
+- Do not post PR comments on repositories outside the `divilla` account/organization.
+
+## Database
+
+- no database objects should be created, altered or dropped (refactored, optimized) under any circumstances, unless there is explicit command to do so in prompt or specification.
+- Use simple, conventional transactions (`Begin`, deferred `Rollback`, and `Commit`) to keep multi-step mutations atomic.
+- Do not introduce project-wide or aggregate locking protocols, advisory locks, isolation-level escalation, or coordinated locking across repository paths unless explicitly requested.
+- Prefer the simpler transaction design when stronger concurrency control would add substantial implementation and maintenance complexity. Accept the documented concurrency trade-off until requirements justify that complexity.
+
+## About Backend
+
+Backend is a classic http API server operating on port 8080 by default.
+
+Example endpoint:
+```bash
+    curl localhost:8080/api/v1/health
+```
+
+## Backend Make Commands
 
 The project uses a Makefile for common development tasks:
 
@@ -18,65 +73,30 @@ The project uses a Makefile for common development tasks:
 - `make race` - Run tests with race detector
 - `make benchmark` - Run benchmarks
 
-Example commands for development:
-```bash
-# Setup development environment
-make init
-
-# Run all checks (lint, vet, race)
-make check
-
-# Run specific tests
-go test ./middleware/...
-go test -race ./...
-
-# Run benchmarks
-make benchmark
-```
-
-## GitHub PR Reviews
-
-When explicitly asked to review a PR, the agent may post the review comment with `gh`, but only for repositories owned by the user's GitHub account `divilla`.
-
-Strong constraints:
-
-- Do not post PR comments unless the user explicitly requested a review.
-- Do not post PR comments on repositories outside the `divilla` account/organization.
-- Before posting, verify the PR repository owner is `divilla` with `gh pr view` or equivalent GitHub metadata.
-- Prefer a single concise PR comment for review findings unless the user asks for line-specific review comments.
-- Never post comments for casual code questions, implementation tasks, or third-party repository reviews.
-
-## Database
-
-- no database objects should be created, altered or dropped (refactored, optimized) under any circumstances, unless there is explicit command to do so in prompt or specification.
-- Use simple, conventional transactions (`Begin`, deferred `Rollback`, and `Commit`) to keep multi-step mutations atomic.
-- Do not introduce project-wide or aggregate locking protocols, advisory locks, isolation-level escalation, or coordinated locking across repository paths unless explicitly requested.
-- Prefer the simpler transaction design when stronger concurrency control would add substantial implementation and maintenance complexity. Accept the documented concurrency trade-off until requirements justify that complexity.
-
 ## Backend Code Architecture
-
-### Core Packages
-
-* **Echo (`[Echo](https://github.com/labstack/echo)`)**
-* **Zerolog (`[Zero Allocation JSON Logger](https://github.com/rs/zerolog)`)**
-* **PGX (`[pgx - PostgreSQL Driver and Toolkit](https://github.com/jackc/pgx)`)**
-* **Google UUID (`[uuid](https://github.com/google/uuid)`)**
-* **Gookit config (`[Config](https://github.com/gookit/config)`)**
-* **Testify (`[Testify - Thou Shalt Write Tests](https://github.com/stretchr/testify)`)**
-
-## Backend File Organization
 
 - `backend/`: Backend working directory
 - `backend/cmd`: All the main and starter files
-- `backend/internal/`: All the domain logic with Screaming Architecture is a software design philosophy coined by Robert C. Martin (Uncle Bob) that dictates a system's folder and code structure should immediately communicate its business purpose, rather than the technology stack it uses
-- `backend/pkg`: Package wrappers
+- `backend/internal/`: All the domain logic with Screaming Architecture
+- `backend/internal/project`: Code structure immediately communicates its business purpose
+- `backend/pkg`: Package and other wrappers
+
+### Core External Packagas
+
+* [Echo](https://github.com/labstack/echo)
+* [Zero Allocation JSON Logger](https://github.com/rs/zerolog)
+* [pgx - PostgreSQL Driver and Toolkit](https://github.com/jackc/pgx)
+* [Config](https://github.com/gookit/config)
+* [Testify - Thou Shalt Write Tests](https://github.com/stretchr/testify)
+
+Always use core external packages for all the relevant code built. Warn when core external packages are not used where they might have been used.
 
 ## Backend API
 
 - Make all API endpoints POST
 - Only keep /health GET
 
-## Code Style
+## Backend Code Style
 
 - Go code uses tabs for indentation (per .editorconfig)
 - Follows standard Go conventions and formatting

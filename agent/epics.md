@@ -1,0 +1,24 @@
+# Epics
+
+- Initial Documentation
+- Initial Database Implementation
+- Change Lifecycle Management
+- Structured PR Builder
+- Smart Change History
+- Agent Workspace Automation
+- Current Project And Change Context
+- Requirements and Acceptance Modeling
+- PR Review Decision Tracking
+- Verification Pipeline
+- Agent CLI Integration
+- Specification Management
+- Backlog to PR Flow
+- Change Scope Control
+- Revert and Checkpoint System
+- GitHub PR Integration
+- Multi-Area Change Planning
+- Review Feedback Processing
+- Change Staging and Approval
+- Agent Execution Guardrails
+- Product Specification Traceability
+- Developer Workflow Dashboard
