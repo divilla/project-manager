@@ -176,39 +176,49 @@ func TestChangeCreateRejectsInvalidReferences(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status)
 }
 
-func TestEpicCRUDAndDeleteConflict(t *testing.T) {
+func TestChangeRejectsInvalidInputAndMissingRows(t *testing.T) {
 	client := shared.NewClient(t)
-	projectID := createProject(t, client)
-	defer shared.CleanupProject(t, client, projectID)
 
-	epicID := createEpic(t, client, projectID)
+	status := client.Post(t, "/api/v1/change/list", map[string]any{}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
 
-	var listed []epic
-	status := client.Post(t, "/api/v1/epic/list", map[string]any{"project_id": projectID}, &listed)
-	require.Equal(t, http.StatusOK, status)
-	require.Len(t, listed, 1)
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": 999999999}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
 
-	var updated epic
-	status = client.Post(t, "/api/v1/epic/update", map[string]any{"id": epicID, "name": "Updated epic"}, &updated)
-	require.Equal(t, http.StatusOK, status)
+	status = client.Post(t, "/api/v1/change/rendered-bodies", map[string]any{"ids": []int{0}}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
 
-	var created change
-	status = client.Post(t, "/api/v1/change/create", map[string]any{
-		"project_id":   projectID,
-		"epic_id":      epicID,
-		"title":        fmt.Sprintf("api-test-epic-conflict-%d", time.Now().UnixNano()),
-		"change_phase": "backlog",
+	status = client.Post(t, "/api/v1/change/update", map[string]any{
+		"id":           999999999,
+		"title":        "missing change",
 		"change_types": []string{"feature"},
-	}, &created)
-	require.Equal(t, http.StatusCreated, status)
+	}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
 
-	status = client.Post(t, "/api/v1/epic/delete", map[string]any{"id": epicID}, nil)
-	assert.Equal(t, http.StatusConflict, status)
+	status = client.Post(t, "/api/v1/change/update", map[string]any{
+		"id":           999999999,
+		"title":        "missing change",
+		"change_types": []string{"missing-type"},
+	}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
 
-	status = client.Post(t, "/api/v1/change/delete", map[string]any{"id": created.ID}, nil)
-	require.Equal(t, http.StatusNoContent, status)
-	status = client.Post(t, "/api/v1/epic/delete", map[string]any{"id": epicID}, nil)
-	assert.Equal(t, http.StatusNoContent, status)
+	status = client.Post(t, "/api/v1/change/update-epic", map[string]any{"id": 999999999, "epic_id": nil}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/change/update-phase", map[string]any{
+		"id":           999999999,
+		"change_phase": "missing-phase",
+	}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/change/update-closed", map[string]any{"id": 999999999, "closed": true}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/change/delete", map[string]any{}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/change/delete", map[string]any{"id": 999999999}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
 }
 
 func createProject(t *testing.T, client *shared.Client) int {

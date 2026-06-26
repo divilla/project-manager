@@ -10,6 +10,8 @@ make api-test
 
 Backend checks should cover service logic, repository behavior where feasible, API contracts, history behavior, and health diagnostics.
 
+`make api-test` runs API integration tests from `backend/api-tests`. These tests exercise backend endpoints over HTTP and should be organized by API endpoint group.
+
 ## Frontend
 From the repository root:
 

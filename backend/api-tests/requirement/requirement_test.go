@@ -124,7 +124,13 @@ func TestRequirementCRUDRecalculatesChangeAndEpicCompleteness(t *testing.T) {
 func TestRequirementRejectsInvalidInputAndMissingRows(t *testing.T) {
 	client := shared.NewClient(t)
 
-	status := client.Post(t, "/api/v1/requirement/create", map[string]any{
+	status := client.Post(t, "/api/v1/requirement/list", map[string]any{}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/requirement/list", map[string]any{"change_id": 999999999}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/requirement/create", map[string]any{
 		"change_id":  -1,
 		"definition": "orphan requirement",
 	}, nil)
@@ -136,10 +142,42 @@ func TestRequirementRejectsInvalidInputAndMissingRows(t *testing.T) {
 	}, nil)
 	assert.Equal(t, http.StatusBadRequest, status)
 
+	status = client.Post(t, "/api/v1/requirement/create", map[string]any{
+		"change_id":  999999999,
+		"definition": "missing change requirement",
+	}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
 	status = client.Post(t, "/api/v1/requirement/update", map[string]any{
 		"id":         999999999,
 		"definition": "missing requirement",
 	}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/requirement/update", map[string]any{
+		"id":         999999999,
+		"definition": "   ",
+	}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/requirement/update-done", map[string]any{}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/requirement/update-done", map[string]any{"id": 999999999, "done": true}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/requirement/update-change", map[string]any{"id": 999999999}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/requirement/update-change", map[string]any{
+		"id": 999999999, "change_id": 999999999,
+	}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/requirement/delete", map[string]any{}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/requirement/delete", map[string]any{"id": 999999999}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 }
 

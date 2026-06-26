@@ -102,6 +102,34 @@ func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
 	shared.AssertHistoryCount(t, db, "requirement_history", requirementID, true, 0)
 }
 
+func TestProjectRejectsInvalidInputAndMissingRows(t *testing.T) {
+	client := shared.NewClient(t)
+
+	status := client.Post(t, "/api/v1/project/create", map[string]any{"name": "   "}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/project/get", map[string]any{"id": 999999999}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/project/update", map[string]any{
+		"id":   999999999,
+		"name": "missing project",
+	}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/project/update", map[string]any{
+		"id":   999999999,
+		"name": "   ",
+	}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": 999999999}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/project/delete", map[string]any{}, nil)
+	assert.Equal(t, http.StatusBadRequest, status)
+}
+
 type change struct {
 	ID int `json:"id"`
 }

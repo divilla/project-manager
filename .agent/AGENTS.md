@@ -122,9 +122,15 @@ Always use core external packages for all the relevant code built. Warn when cor
 - Unit tests are for service-layer behavior only (that includes service.go and *_service.go files)
 - Do not write unit tests for API handlers, repositories, config helpers, or other non-service layers.
 - API and cross-layer behavior must be covered by integration tests instead of unit tests.
-- Tests include service unit tests, integration tests, and benchmarks
-- Use `backend/api-tests` folder for all integration tests
-- Add subfolder to `backend/api-tests` for each api group specified in code like `project`, `task`, etc...
+- Tests include service unit tests, API-tests (integration tests), and benchmarks.
 - Race condition testing is required (`make race`)
 - Test files follow `*_test.go` naming convention
 - Build all test types for all the code built by AI or fix existing tests
+
+## API-tests (integration tests)
+
+- Use `backend/api-tests` for all API integration tests.
+- Add a subfolder to `backend/api-tests` for each backend API group specified in code, such as `project` or `change`.
+- New backend endpoints and endpoint groups require API integration-test coverage in the same Change that introduces them.
+- Reviewers must inspect backend endpoint additions for matching API integration tests under `backend/api-tests`.
+- Every endpoint must be covered by at least one API-test.
