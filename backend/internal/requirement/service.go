@@ -5,8 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	"aipm/internal/changeview"
 	"aipm/internal/dto"
-	"aipm/internal/taskview"
 )
 
 var (
@@ -17,20 +17,20 @@ var (
 type (
 	Service struct {
 		repo     Repository
-		renderer taskview.TaskRenderer
+		renderer changeview.ChangeRenderer
 	}
 
 	Repository interface {
-		List(ctx context.Context, taskID int) ([]dto.Requirement, error)
+		List(ctx context.Context, changeID int) ([]dto.Requirement, error)
 		Create(ctx context.Context, req dto.RequirementCreateRequest) (dto.RequirementMutationResponse, error)
 		Update(ctx context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error)
 		UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequest) (dto.RequirementMutationResponse, error)
-		UpdateTask(ctx context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error)
+		UpdateChange(ctx context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error)
 		Delete(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error)
 	}
 )
 
-func NewService(requirementRepository Repository, renderer taskview.TaskRenderer) *Service {
+func NewService(requirementRepository Repository, renderer changeview.ChangeRenderer) *Service {
 	return &Service{repo: requirementRepository, renderer: renderer}
 }
 
@@ -76,11 +76,11 @@ func (s *Service) UpdateRequirementDone(ctx context.Context, req dto.Requirement
 	return s.renderMutation(mutation), nil
 }
 
-func (s *Service) UpdateRequirementTask(ctx context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error) {
-	if req.ID <= 0 || req.TaskID <= 0 {
+func (s *Service) UpdateRequirementChange(ctx context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error) {
+	if req.ID <= 0 || req.ChangeID <= 0 {
 		return dto.RequirementMutationResponse{}, ErrInvalidInput
 	}
-	mutation, err := s.repo.UpdateTask(ctx, req)
+	mutation, err := s.repo.UpdateChange(ctx, req)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}

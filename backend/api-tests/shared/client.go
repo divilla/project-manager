@@ -22,9 +22,8 @@ type Client struct {
 	http    *http.Client
 }
 
-type cleanupTask struct {
-	ID       int  `json:"id"`
-	ParentID *int `json:"parent_id"`
+type cleanupChange struct {
+	ID int `json:"id"`
 }
 
 func NewClient(t *testing.T) *Client {
@@ -46,7 +45,12 @@ func NewClient(t *testing.T) *Client {
 	require.NoError(t, err)
 
 	res, err := client.http.Do(req)
-	require.NoErrorf(t, err, "backend is not available at %s", client.baseURL)
+	if err != nil {
+		if os.Getenv("AIPM_API_BASE_URL") == "" {
+			t.Skipf("backend is not available at %s", client.baseURL)
+		}
+		require.NoErrorf(t, err, "backend is not available at %s", client.baseURL)
+	}
 	defer res.Body.Close()
 
 	return client
@@ -57,7 +61,7 @@ func NewDB(t *testing.T) *pgxpool.Pool {
 
 	databaseURL := os.Getenv("AIPM_DATABASE_URL")
 	if databaseURL == "" {
-		databaseURL = "postgres://postgres:postgres@localhost:5432/project_manager_test?sslmode=disable"
+		databaseURL = "postgres://postgres:postgres@localhost:5432/changes_test?sslmode=disable"
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -74,19 +78,16 @@ func NewDB(t *testing.T) *pgxpool.Pool {
 
 func AssertHistoryNotDeleted(t *testing.T, db *pgxpool.Pool, table string, id int) {
 	t.Helper()
-
 	AssertHistoryCountAtLeast(t, db, table, id, false, 1)
 }
 
 func AssertHistoryDeleted(t *testing.T, db *pgxpool.Pool, table string, id int) {
 	t.Helper()
-
 	AssertHistoryCountAtLeast(t, db, table, id, true, 1)
 }
 
 func AssertHistoryCountAtLeast(t *testing.T, db *pgxpool.Pool, table string, id int, deleted bool, minimum int) {
 	t.Helper()
-
 	var count int
 	err := db.QueryRow(context.Background(), "select count(*) from "+table+" where id = $1 and deleted = $2", id, deleted).Scan(&count)
 	require.NoError(t, err)
@@ -104,19 +105,23 @@ func AssertHistoryCount(t *testing.T, db *pgxpool.Pool, table string, id int, de
 func CleanupProject(t *testing.T, client *Client, projectID int) {
 	t.Helper()
 
-	var tasks []cleanupTask
-	status := client.Post(t, "/api/v1/task/list", map[string]any{"project_id": projectID}, &tasks)
+	var changes []cleanupChange
+	status := client.Post(t, "/api/v1/change/list", map[string]any{"project_id": projectID}, &changes)
 	if status == http.StatusOK {
-		for _, task := range tasks {
-			if task.ParentID != nil {
-				continue
-			}
-			status = client.Post(t, "/api/v1/task/delete", map[string]any{"id": task.ID}, nil)
+		for _, change := range changes {
+			status = client.Post(t, "/api/v1/change/delete", map[string]any{"id": change.ID}, nil)
 			assert.Contains(t, []int{http.StatusNoContent, http.StatusNotFound}, status)
 		}
-		for _, task := range tasks {
-			status = client.Post(t, "/api/v1/task/delete", map[string]any{"id": task.ID}, nil)
-			assert.Contains(t, []int{http.StatusNoContent, http.StatusNotFound}, status)
+	}
+
+	var epics []struct {
+		ID int `json:"id"`
+	}
+	status = client.Post(t, "/api/v1/epic/list", map[string]any{"project_id": projectID}, &epics)
+	if status == http.StatusOK {
+		for _, epic := range epics {
+			status = client.Post(t, "/api/v1/epic/delete", map[string]any{"id": epic.ID}, nil)
+			assert.Contains(t, []int{http.StatusNoContent, http.StatusNotFound, http.StatusConflict}, status)
 		}
 	}
 

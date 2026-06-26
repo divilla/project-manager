@@ -15,17 +15,16 @@ type Repo struct {
 	pool *pgxpool.Pool
 }
 
-const taskColumns = `
+const changeColumns = `
 	id,
 	version,
-	task_type,
-	name,
-	coalesce(description, ''),
-	difficulty,
-	priority,
-	task_phase,
-	parent_id,
 	project_id,
+	epic_id,
+	change_phase,
+	change_types,
+	title,
+	coalesce(body, ''),
+	closed,
 	done_req,
 	total_req,
 	completed,
@@ -36,11 +35,11 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
-func (r *Repo) List(ctx context.Context, taskID int) ([]dto.Requirement, error) {
-	if err := ensureTaskExists(ctx, r.pool, taskID); err != nil {
+func (r *Repo) List(ctx context.Context, changeID int) ([]dto.Requirement, error) {
+	if err := ensureChangeExists(ctx, r.pool, changeID); err != nil {
 		return nil, err
 	}
-	return listRequirements(ctx, r.pool, taskID)
+	return listRequirements(ctx, r.pool, changeID)
 }
 
 func (r *Repo) Create(ctx context.Context, req dto.RequirementCreateRequest) (dto.RequirementMutationResponse, error) {
@@ -50,13 +49,13 @@ func (r *Repo) Create(ctx context.Context, req dto.RequirementCreateRequest) (dt
 	}
 	defer tx.Rollback(ctx)
 
-	if err := ensureTaskExists(ctx, tx, req.ChangeID); err != nil {
+	if err := ensureChangeExists(ctx, tx, req.ChangeID); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
-		insert into public.requirement (definition, task_id)
+		insert into public.requirement (definition, change_id)
 		values ($1, $2)
-		returning id, version, definition, done, task_id, created, modified
+		returning id, version, definition, done, change_id, created, modified
 	`, req.Definition, req.ChangeID))
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
@@ -81,14 +80,13 @@ func (r *Repo) Update(ctx context.Context, req dto.RequirementUpdateRequest) (dt
 	if _, err := tx.Exec(ctx, "call public.sp_requirement_to_history($1, false)", req.ID); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
 		update public.requirement
 		set definition = $2,
 			version = version + 1,
 			modified = now()
 		where id = $1
-		returning id, version, definition, done, task_id, created, modified
+		returning id, version, definition, done, change_id, created, modified
 	`, req.ID, req.Definition))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.RequirementMutationResponse{}, ErrNotFound
@@ -105,6 +103,7 @@ func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequ
 		return dto.RequirementMutationResponse{}, err
 	}
 	defer tx.Rollback(ctx)
+
 	current, err := getRequirement(ctx, tx, req.ID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
@@ -114,9 +113,10 @@ func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequ
 	}
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
 		update public.requirement
-		set done = $2, modified = now()
+		set done = $2,
+			modified = now()
 		where id = $1
-		returning id, version, definition, done, task_id, created, modified
+		returning id, version, definition, done, change_id, created, modified
 	`, req.ID, req.Done))
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
@@ -124,32 +124,34 @@ func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequ
 	return finishMutation(ctx, tx, current.ChangeID, []int{current.ChangeID}, &requirement)
 }
 
-func (r *Repo) UpdateTask(ctx context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error) {
+func (r *Repo) UpdateChange(ctx context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
 	defer tx.Rollback(ctx)
+
 	current, err := getRequirement(ctx, tx, req.ID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	if err := ensureTaskExists(ctx, tx, req.TaskID); err != nil {
+	if err := ensureChangeExists(ctx, tx, req.ChangeID); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	if req.TaskID == current.ChangeID {
+	if req.ChangeID == current.ChangeID {
 		return finishMutation(ctx, tx, current.ChangeID, nil, &current)
 	}
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
 		update public.requirement
-		set task_id = $2, modified = now()
+		set change_id = $2,
+			modified = now()
 		where id = $1
-		returning id, version, definition, done, task_id, created, modified
-	`, req.ID, req.TaskID))
+		returning id, version, definition, done, change_id, created, modified
+	`, req.ID, req.ChangeID))
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	return finishMutation(ctx, tx, req.TaskID, []int{current.ChangeID, req.TaskID}, &requirement)
+	return finishMutation(ctx, tx, req.ChangeID, []int{current.ChangeID, req.ChangeID}, &requirement)
 }
 
 func (r *Repo) Delete(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error) {
@@ -176,30 +178,31 @@ func (r *Repo) Delete(ctx context.Context, req dto.RequirementIDRequest) (dto.Re
 	return finishMutation(ctx, tx, current.ChangeID, []int{current.ChangeID}, nil)
 }
 
-func finishMutation(ctx context.Context, tx pgx.Tx, responseTaskID int, affectedTaskIDs []int, requirement *dto.Requirement) (dto.RequirementMutationResponse, error) {
-	for _, taskID := range affectedTaskIDs {
-		if _, err := tx.Exec(ctx, "call public.sp_task_requirement_recalculate($1)", taskID); err != nil {
+func finishMutation(ctx context.Context, tx pgx.Tx, responseChangeID int, affectedChangeIDs []int, requirement *dto.Requirement) (dto.RequirementMutationResponse, error) {
+	for _, changeID := range uniqueIDs(affectedChangeIDs) {
+		if _, err := tx.Exec(ctx, "call public.sp_change_requirement_recalculate($1)", changeID); err != nil {
 			return dto.RequirementMutationResponse{}, err
 		}
 	}
-	task, err := getTask(ctx, tx, responseTaskID)
+	change, err := getChange(ctx, tx, responseChangeID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	requirements, err := listRequirements(ctx, tx, responseTaskID)
+	requirements, err := listRequirements(ctx, tx, responseChangeID)
 	if err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return dto.RequirementMutationResponse{}, err
 	}
-	return dto.RequirementMutationResponse{Requirement: requirement, Change: task, Requirements: requirements}, nil
+	return dto.RequirementMutationResponse{Requirement: requirement, Change: change, Requirements: requirements}, nil
 }
 
 func getRequirement(ctx context.Context, tx pgx.Tx, id int) (dto.Requirement, error) {
 	requirement, err := scanRequirement(tx.QueryRow(ctx, `
-		select id, version, definition, done, task_id, created, modified
-		from public.requirement where id = $1
+		select id, version, definition, done, change_id, created, modified
+		from public.requirement
+		where id = $1
 	`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Requirement{}, ErrNotFound
@@ -210,9 +213,9 @@ func getRequirement(ctx context.Context, tx pgx.Tx, id int) (dto.Requirement, er
 	return requirement, nil
 }
 
-func ensureTaskExists(ctx context.Context, q queryer, id int) error {
+func ensureChangeExists(ctx context.Context, q queryer, id int) error {
 	var exists bool
-	if err := q.QueryRow(ctx, "select exists(select 1 from public.task where id = $1)", id).Scan(&exists); err != nil {
+	if err := q.QueryRow(ctx, "select exists(select 1 from public.change where id = $1)", id).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
@@ -221,11 +224,13 @@ func ensureTaskExists(ctx context.Context, q queryer, id int) error {
 	return nil
 }
 
-func listRequirements(ctx context.Context, q queryer, taskID int) ([]dto.Requirement, error) {
+func listRequirements(ctx context.Context, q queryer, changeID int) ([]dto.Requirement, error) {
 	rows, err := q.Query(ctx, `
-		select id, version, definition, done, task_id, created, modified
-		from public.requirement where task_id = $1 order by created, definition
-	`, taskID)
+		select id, version, definition, done, change_id, created, modified
+		from public.requirement
+		where change_id = $1
+		order by created, definition
+	`, changeID)
 	if err != nil {
 		return nil, err
 	}
@@ -250,30 +255,43 @@ func scanRequirement(row pgx.Row) (dto.Requirement, error) {
 	return requirement, err
 }
 
-func getTask(ctx context.Context, q queryer, id int) (dto.Change, error) {
-	task, err := scanTask(q.QueryRow(ctx, "select "+taskColumns+" from public.vw_task where id = $1", id))
+func getChange(ctx context.Context, q queryer, id int) (dto.Change, error) {
+	change, err := scanChange(q.QueryRow(ctx, "select "+changeColumns+" from public.change where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Change{}, ErrNotFound
 	}
-	return task, err
+	return change, err
 }
 
-func scanTask(row pgx.Row) (dto.Change, error) {
-	var task dto.Change
-	var parentID pgtype.Int8
+func scanChange(row pgx.Row) (dto.Change, error) {
+	var change dto.Change
+	var epicID pgtype.Int8
 	err := row.Scan(
-		&task.ID, &task.Version, &task.ChangeTypes, &task.Name, &task.Body,
-		&task.Difficulty, &task.Priority, &task.ChangesPhase, &parentID, &task.ProjectID,
-		&task.DoneReq, &task.TotalReq, &task.Completed, &task.Created, &task.Modified,
+		&change.ID, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
+		&change.ChangeTypes, &change.Title, &change.Body, &change.Closed, &change.DoneReq,
+		&change.TotalReq, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
 		return dto.Change{}, err
 	}
-	if parentID.Valid {
-		value := int(parentID.Int64)
-		task.EpicID = &value
+	if epicID.Valid {
+		value := int(epicID.Int64)
+		change.EpicID = &value
 	}
-	return task, nil
+	return change, nil
+}
+
+func uniqueIDs(values []int) []int {
+	seen := make(map[int]struct{}, len(values))
+	result := make([]int, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 type queryer interface {

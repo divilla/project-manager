@@ -19,8 +19,10 @@ test: ## Run tests
 	@go test -short ${PKG_LIST}
 
 api-test: ## Run integration tests
+	@psql postgres://postgres:postgres@localhost:5432/changes_test -v ON_ERROR_STOP=1 -f ../db/init.sql >/tmp/aipm-api-test-db.log 2>&1
+	@psql postgres://postgres:postgres@localhost:5432/changes_test -v ON_ERROR_STOP=1 -f ../db/seed.sql >>/tmp/aipm-api-test-db.log 2>&1
 	@go build -o aipm-server cmd/server/*.go
-	@DATABASE_URL=postgres://postgres:postgres@localhost:5432/project_manager_test PORT=18080 ./aipm-server >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
+	@./aipm-server -db postgres://postgres:postgres@localhost:5432/changes_test -port 18080 >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
 		trap 'kill $$pid >/dev/null 2>&1 || true; rm -f aipm-server' EXIT; \
 		for _ in $$(seq 1 50); do \
 			if curl -fsS http://localhost:18080/api/v1/health >/dev/null 2>&1; then \

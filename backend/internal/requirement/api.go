@@ -26,7 +26,7 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 	a.g.POST("/create", a.createRequirement)
 	a.g.POST("/update", a.updateRequirement)
 	a.g.POST("/update-done", a.updateRequirementDone)
-	a.g.POST("/update-task", a.updateRequirementTask)
+	a.g.POST("/update-change", a.updateRequirementChange)
 	a.g.POST("/delete", a.deleteRequirement)
 
 	return a
@@ -37,12 +37,10 @@ func (a *Api) listRequirements(c *echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement list payload")
 	}
-
 	res, err := a.s.ListRequirements(c.Request().Context(), req)
 	if err != nil {
 		return requirementError(err)
 	}
-
 	return c.JSON(http.StatusOK, &res)
 }
 
@@ -51,12 +49,10 @@ func (a *Api) createRequirement(c *echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement create payload")
 	}
-
 	res, err := a.s.CreateRequirement(c.Request().Context(), req)
 	if err != nil {
 		return requirementError(err)
 	}
-
 	return c.JSON(http.StatusCreated, &res)
 }
 
@@ -65,12 +61,10 @@ func (a *Api) updateRequirement(c *echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement update payload")
 	}
-
 	res, err := a.s.UpdateRequirement(c.Request().Context(), req)
 	if err != nil {
 		return requirementError(err)
 	}
-
 	return c.JSON(http.StatusOK, &res)
 }
 
@@ -86,12 +80,12 @@ func (a *Api) updateRequirementDone(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) updateRequirementTask(c *echo.Context) error {
+func (a *Api) updateRequirementChange(c *echo.Context) error {
 	var req dto.RequirementUpdateChangeRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement task payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement change payload")
 	}
-	res, err := a.s.UpdateRequirementTask(c.Request().Context(), req)
+	res, err := a.s.UpdateRequirementChange(c.Request().Context(), req)
 	if err != nil {
 		return requirementError(err)
 	}
@@ -103,12 +97,10 @@ func (a *Api) deleteRequirement(c *echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement delete payload")
 	}
-
 	res, err := a.s.DeleteRequirement(c.Request().Context(), req)
 	if err != nil {
 		return requirementError(err)
 	}
-
 	return c.JSON(http.StatusOK, &res)
 }
 

@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"net/http"
 	"os"
 
+	"aipm/internal/change"
+	"aipm/internal/changeview"
+	"aipm/internal/epic"
 	"aipm/internal/health"
 	"aipm/internal/project"
 	"aipm/internal/requirement"
-	"aipm/internal/task"
-	"aipm/internal/taskview"
 	"aipm/pkg/config"
 	"aipm/pkg/db"
 	"aipm/pkg/markdown"
@@ -24,6 +26,16 @@ import (
 func main() {
 	config.New()
 	cfg := config.Get()
+
+	portFlag := flag.String("port", "", "server port")
+	dbFlag := flag.String("db", "", "database connection string")
+	flag.Parse()
+	if *portFlag != "" {
+		cfg.Port = *portFlag
+	}
+	if *dbFlag != "" {
+		cfg.ConnectionString = *dbFlag
+	}
 
 	ctx := context.Background()
 	pool := db.Pool(ctx, cfg.ConnectionString)
@@ -58,7 +70,7 @@ func main() {
 
 	markdownParser := markdown.NewGoldmarkParser()
 	htmlSanitizer := markdown.NewBluemondaySanitizer()
-	taskRenderer := taskview.NewTaskRenderer(markdownParser, htmlSanitizer)
+	changeRenderer := changeview.NewChangeRenderer(markdownParser, htmlSanitizer)
 
 	healthRepository := health.NewRepo(pool)
 	healthService := health.NewService(healthRepository)
@@ -68,12 +80,16 @@ func main() {
 	projectService := project.NewService(projectRepository)
 	project.NewAPI(e, projectService)
 
-	taskRepository := task.NewRepo(pool)
-	taskService := task.NewService(taskRepository, taskRenderer)
-	task.NewAPI(e, taskService)
+	epicRepository := epic.NewRepo(pool)
+	epicService := epic.NewService(epicRepository)
+	epic.NewAPI(e, epicService)
+
+	changeRepository := change.NewRepo(pool)
+	changeService := change.NewService(changeRepository, changeRenderer)
+	change.NewAPI(e, changeService)
 
 	requirementRepository := requirement.NewRepo(pool)
-	requirementService := requirement.NewService(requirementRepository, taskRenderer)
+	requirementService := requirement.NewService(requirementRepository, changeRenderer)
 	requirement.NewAPI(e, requirementService)
 
 	if err := e.Start(cfg.Addr()); err != nil && !errors.Is(err, http.ErrServerClosed) {

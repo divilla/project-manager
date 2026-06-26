@@ -14,7 +14,13 @@ From `backend`:
 go run ./cmd/server
 ```
 
-The backend reads configuration from environment variables and local config files. Health endpoints should report API and database availability.
+The backend reads configuration from environment variables and local config files. For temporary overrides, pass `-port` and `-db` to the server binary:
+
+```sh
+go run ./cmd/server -port 18080 -db postgres://postgres:postgres@localhost:5432/changes_test
+```
+
+Health endpoints should report API and database availability.
 
 ## Frontend
 From `frontend`:

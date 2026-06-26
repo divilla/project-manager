@@ -28,7 +28,7 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
-const projectColumns = "id, name, created, modified, task_count"
+const projectColumns = "id, name, created, modified, change_count"
 
 func (r *Repo) List(ctx context.Context, limit, offset int) ([]dto.Project, error) {
 	rows, err := r.pool.Query(ctx, `
@@ -93,8 +93,13 @@ func (r *Repo) Delete(ctx context.Context, id int) error {
 		where id = $1
 		  and not exists (
 		    select 1
-		    from public.task
-		    where task.project_id = project.id
+		    from public.change
+		    where change.project_id = project.id
+		  )
+		  and not exists (
+		    select 1
+		    from public.epic
+		    where epic.project_id = project.id
 		  )
 	`, id)
 	if err != nil {
@@ -111,7 +116,7 @@ func (r *Repo) Delete(ctx context.Context, id int) error {
 	if !exists {
 		return ErrNotFound
 	}
-	return ErrProjectHasTasks
+	return ErrProjectHasChanges
 }
 
 func scanProject(row pgx.Row) (dto.Project, error) {

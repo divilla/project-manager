@@ -19,6 +19,17 @@ Projects are managed with POST endpoints:
 
 Project list responses include `change_count` so the UI can explain safe deletion.
 
+## Epics
+Epics are managed with POST endpoints:
+
+- `POST /api/v1/epic/list`
+- `POST /api/v1/epic/get`
+- `POST /api/v1/epic/create`
+- `POST /api/v1/epic/update`
+- `POST /api/v1/epic/delete`
+
+Epic responses include aggregate completeness fields derived from linked changes.
+
 ## Changes
 Changes are managed with POST endpoints:
 

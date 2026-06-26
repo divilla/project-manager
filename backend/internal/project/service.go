@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	ErrInvalidInput    = errors.New("invalid project input")
-	ErrNotFound        = errors.New("project not found")
-	ErrProjectHasTasks = errors.New("project has tasks")
+	ErrInvalidInput      = errors.New("invalid project input")
+	ErrNotFound          = errors.New("project not found")
+	ErrProjectHasChanges = errors.New("project has changes")
 )
 
 type Service struct {

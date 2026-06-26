@@ -14,18 +14,17 @@ set priority = excluded.priority;
 insert into public.change_type (slug, priority)
 values
     ('feature', 0),
-    ('fix', 0),
-    ('refactor', 0),
-    ('upgrade', 0),
-    ('chore', 0),
-    ('docs', 0),
-    ('test', 0),
-    ('test', 0),
-    ('ci', 0),
-    ('security', 0),
-    ('migration', 0),
-    ('revert', 0),
-    ('spike', 0)
+    ('fix', 1),
+    ('refactor', 2),
+    ('upgrade', 3),
+    ('chore', 4),
+    ('docs', 5),
+    ('test', 6),
+    ('ci', 7),
+    ('security', 8),
+    ('migration', 9),
+    ('revert', 10),
+    ('spike', 11)
 on conflict (slug) do update
 set priority = excluded.priority;
 

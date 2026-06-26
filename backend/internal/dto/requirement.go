@@ -37,8 +37,8 @@ type (
 	}
 
 	RequirementUpdateChangeRequest struct {
-		ID     int `json:"id"`
-		TaskID int `json:"task_id"`
+		ID       int `json:"id"`
+		ChangeID int `json:"change_id"`
 	}
 
 	RequirementMutationResponse struct {

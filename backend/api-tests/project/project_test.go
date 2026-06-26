@@ -14,11 +14,11 @@ import (
 )
 
 type project struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	Created   time.Time `json:"created"`
-	Modified  time.Time `json:"modified"`
-	TaskCount int       `json:"task_count"`
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Created     time.Time `json:"created"`
+	Modified    time.Time `json:"modified"`
+	ChangeCount int       `json:"change_count"`
 }
 
 func TestProjectCRUD(t *testing.T) {
@@ -33,7 +33,7 @@ func TestProjectCRUD(t *testing.T) {
 	assert.Equal(t, name, created.Name)
 	assert.False(t, created.Created.IsZero())
 	assert.False(t, created.Modified.IsZero())
-	assert.Equal(t, 0, created.TaskCount)
+	assert.Equal(t, 0, created.ChangeCount)
 
 	defer shared.CleanupProject(t, client, created.ID)
 
@@ -60,7 +60,7 @@ func TestProjectCRUD(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, status)
 }
 
-func TestProjectDeleteRejectsProjectsWithTasks(t *testing.T) {
+func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
 	client := shared.NewClient(t)
 	db := shared.NewDB(t)
 	ctx := context.Background()
@@ -71,11 +71,13 @@ func TestProjectDeleteRejectsProjectsWithTasks(t *testing.T) {
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 
-	var createdTask task
-	status = client.Post(t, "/api/v1/task/create", map[string]any{
-		"project_id": created.ID,
-		"name":       fmt.Sprintf("api-test-project-delete-task-%d", time.Now().UnixNano()),
-	}, &createdTask)
+	var createdChange change
+	status = client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id":   created.ID,
+		"title":        fmt.Sprintf("api-test-project-delete-change-%d", time.Now().UnixNano()),
+		"change_phase": "backlog",
+		"change_types": []string{"feature"},
+	}, &createdChange)
 	require.Equal(t, http.StatusCreated, status)
 
 	t.Cleanup(func() {
@@ -84,23 +86,23 @@ func TestProjectDeleteRejectsProjectsWithTasks(t *testing.T) {
 
 	var requirementID int
 	err := db.QueryRow(ctx, `
-		insert into requirement (definition, task_id)
+		insert into requirement (definition, change_id)
 		values ($1, $2)
 		returning id
-	`, "Project delete archives this requirement.", createdTask.ID).Scan(&requirementID)
+	`, "Project delete keeps this requirement.", createdChange.ID).Scan(&requirementID)
 	require.NoError(t, err)
 
 	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusConflict, status)
 
 	assertRowExists(t, db, "project", created.ID)
-	assertRowExists(t, db, "task", createdTask.ID)
+	assertRowExists(t, db, "change", createdChange.ID)
 	assertRowExists(t, db, "requirement", requirementID)
-	shared.AssertHistoryCount(t, db, "task_history", createdTask.ID, true, 0)
+	shared.AssertHistoryCount(t, db, "change_history", createdChange.ID, true, 0)
 	shared.AssertHistoryCount(t, db, "requirement_history", requirementID, true, 0)
 }
 
-type task struct {
+type change struct {
 	ID int `json:"id"`
 }
 
