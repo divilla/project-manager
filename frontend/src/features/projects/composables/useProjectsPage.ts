@@ -2,40 +2,47 @@ import { computed, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import type { Project } from '@/features/projects/model/project.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
-import { useTaskCacheStore } from '@/features/tasks/model/taskCache.store';
+import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
 import {
-  deleteTask,
-  getTaskReferences,
-  updateTaskPhase,
-} from '@/features/tasks/api/taskApi';
-import type { ReferenceOption, SelectOption, Task } from '@/features/tasks/model/task.types';
+  createEpic,
+  deleteChange,
+  deleteEpic,
+  getChangeReferences,
+  updateEpic,
+  updateChangePhase,
+} from '@/features/changes/api/changeApi';
+import type { ReferenceOption, SelectOption, Change, Epic } from '@/features/changes/model/change.types';
 
 function errorMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
 }
 
 interface UseProjectsPageOptions {
-  tasksEnabled?: boolean;
+  changesEnabled?: boolean;
 }
 
 export function useProjectsPage(options: UseProjectsPageOptions = {}) {
-  const tasksEnabled = options.tasksEnabled ?? true;
+  const changesEnabled = options.changesEnabled ?? true;
   const projectSelection = useProjectSelectionStore();
-  const taskCache = useTaskCacheStore();
+  const changeCache = useChangeCacheStore();
   const { projects, currentProjectId, currentProject } = storeToRefs(projectSelection);
-  const { tasks } = storeToRefs(taskCache);
+  const { changes, epics } = storeToRefs(changeCache);
   const phases = ref<ReferenceOption[]>([]);
   const types = ref<ReferenceOption[]>([]);
   const projectName = ref('');
-  const taskName = ref('');
-  const taskType = ref('');
-  const taskPhase = ref('');
+  const changeTitle = ref('');
+  const changeType = ref('');
+  const changePhase = ref('');
   const loading = ref(false);
   const error = ref('');
 
   const projectDialogOpen = ref(false);
   const projectEditId = ref(0);
   const projectEditName = ref('');
+  const epicName = ref('');
+  const epicEditId = ref(0);
+  const epicEditName = ref('');
+  const epicDialogOpen = ref(false);
 
   const confirmationDialogOpen = ref(false);
   let confirmationAction: (() => Promise<void>) | null = null;
@@ -46,35 +53,35 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
   const typeOptions = computed<SelectOption[]>(() =>
     types.value.map((type) => ({ label: type.slug, value: type.slug })),
   );
-  const boardPhases = computed(() => (phases.value.length ? phases.value : uniqueTaskPhases.value));
+  const boardPhases = computed(() => (phases.value.length ? phases.value : uniqueChangePhases.value));
 
-  const uniqueTaskPhases = computed<ReferenceOption[]>(() =>
-    [...new Set(tasks.value.map((task) => task.task_phase))].map((slug, index) => ({
+  const uniqueChangePhases = computed<ReferenceOption[]>(() =>
+    [...new Set(changes.value.map((change) => change.change_phase))].map((slug, index) => ({
       slug,
       priority: index,
     })),
   );
 
-  const filteredTasks = computed<Task[]>(() => {
-    const name = taskName.value.trim().toLowerCase();
-    const type = taskType.value;
-    const phase = taskPhase.value;
+  const filteredChanges = computed<Change[]>(() => {
+    const title = changeTitle.value.trim().toLowerCase();
+    const type = changeType.value;
+    const phase = changePhase.value;
 
-    return tasks.value.filter((task) => {
-      if (name && !task.name.toLowerCase().includes(name)) return false;
-      if (type && task.task_type !== type) return false;
-      if (phase && task.task_phase !== phase) return false;
+    return changes.value.filter((change) => {
+      if (title && !change.title.toLowerCase().includes(title)) return false;
+      if (type && !change.change_types.includes(type)) return false;
+      if (phase && change.change_phase !== phase) return false;
       return true;
     });
   });
 
-  const tasksByPhase = computed<Record<string, Task[]>>(() => {
-    const grouped: Record<string, Task[]> = {};
+  const changesByPhase = computed<Record<string, Change[]>>(() => {
+    const grouped: Record<string, Change[]> = {};
     for (const phase of boardPhases.value) grouped[phase.slug] = [];
-    for (const task of filteredTasks.value) {
-      const group = grouped[task.task_phase] || [];
-      group.push(task);
-      grouped[task.task_phase] = group;
+    for (const change of filteredChanges.value) {
+      const group = grouped[change.change_phase] || [];
+      group.push(change);
+      grouped[change.change_phase] = group;
     }
     return grouped;
   });
@@ -84,22 +91,22 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     error.value = '';
 
     try {
-      if (tasksEnabled) {
+      if (changesEnabled) {
         const [references] = await Promise.all([
-          getTaskReferences(),
+          getChangeReferences(),
           projectSelection.loadProjects(),
         ]);
         phases.value = references.phases;
         types.value = references.types;
 
         if (currentProjectId.value) {
-          await loadTasks(currentProjectId.value);
+          await loadChanges(currentProjectId.value);
         } else {
-          taskCache.setTasks([]);
+          changeCache.setChanges([]);
         }
       } else {
         await projectSelection.loadProjects();
-        taskCache.setTasks([]);
+        changeCache.setChanges([]);
       }
     } catch (err) {
       error.value = errorMessage(err, 'Unable to load projects.');
@@ -108,23 +115,23 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     }
   }
 
-  async function loadTasks(projectId: number) {
-    await taskCache.loadProjectTasks(projectId);
+  async function loadChanges(projectId: number) {
+    await changeCache.loadProjectChanges(projectId);
   }
 
   async function selectProject(projectId: number) {
     projectSelection.selectProject(projectId);
     error.value = '';
     try {
-      if (!tasksEnabled) {
-        taskCache.setTasks([]);
+      if (!changesEnabled) {
+        changeCache.setChanges([]);
       } else if (currentProjectId.value) {
-        await loadTasks(currentProjectId.value);
+        await loadChanges(currentProjectId.value);
       } else {
-        taskCache.setTasks([]);
+        changeCache.setChanges([]);
       }
     } catch (err) {
-      error.value = errorMessage(err, 'Unable to load tasks.');
+      error.value = errorMessage(err, 'Unable to load changes.');
     }
   }
 
@@ -135,7 +142,7 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     try {
       const project = await projectSelection.createProject(name);
       projectName.value = '';
-      if (tasksEnabled) await loadTasks(project.id);
+      if (changesEnabled) await loadChanges(project.id);
     } catch (err) {
       error.value = errorMessage(err, 'Unable to create project.');
     }
@@ -174,65 +181,112 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
   }
 
   function removeProject(project: Project) {
-    if (project.task_count > 0) {
-      error.value = 'Delete all project tasks before deleting this project.';
+    if (project.change_count > 0) {
+      error.value = 'Delete all project changes before deleting this project.';
       return;
     }
 
     requestConfirmation(() => removeProjectConfirmed(project));
   }
 
+  async function createEpicFromForm() {
+    const name = epicName.value.trim();
+    if (!name || !currentProjectId.value) return;
+
+    try {
+      const epic = await createEpic({ project_id: currentProjectId.value, name });
+      epicName.value = '';
+      changeCache.upsertEpic(epic);
+      await refreshCurrentProjectChanges();
+    } catch (err) {
+      error.value = errorMessage(err, 'Unable to create epic.');
+    }
+  }
+
+  function startEpicRename(epic: Epic) {
+    epicEditId.value = epic.id;
+    epicEditName.value = epic.name;
+    epicDialogOpen.value = true;
+  }
+
+  async function saveEpicName() {
+    const name = epicEditName.value.trim();
+    if (!epicEditId.value || !name) return;
+
+    try {
+      const epic = await updateEpic({ id: epicEditId.value, name });
+      changeCache.upsertEpic(epic);
+      epicDialogOpen.value = false;
+    } catch (err) {
+      error.value = errorMessage(err, 'Unable to update epic.');
+    }
+  }
+
   async function removeProjectConfirmed(project: Project) {
     try {
       const wasSelected = currentProjectId.value === project.id;
       await projectSelection.removeProject(project);
-      if (tasksEnabled && wasSelected) {
-        taskCache.setTasks([]);
-        if (currentProjectId.value) await loadTasks(currentProjectId.value);
+      if (changesEnabled && wasSelected) {
+        changeCache.setChanges([]);
+        if (currentProjectId.value) await loadChanges(currentProjectId.value);
       }
     } catch (err) {
       error.value = errorMessage(err, 'Unable to delete project.');
     }
   }
 
-  async function searchTasks() {
+  async function searchChanges() {
     await loadAll();
   }
 
-  async function clearTaskSearch() {
-    taskName.value = '';
-    taskType.value = '';
-    taskPhase.value = '';
+  async function clearChangeSearch() {
+    changeTitle.value = '';
+    changeType.value = '';
+    changePhase.value = '';
     await loadAll();
   }
 
-  async function moveTask(task: Task, phase: string) {
+  async function moveChange(change: Change, phase: string) {
     try {
-      const moved = await updateTaskPhase(task.id, phase);
-      taskCache.upsertTask(moved);
-      await refreshCurrentProjectTasks();
+      const moved = await updateChangePhase(change.id, phase);
+      changeCache.upsertChange(moved);
+      await refreshCurrentProjectChanges();
     } catch (err) {
-      error.value = errorMessage(err, 'Unable to move task.');
+      error.value = errorMessage(err, 'Unable to move change.');
     }
   }
 
-  async function refreshCurrentProjectTasks() {
+  async function refreshCurrentProjectChanges() {
     if (currentProjectId.value) {
-      await loadTasks(currentProjectId.value);
+      await loadChanges(currentProjectId.value);
     }
   }
 
-  function removeTask(task: Task) {
-    requestConfirmation(() => removeTaskConfirmed(task));
+  function removeChange(change: Change) {
+    requestConfirmation(() => removeChangeConfirmed(change));
   }
 
-  async function removeTaskConfirmed(task: Task) {
+  function removeEpic(epic: Epic) {
+    requestConfirmation(() => removeEpicConfirmed(epic));
+  }
+
+  async function removeChangeConfirmed(change: Change) {
     try {
-      await deleteTask(task.id);
-      await refreshCurrentProjectTasks();
+      await deleteChange(change.id);
+      await refreshCurrentProjectChanges();
       await projectSelection.loadProjects();
     } catch (err) {
-      error.value = errorMessage(err, 'Unable to delete task.');
+      error.value = errorMessage(err, 'Unable to delete change.');
+    }
+  }
+
+  async function removeEpicConfirmed(epic: Epic) {
+    try {
+      await deleteEpic(epic.id);
+      changeCache.removeEpic(epic.id);
+      await refreshCurrentProjectChanges();
+    } catch (err) {
+      error.value = errorMessage(err, 'Unable to delete epic.');
     }
   }
 
@@ -242,35 +296,44 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
 
   return {
     projects,
-    tasks,
+    changes,
+    epics,
     phases,
     types,
     currentProjectId,
     projectName,
-    taskName,
-    taskType,
-    taskPhase,
+    changeTitle,
+    changeType,
+    changePhase,
     loading,
     error,
     projectDialogOpen,
     projectEditId,
     projectEditName,
+    epicName,
+    epicEditId,
+    epicEditName,
+    epicDialogOpen,
     confirmationDialogOpen,
     currentProject,
     phaseOptions,
     typeOptions,
     boardPhases,
-    tasksByPhase,
+    changesByPhase,
     loadAll,
     selectProject,
     createProjectFromForm,
     startProjectRename,
     saveProjectName,
     removeProject,
-    searchTasks,
-    clearTaskSearch,
-    moveTask,
-    removeTask,
+    createEpicFromForm,
+    startEpicRename,
+    saveEpicName,
+    searchChanges,
+    clearChangeSearch,
+    moveChange,
+    removeChange,
+    removeEpic,
     confirm,
   };
 }

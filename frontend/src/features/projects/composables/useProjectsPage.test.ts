@@ -10,12 +10,13 @@ import {
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 import type { Project } from '@/features/projects/model/project.types';
 import {
-  deleteTask,
-  getTaskReferences,
-  listTasks,
-  updateTaskPhase,
-} from '@/features/tasks/api/taskApi';
-import { taskFixture, taskReferencesFixture } from '@/features/tasks/model/task.fixtures';
+  deleteChange,
+  listEpics,
+  getChangeReferences,
+  listChanges,
+  updateChangePhase,
+} from '@/features/changes/api/changeApi';
+import { changeFixture, changeReferencesFixture } from '@/features/changes/model/change.fixtures';
 import { useProjectsPage } from './useProjectsPage';
 
 vi.mock('@/features/projects/api/projectApi', () => ({
@@ -25,16 +26,17 @@ vi.mock('@/features/projects/api/projectApi', () => ({
   updateProject: vi.fn(),
 }));
 
-vi.mock('@/features/tasks/api/taskApi', () => ({
-  deleteTask: vi.fn(),
-  getTaskReferences: vi.fn(),
-  listTasks: vi.fn(),
-  updateTaskPhase: vi.fn(),
+vi.mock('@/features/changes/api/changeApi', () => ({
+  deleteChange: vi.fn(),
+  getChangeReferences: vi.fn(),
+  listEpics: vi.fn(),
+  listChanges: vi.fn(),
+  updateChangePhase: vi.fn(),
 }));
 
 type ProjectsPageState = ReturnType<typeof useProjectsPage>;
 
-function projectFixture(project: Pick<Project, 'id' | 'name' | 'task_count'>): Project {
+function projectFixture(project: Pick<Project, 'id' | 'name' | 'change_count'>): Project {
   return {
     created: '2026-06-23T00:00:00Z',
     modified: '2026-06-23T00:00:00Z',
@@ -59,22 +61,23 @@ describe('useProjectsPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     localStorage.clear();
-    vi.mocked(getTaskReferences).mockResolvedValue(taskReferencesFixture());
+    vi.mocked(getChangeReferences).mockResolvedValue(changeReferencesFixture());
     vi.mocked(listProjects).mockResolvedValue([
-      projectFixture({ id: 1, name: 'Project', task_count: 1 }),
+      projectFixture({ id: 1, name: 'Project', change_count: 1 }),
     ]);
-    vi.mocked(listTasks).mockResolvedValue([taskFixture({ id: 10, project_id: 1 })]);
+    vi.mocked(listChanges).mockResolvedValue([changeFixture({ id: 10, project_id: 1 })]);
+    vi.mocked(listEpics).mockResolvedValue([]);
     vi.mocked(createProject).mockResolvedValue(
-      projectFixture({ id: 2, name: 'New project', task_count: 0 }),
+      projectFixture({ id: 2, name: 'New project', change_count: 0 }),
     );
     vi.mocked(updateProject).mockResolvedValue(
-      projectFixture({ id: 1, name: 'Renamed', task_count: 1 }),
+      projectFixture({ id: 1, name: 'Renamed', change_count: 1 }),
     );
     vi.mocked(deleteProject).mockResolvedValue(undefined);
-    vi.mocked(updateTaskPhase).mockResolvedValue(
-      taskFixture({ id: 10, project_id: 1, task_phase: 'review' }),
+    vi.mocked(updateChangePhase).mockResolvedValue(
+      changeFixture({ id: 10, project_id: 1, change_phase: 'review' }),
     );
-    vi.mocked(deleteTask).mockResolvedValue(undefined);
+    vi.mocked(deleteChange).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -82,127 +85,127 @@ describe('useProjectsPage', () => {
     localStorage.clear();
   });
 
-  it('loads references, projects, empty search fields, and tasks on mount', async () => {
+  it('loads references, projects, empty search fields, and changes on mount', async () => {
     const { state } = mountProjectsPage();
     await flushPromises();
 
     expect(state.projects.value).toEqual([
-      projectFixture({ id: 1, name: 'Project', task_count: 1 }),
+      projectFixture({ id: 1, name: 'Project', change_count: 1 }),
     ]);
     expect(state.currentProjectId.value).toBe(1);
-    expect(state.taskType.value).toBe('');
-    expect(state.taskPhase.value).toBe('');
-    expect(state.tasks.value).toEqual([taskFixture({ id: 10, project_id: 1 })]);
-    expect(listTasks).toHaveBeenCalledWith(1);
+    expect(state.changeType.value).toBe('');
+    expect(state.changePhase.value).toBe('');
+    expect(state.changes.value).toEqual([changeFixture({ id: 10, project_id: 1 })]);
+    expect(listChanges).toHaveBeenCalledWith(1);
   });
 
-  it('filters visible task board results by search fields', async () => {
-    vi.mocked(listTasks).mockResolvedValueOnce([
-      taskFixture({ id: 10, name: 'Build task search', task_type: 'task', task_phase: 'backlog' }),
-      taskFixture({ id: 11, name: 'Review filters', task_type: 'bug', task_phase: 'review' }),
-      taskFixture({ id: 12, name: 'Build refresh', task_type: 'task', task_phase: 'review' }),
+  it('filters visible change board results by search fields', async () => {
+    vi.mocked(listChanges).mockResolvedValueOnce([
+      changeFixture({ id: 10, title: 'Build change search', change_types: ['feature'], change_phase: 'backlog' }),
+      changeFixture({ id: 11, title: 'Review filters', change_types: ['fix'], change_phase: 'review' }),
+      changeFixture({ id: 12, title: 'Build refresh', change_types: ['feature'], change_phase: 'review' }),
     ]);
     const { state } = mountProjectsPage();
     await flushPromises();
 
-    state.taskName.value = 'build';
-    state.taskType.value = 'task';
-    state.taskPhase.value = 'review';
+    state.changeTitle.value = 'build';
+    state.changeType.value = 'feature';
+    state.changePhase.value = 'review';
 
-    expect(state.tasksByPhase.value.backlog).toEqual([]);
-    expect(state.tasksByPhase.value.review).toEqual([
-      taskFixture({ id: 12, name: 'Build refresh', task_type: 'task', task_phase: 'review' }),
+    expect(state.changesByPhase.value.backlog).toEqual([]);
+    expect(state.changesByPhase.value.review).toEqual([
+      changeFixture({ id: 12, title: 'Build refresh', change_types: ['feature'], change_phase: 'review' }),
     ]);
   });
 
-  it('refreshes tasks when search is submitted', async () => {
+  it('refreshes changes when search is submitted', async () => {
     const { state } = mountProjectsPage();
     await flushPromises();
-    vi.mocked(listTasks).mockClear();
-    vi.mocked(listTasks).mockResolvedValueOnce([
-      taskFixture({ id: 13, name: 'Fresh result', project_id: 1 }),
+    vi.mocked(listChanges).mockClear();
+    vi.mocked(listChanges).mockResolvedValueOnce([
+      changeFixture({ id: 13, title: 'Fresh result', project_id: 1 }),
     ]);
 
-    await state.searchTasks();
+    await state.searchChanges();
 
-    expect(listTasks).toHaveBeenCalledWith(1);
-    expect(state.tasks.value).toEqual([
-      taskFixture({ id: 13, name: 'Fresh result', project_id: 1 }),
+    expect(listChanges).toHaveBeenCalledWith(1);
+    expect(state.changes.value).toEqual([
+      changeFixture({ id: 13, title: 'Fresh result', project_id: 1 }),
     ]);
   });
 
-  it('clears search fields and refreshes tasks', async () => {
+  it('clears search fields and refreshes changes', async () => {
     const { state } = mountProjectsPage();
     await flushPromises();
-    vi.mocked(listTasks).mockClear();
-    vi.mocked(listTasks).mockResolvedValueOnce([
-      taskFixture({ id: 14, name: 'Cleared result', project_id: 1 }),
+    vi.mocked(listChanges).mockClear();
+    vi.mocked(listChanges).mockResolvedValueOnce([
+      changeFixture({ id: 14, title: 'Cleared result', project_id: 1 }),
     ]);
-    state.taskName.value = 'build';
-    state.taskType.value = 'task';
-    state.taskPhase.value = 'review';
+    state.changeTitle.value = 'build';
+    state.changeType.value = 'feature';
+    state.changePhase.value = 'review';
 
-    await state.clearTaskSearch();
+    await state.clearChangeSearch();
 
-    expect(state.taskName.value).toBe('');
-    expect(state.taskType.value).toBe('');
-    expect(state.taskPhase.value).toBe('');
-    expect(listTasks).toHaveBeenCalledWith(1);
-    expect(state.tasks.value).toEqual([
-      taskFixture({ id: 14, name: 'Cleared result', project_id: 1 }),
+    expect(state.changeTitle.value).toBe('');
+    expect(state.changeType.value).toBe('');
+    expect(state.changePhase.value).toBe('');
+    expect(listChanges).toHaveBeenCalledWith(1);
+    expect(state.changes.value).toEqual([
+      changeFixture({ id: 14, title: 'Cleared result', project_id: 1 }),
     ]);
   });
 
-  it('loads only projects when task-board behavior is disabled', async () => {
-    const { state } = mountProjectsPage({ tasksEnabled: false });
+  it('loads only projects when change-board behavior is disabled', async () => {
+    const { state } = mountProjectsPage({ changesEnabled: false });
     await flushPromises();
 
     expect(state.projects.value).toEqual([
-      projectFixture({ id: 1, name: 'Project', task_count: 1 }),
+      projectFixture({ id: 1, name: 'Project', change_count: 1 }),
     ]);
     expect(state.currentProjectId.value).toBe(1);
-    expect(getTaskReferences).not.toHaveBeenCalled();
-    expect(listTasks).not.toHaveBeenCalled();
+    expect(getChangeReferences).not.toHaveBeenCalled();
+    expect(listChanges).not.toHaveBeenCalled();
 
     await state.selectProject(1);
 
-    expect(listTasks).not.toHaveBeenCalled();
+    expect(listChanges).not.toHaveBeenCalled();
   });
 
-  it('does not load tasks when the shared selector changes on the projects CRUD page', async () => {
+  it('does not load changes when the shared selector changes on the projects CRUD page', async () => {
     vi.mocked(listProjects).mockResolvedValue([
-      projectFixture({ id: 1, name: 'Project', task_count: 1 }),
-      projectFixture({ id: 2, name: 'Other project', task_count: 0 }),
+      projectFixture({ id: 1, name: 'Project', change_count: 1 }),
+      projectFixture({ id: 2, name: 'Other project', change_count: 0 }),
     ]);
-    const { state } = mountProjectsPage({ tasksEnabled: false });
+    const { state } = mountProjectsPage({ changesEnabled: false });
     await flushPromises();
-    vi.mocked(listTasks).mockClear();
+    vi.mocked(listChanges).mockClear();
 
     useProjectSelectionStore().selectProject(2);
     await flushPromises();
 
     expect(state.currentProjectId.value).toBe(2);
-    expect(listTasks).not.toHaveBeenCalled();
+    expect(listChanges).not.toHaveBeenCalled();
   });
 
-  it('selects a created project and loads its task list', async () => {
+  it('selects a created project and loads its change list', async () => {
     const { state } = mountProjectsPage();
     await flushPromises();
-    vi.mocked(listTasks).mockClear();
+    vi.mocked(listChanges).mockClear();
 
     state.projectName.value = 'New project';
     await state.createProjectFromForm();
 
     expect(createProject).toHaveBeenCalledWith('New project');
     expect(state.currentProjectId.value).toBe(2);
-    expect(listTasks).toHaveBeenCalledWith(2);
+    expect(listChanges).toHaveBeenCalledWith(2);
   });
 
   it('confirms project deletion before removing it', async () => {
-    const { state } = mountProjectsPage({ tasksEnabled: false });
+    const { state } = mountProjectsPage({ changesEnabled: false });
     await flushPromises();
 
-    state.removeProject(projectFixture({ id: 2, name: 'Empty project', task_count: 0 }));
+    state.removeProject(projectFixture({ id: 2, name: 'Empty project', change_count: 0 }));
 
     expect(state.confirmationDialogOpen.value).toBe(true);
     expect(deleteProject).not.toHaveBeenCalled();
@@ -213,48 +216,48 @@ describe('useProjectsPage', () => {
     expect(deleteProject).toHaveBeenCalledWith(2);
   });
 
-  it('refreshes project task counts after task deletion', async () => {
+  it('refreshes project change counts after change deletion', async () => {
     const { state } = mountProjectsPage();
     await flushPromises();
     vi.mocked(listProjects).mockClear();
-    vi.mocked(listTasks).mockClear();
+    vi.mocked(listChanges).mockClear();
     vi.mocked(listProjects).mockResolvedValueOnce([
-      projectFixture({ id: 1, name: 'Project', task_count: 0 }),
+      projectFixture({ id: 1, name: 'Project', change_count: 0 }),
     ]);
 
-    state.removeTask(taskFixture({ id: 10, project_id: 1 }));
+    state.removeChange(changeFixture({ id: 10, project_id: 1 }));
 
     expect(state.confirmationDialogOpen.value).toBe(true);
-    expect(deleteTask).not.toHaveBeenCalled();
+    expect(deleteChange).not.toHaveBeenCalled();
 
     await state.confirm();
 
     expect(state.confirmationDialogOpen.value).toBe(false);
-    expect(deleteTask).toHaveBeenCalledWith(10);
-    expect(listTasks).toHaveBeenCalledWith(1);
+    expect(deleteChange).toHaveBeenCalledWith(10);
+    expect(listChanges).toHaveBeenCalledWith(1);
     expect(listProjects).toHaveBeenCalledTimes(1);
     expect(state.projects.value).toEqual([
-      projectFixture({ id: 1, name: 'Project', task_count: 0 }),
+      projectFixture({ id: 1, name: 'Project', change_count: 0 }),
     ]);
   });
 
-  it('refreshes selected project tasks after task phase changes', async () => {
+  it('refreshes selected project changes after change phase changes', async () => {
     const { state } = mountProjectsPage();
     await flushPromises();
-    vi.mocked(listTasks).mockClear();
-    vi.mocked(listTasks).mockResolvedValueOnce([taskFixture({ id: 10, task_phase: 'review' })]);
+    vi.mocked(listChanges).mockClear();
+    vi.mocked(listChanges).mockResolvedValueOnce([changeFixture({ id: 10, change_phase: 'review' })]);
 
-    await state.moveTask(taskFixture({ id: 10 }), 'review');
+    await state.moveChange(changeFixture({ id: 10 }), 'review');
 
-    expect(updateTaskPhase).toHaveBeenCalledWith(10, 'review');
-    expect(listTasks).toHaveBeenCalledWith(1);
-    expect(state.tasks.value[0]?.task_phase).toBe('review');
+    expect(updateChangePhase).toHaveBeenCalledWith(10, 'review');
+    expect(listChanges).toHaveBeenCalledWith(1);
+    expect(state.changes.value[0]?.change_phase).toBe('review');
   });
 
-  it('sets a user-facing error when task loading fails', async () => {
+  it('sets a user-facing error when change loading fails', async () => {
     const { state } = mountProjectsPage();
     await flushPromises();
-    vi.mocked(listTasks).mockRejectedValueOnce(new Error('network down'));
+    vi.mocked(listChanges).mockRejectedValueOnce(new Error('network down'));
 
     await state.selectProject(1);
 

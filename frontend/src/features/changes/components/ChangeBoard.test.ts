@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils';
-import { taskFixture } from '../model/task.fixtures';
-import TaskBoard from './TaskBoard.vue';
+import { changeFixture } from '../model/change.fixtures';
+import ChangeBoard from './ChangeBoard.vue';
 
 const quasarStubs = {
   QBadge: { props: ['label'], template: '<span>{{ label }}<slot /></span>' },
@@ -11,7 +11,7 @@ const quasarStubs = {
   },
   QCard: {
     emits: ['click'],
-    template: '<article class="task-card-stub" @click="$emit(\'click\', $event)"><slot /></article>',
+    template: '<article class="change-card-stub" @click="$emit(\'click\', $event)"><slot /></article>',
   },
   QCardActions: { template: '<div><slot /></div>' },
   QCardSection: { template: '<section><slot /></section>' },
@@ -26,20 +26,20 @@ const quasarStubs = {
   QTooltip: { template: '<span><slot /></span>' },
 };
 
-describe('TaskBoard', () => {
-  it('renders tasks by phase and emits task actions', async () => {
-    const backlogTask = taskFixture({ id: 1, name: 'Backlog task', task_phase: 'backlog' });
-    const reviewTask = taskFixture({ id: 2, name: 'Review task', task_phase: 'review' });
-    const wrapper = mount(TaskBoard, {
+describe('ChangeBoard', () => {
+  it('renders changes by phase and emits change actions', async () => {
+    const backlogChange = changeFixture({ id: 1, title: 'Backlog change', change_phase: 'backlog' });
+    const reviewChange = changeFixture({ id: 2, title: 'Review change', change_phase: 'review' });
+    const wrapper = mount(ChangeBoard, {
       props: {
         hasSelectedProject: true,
         boardPhases: [
           { slug: 'backlog', priority: 1 },
           { slug: 'review', priority: 2 },
         ],
-        tasksByPhase: {
-          backlog: [backlogTask],
-          review: [reviewTask],
+        changesByPhase: {
+          backlog: [backlogChange],
+          review: [reviewChange],
         },
         phaseOptions: [
           { label: 'backlog', value: 'backlog' },
@@ -51,15 +51,15 @@ describe('TaskBoard', () => {
       },
     });
 
-    expect(wrapper.text()).toContain('Backlog task');
-    expect(wrapper.text()).toContain('Review task');
+    expect(wrapper.text()).toContain('Backlog change');
+    expect(wrapper.text()).toContain('Review change');
 
-    await wrapper.find('.task-card-stub').trigger('click');
+    await wrapper.find('.change-card-stub').trigger('click');
     await wrapper.find('.phase-select').trigger('click');
     await wrapper.find('[data-icon="delete"]').trigger('click');
 
-    expect(wrapper.emitted('open-task')).toEqual([[backlogTask]]);
-    expect(wrapper.emitted('move-task')).toEqual([[backlogTask, 'review']]);
-    expect(wrapper.emitted('delete-task')).toEqual([[backlogTask]]);
+    expect(wrapper.emitted('open-change')).toEqual([[backlogChange]]);
+    expect(wrapper.emitted('move-change')).toEqual([[backlogChange, 'review']]);
+    expect(wrapper.emitted('delete-change')).toEqual([[backlogChange]]);
   });
 });

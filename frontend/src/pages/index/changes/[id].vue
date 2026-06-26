@@ -11,76 +11,49 @@
       <q-spinner size="32px" color="primary" />
     </div>
 
-    <div v-else-if="!currentTask" class="empty-state">
-      <q-icon name="task_alt" size="44px" />
-      <span>Task not found.</span>
+    <div v-else-if="!currentChange" class="empty-state">
+      <q-icon name="published_with_changes" size="44px" />
+      <span>Change not found.</span>
     </div>
 
     <template v-else>
-      <q-markup-table flat bordered>
+      <q-markup-table flat bordered class="change-detail-table">
         <thead>
           <tr>
             <th class="text-right">nr</th>
-            <th class="text-center">Type</th>
-            <th class="text-left">Name</th>
-            <th class="text-center">Diff</th>
-            <th class="text-center">Pri</th>
+            <th class="text-center">Types</th>
+            <th class="text-left">Title</th>
+            <th class="text-center">Epic</th>
             <th class="text-center">Phase</th>
+            <th class="text-center">Closed</th>
             <th class="text-center">Complete</th>
             <th class="text-center">Modified</th>
             <th class="text-center">Version</th>
-            <th class="task-actions-cell"></th>
+            <th class="change-actions-cell"></th>
           </tr>
         </thead>
         <tbody>
-          <tr
-            v-for="task in ancestorTasks"
-            :key="task.id"
-            class="bg-deep-purple-3 cursor-pointer"
-            @click="openTask(task.id)"
-          >
-            <td class="text-right">#{{ task.id }}</td>
-            <td class="text-center">
-              <q-btn :color="taskTypeColor(task.task_type)" :label="task.task_type" />
-            </td>
-            <td class="text-left">{{ task.name }}</td>
-            <td class="text-center">{{ task.difficulty }}</td>
-            <td class="text-center">{{ task.priority }}</td>
-            <td class="text-center">{{ task.task_phase }}</td>
-            <td class="text-center">{{ completionLabel(task) }}</td>
-            <td class="text-center">{{ formatModified(task.modified) }}</td>
-            <td class="text-center">{{ task.version }}</td>
-            <td class="task-actions-cell"></td>
-          </tr>
-
           <tr class="bg-primary text-white text-weight-bold">
-            <td class="text-right">#{{ currentTask.id }}</td>
-            <td class="text-center">
-              <q-btn :color="taskTypeColor(currentTask.task_type)" :label="currentTask.task_type" />
-            </td>
-            <td class="text-left">{{ currentTask.name }}</td>
-            <td class="text-center">{{ currentTask.difficulty }}</td>
-            <td class="text-center">{{ currentTask.priority }}</td>
-            <td class="text-center">{{ currentTask.task_phase }}</td>
-            <td class="text-center">{{ completionLabel(currentTask) }}</td>
-            <td class="text-center">{{ formatModified(currentTask.modified) }}</td>
-            <td class="text-center">{{ currentTask.version }}</td>
-            <td class="task-actions-cell">
+            <td class="text-right">#{{ currentChange.id }}</td>
+            <td class="text-center">{{ currentChange.change_types.join(', ') }}</td>
+            <td class="text-left">{{ currentChange.title }}</td>
+            <td class="text-center">{{ epicName(currentChange.epic_id) }}</td>
+            <td class="text-center">{{ currentChange.change_phase }}</td>
+            <td class="text-center">{{ currentChange.closed ? 'Yes' : 'No' }}</td>
+            <td class="text-center">{{ completionLabel(currentChange) }}</td>
+            <td class="text-center">{{ formatModified(currentChange.modified) }}</td>
+            <td class="text-center">{{ currentChange.version }}</td>
+            <td class="change-actions-cell">
               <q-btn-dropdown
                 flat
                 round
                 color="white"
                 dropdown-icon="more_vert"
-                aria-label="Task actions"
+                aria-label="Change actions"
                 @click.stop
               >
                 <q-list>
-                  <q-item
-                    clickable
-                    v-close-popup
-                    data-action="edit-task"
-                    @click.stop="openTaskEdit(currentTask.id)"
-                  >
+                  <q-item clickable v-close-popup data-action="edit-change" @click.stop="openChangeEdit(currentChange.id)">
                     <q-item-section>
                       <q-item-label>Edit</q-item-label>
                     </q-item-section>
@@ -89,9 +62,9 @@
                   <q-item
                     clickable
                     v-close-popup
-                    data-action="delete-task"
-                    :disable="!isLeafTask(currentTask) || isTaskDeleting(currentTask.id)"
-                    @click.stop="confirmDeleteTask(currentTask)"
+                    data-action="delete-change"
+                    :disable="isChangeDeleting(currentChange.id)"
+                    @click.stop="confirmDeleteChange(currentChange)"
                   >
                     <q-item-section>
                       <q-item-label>Delete</q-item-label>
@@ -99,72 +72,6 @@
                   </q-item>
                 </q-list>
               </q-btn-dropdown>
-            </td>
-          </tr>
-
-          <tr
-            v-for="task in childTasks"
-            :key="task.id"
-            class="bg-teal-4 cursor-pointer"
-            @click="openTask(task.id)"
-          >
-            <td class="text-right">#{{ task.id }}</td>
-            <td class="text-center">
-              <q-btn :color="taskTypeColor(task.task_type)" :label="task.task_type" />
-            </td>
-            <td class="text-left">{{ task.name }}</td>
-            <td class="text-center">{{ task.difficulty }}</td>
-            <td class="text-center">{{ task.priority }}</td>
-            <td class="text-center">{{ task.task_phase }}</td>
-            <td class="text-center">{{ completionLabel(task) }}</td>
-            <td class="text-center">{{ formatModified(task.modified) }}</td>
-            <td class="text-center">{{ task.version }}</td>
-            <td class="task-actions-cell">
-              <q-btn-dropdown
-                flat
-                round
-                color="white"
-                dropdown-icon="more_vert"
-                aria-label="Task actions"
-                @click.stop
-              >
-                <q-list>
-                  <q-item
-                    clickable
-                    v-close-popup
-                    data-action="edit-task"
-                    @click.stop="openTaskEdit(task.id)"
-                  >
-                    <q-item-section>
-                      <q-item-label>Edit</q-item-label>
-                    </q-item-section>
-                  </q-item>
-
-                  <q-item
-                    clickable
-                    v-close-popup
-                    data-action="delete-task"
-                    :disable="!isLeafTask(task) || isTaskDeleting(task.id)"
-                    @click.stop="confirmDeleteTask(task)"
-                  >
-                    <q-item-section>
-                      <q-item-label>Delete</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                </q-list>
-              </q-btn-dropdown>
-            </td>
-          </tr>
-          <tr>
-            <td colspan="2"></td>
-            <td colspan="8">
-              <q-btn
-                rounded
-                color="primary"
-                icon="add_box"
-                label="Add Child Task"
-                @click="openTaskCreate(currentTask.id)"
-              />
             </td>
           </tr>
 
@@ -175,7 +82,7 @@
             <td class="text-center">Complete</td>
             <td class="text-center">Modified</td>
             <td class="text-center">Version</td>
-            <td class="task-actions-cell"></td>
+            <td class="change-actions-cell"></td>
           </tr>
           <tr v-for="requirement in requirements" :key="requirement.id">
             <td class="text-right">#{{ requirement.id }}</td>
@@ -194,7 +101,7 @@
             </td>
             <td class="text-center">{{ formatModified(requirement.modified) }}</td>
             <td class="text-center">{{ requirement.version }}</td>
-            <td class="task-actions-cell">
+            <td class="change-actions-cell">
               <q-btn-dropdown
                 flat
                 round
@@ -247,16 +154,11 @@
         </tbody>
       </q-markup-table>
 
-      <q-markup-table flat bordered class="task-detail-table">
+      <q-markup-table flat bordered class="change-detail-table">
         <tbody>
           <tr>
-            <td class="task-detail-description-cell" style="padding-top: 32px; padding-bottom: 32px;">
-              <div class="apply-markdown" v-html="currentTask.description_html" />
-            </td>
-          </tr>
-          <tr v-for="task in parentDescriptionTasks" :key="`parent-description-${task.id}`">
-            <td class="task-detail-description-cell" style="padding-top: 32px; padding-bottom: 32px;">
-              <div class="apply-markdown" v-html="descriptionHTML(task)" />
+            <td class="change-detail-body-cell" style="padding-top: 32px; padding-bottom: 32px;">
+              <div class="apply-markdown" v-html="currentChange.body_html" />
             </td>
           </tr>
         </tbody>
@@ -270,7 +172,7 @@
         </q-card-section>
 
         <q-form @submit.prevent="saveRequirementEdit">
-          <q-card-section>
+          <q-card-section class="requirement-edit-fields">
             <q-input
               v-model="editingRequirementDefinition"
               autofocus
@@ -279,6 +181,14 @@
               type="textarea"
               input-style="min-height: 72px"
               label="Requirement"
+            />
+            <q-select
+              v-model="editingRequirementChangeId"
+              filled
+              emit-value
+              map-options
+              label="Change"
+              :options="changeOptions"
             />
           </q-card-section>
 
@@ -346,13 +256,13 @@
         </q-card-section>
 
         <q-card-section>
-          This task belongs to {{ projectMismatch?.requiredProjectName }}. The selected project is
+          This change belongs to {{ projectMismatch?.requiredProjectName }}. The selected project is
           {{ projectMismatch?.currentProjectName }}.
         </q-card-section>
 
         <q-card-actions align="right">
           <q-btn flat label="Stay" @click="stayOnCurrentProject" />
-          <q-btn color="primary" label="Switch" @click="switchToTaskProject" />
+          <q-btn color="primary" label="Switch" @click="switchToChangeProject" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -361,18 +271,20 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useRoute, useRouter } from 'vue-router';
+import { deleteChange, getChange } from '@/features/changes/api/changeApi';
+import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
+import type { Change } from '@/features/changes/model/change.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 import {
   createRequirement,
   deleteRequirement,
   updateRequirement,
+  updateRequirementChange,
   updateRequirementDone,
 } from '@/features/requirements/api/requirementApi';
 import type { Requirement } from '@/features/requirements/model/requirement.types';
-import { deleteTask, getRenderedTaskDescriptions, getTask } from '@/features/tasks/api/taskApi';
-import { useTaskCacheStore } from '@/features/tasks/model/taskCache.store';
-import type { Task } from '@/features/tasks/model/task.types';
 import DeleteConfirmationDialog from '@/shared/ui/DeleteConfirmationDialog.vue';
 
 interface ProjectMismatch {
@@ -385,13 +297,13 @@ interface ProjectMismatch {
 const route = useRoute();
 const router = useRouter();
 const projectSelection = useProjectSelectionStore();
-const taskCache = useTaskCacheStore();
-const tasks = computed(() => taskCache.tasks);
+const changeCache = useChangeCacheStore();
+const { changes, epics } = storeToRefs(changeCache);
 
 const requirements = ref<Requirement[]>([]);
-const detailTask = ref<Task | null>(null);
+const detailChange = ref<Change | null>(null);
 const detailLoading = ref(false);
-const deletingTaskIds = ref<number[]>([]);
+const deletingChangeIds = ref<number[]>([]);
 const updatingRequirementIds = ref<number[]>([]);
 const requirementCreateOpen = ref(false);
 const newRequirementDefinition = ref('');
@@ -399,46 +311,22 @@ const creatingRequirement = ref(false);
 const requirementEditOpen = ref(false);
 const editingRequirement = ref<Requirement | null>(null);
 const editingRequirementDefinition = ref('');
+const editingRequirementChangeId = ref<number | null>(null);
 const savingRequirement = ref(false);
 const deleteConfirmationOpen = ref(false);
 const pendingDeleteAction = ref<(() => Promise<void>) | null>(null);
-const ancestorDescriptionHTML = ref<Record<number, string>>({});
 const projectMismatchOpen = ref(false);
 const projectMismatch = ref<ProjectMismatch | null>(null);
 const requirementError = ref('');
 const error = computed(() => projectSelection.error || requirementError.value);
-const loading = computed(() => detailLoading.value || taskCache.loading);
-const taskId = computed(() => Number(route.params.id));
-const taskMap = computed(() => new Map(tasks.value.map((task) => [task.id, task])));
-const currentTask = computed(() =>
-  detailTask.value?.id === taskId.value ? detailTask.value : taskMap.value.get(taskId.value) || null,
+const loading = computed(() => detailLoading.value || changeCache.loading);
+const changeId = computed(() => Number(route.params.id));
+const changeMap = computed(() => new Map(changes.value.map((change) => [change.id, change])));
+const currentChange = computed(() =>
+  detailChange.value?.id === changeId.value ? detailChange.value : changeMap.value.get(changeId.value) || null,
 );
-
-const ancestorTasks = computed(() => {
-  const ancestors: Task[] = [];
-  const seen = new Set<number>();
-  let task = currentTask.value;
-
-  while (task?.parent_id) {
-    if (seen.has(task.parent_id)) break;
-    seen.add(task.parent_id);
-
-    const parent = taskMap.value.get(task.parent_id);
-    if (!parent) break;
-
-    ancestors.unshift(parent);
-    task = parent;
-  }
-
-  return ancestors;
-});
-
-const parentDescriptionTasks = computed(() => ancestorTasks.value.slice().reverse());
-
-const childTasks = computed(() =>
-  tasks.value
-    .filter((task) => task.parent_id === currentTask.value?.id)
-    .sort((left, right) => left.priority - right.priority || left.id - right.id),
+const changeOptions = computed(() =>
+  changes.value.map((change) => ({ label: `#${change.id} ${change.title}`, value: change.id })),
 );
 
 async function ensureProjectsLoaded() {
@@ -447,57 +335,35 @@ async function ensureProjectsLoaded() {
   }
 }
 
-async function loadTaskDetail() {
-  if (!taskId.value) return;
+async function loadChangeDetail() {
+  if (!changeId.value) return;
 
   detailLoading.value = true;
   requirementError.value = '';
   try {
-    const detail = await getTask(taskId.value);
-    detailTask.value = detail.task;
+    const detail = await getChange(changeId.value);
+    detailChange.value = detail.change;
     requirements.value = detail.requirements;
     await ensureProjectsLoaded();
-    detectProjectMismatch(detail.task);
-    await taskCache.loadProjectTasks(detail.task.project_id);
-    taskCache.upsertTask(detail.task);
-    await loadAncestorDescriptions();
+    detectProjectMismatch(detail.change);
+    await changeCache.loadProjectChanges(detail.change.project_id);
+    changeCache.upsertChange(detail.change);
   } catch (err) {
-    detailTask.value = null;
+    detailChange.value = null;
     requirements.value = [];
-    ancestorDescriptionHTML.value = {};
-    requirementError.value = err instanceof Error ? err.message : 'Unable to load task.';
+    requirementError.value = err instanceof Error ? err.message : 'Unable to load change.';
   } finally {
     detailLoading.value = false;
   }
-}
-
-async function loadAncestorDescriptions() {
-  const ids = parentDescriptionTasks.value.map((task) => task.id);
-  ancestorDescriptionHTML.value = {};
-  if (!ids.length) return;
-
-  try {
-    const rendered = await getRenderedTaskDescriptions(ids);
-    ancestorDescriptionHTML.value = Object.fromEntries(
-      rendered.descriptions.map((description) => [description.id, description.description_html]),
-    );
-  } catch (err) {
-    requirementError.value =
-      err instanceof Error ? err.message : 'Unable to load parent task descriptions.';
-  }
-}
-
-function descriptionHTML(task: Task) {
-  return ancestorDescriptionHTML.value[task.id] ?? task.description_html;
 }
 
 function projectName(projectId: number) {
   return projectSelection.projects.find((project) => project.id === projectId)?.name || `#${projectId}`;
 }
 
-function detectProjectMismatch(task: Task) {
+function detectProjectMismatch(change: Change) {
   const currentProjectId = projectSelection.currentProjectId;
-  if (!currentProjectId || currentProjectId === task.project_id || projectSelection.isSwitchingProject) {
+  if (!currentProjectId || currentProjectId === change.project_id || projectSelection.isSwitchingProject) {
     projectMismatchOpen.value = false;
     projectMismatch.value = null;
     return;
@@ -506,13 +372,13 @@ function detectProjectMismatch(task: Task) {
   projectMismatch.value = {
     currentProjectId,
     currentProjectName: projectName(currentProjectId),
-    requiredProjectId: task.project_id,
-    requiredProjectName: projectName(task.project_id),
+    requiredProjectId: change.project_id,
+    requiredProjectName: projectName(change.project_id),
   };
   projectMismatchOpen.value = true;
 }
 
-function switchToTaskProject() {
+function switchToChangeProject() {
   const mismatch = projectMismatch.value;
   if (!mismatch) return;
 
@@ -531,30 +397,28 @@ function stayOnCurrentProject() {
     return;
   }
 
-  void router.replace('/tasks');
+  void router.replace('/changes');
 }
 
-function applyRequirementMutation(requirementList: Requirement[], task: Task) {
-  requirements.value = requirementList;
-  detailTask.value = task;
-  taskCache.upsertTask(task);
+function applyRequirementMutation(requirementList: Requirement[], change: Change) {
+  if (change.id === changeId.value) {
+    requirements.value = requirementList;
+    detailChange.value = change;
+  }
+  changeCache.upsertChange(change);
 }
 
 function isRequirementUpdating(id: number) {
   return updatingRequirementIds.value.includes(id);
 }
 
-function isLeafTask(task: Task) {
-  return !tasks.value.some((candidate) => candidate.parent_id === task.id);
+function isChangeDeleting(id: number) {
+  return deletingChangeIds.value.includes(id);
 }
 
-function isTaskDeleting(id: number) {
-  return deletingTaskIds.value.includes(id);
-}
-
-function confirmDeleteTask(task: Task) {
-  if (!isLeafTask(task) || isTaskDeleting(task.id)) return;
-  pendingDeleteAction.value = () => deleteTaskConfirmed(task);
+function confirmDeleteChange(change: Change) {
+  if (isChangeDeleting(change.id)) return;
+  pendingDeleteAction.value = () => deleteChangeConfirmed(change);
   deleteConfirmationOpen.value = true;
 }
 
@@ -567,25 +431,24 @@ async function confirm() {
   await action();
 }
 
-async function deleteTaskConfirmed(task: Task) {
-  if (!task || !isLeafTask(task) || isTaskDeleting(task.id)) return;
+async function deleteChangeConfirmed(change: Change) {
+  if (!change || isChangeDeleting(change.id)) return;
 
-  deletingTaskIds.value = [...deletingTaskIds.value, task.id];
+  deletingChangeIds.value = [...deletingChangeIds.value, change.id];
   requirementError.value = '';
 
   try {
-    await deleteTask(task.id);
-    await taskCache.loadProjectTasks(task.project_id);
+    await deleteChange(change.id);
+    await changeCache.loadProjectChanges(change.project_id);
     await projectSelection.loadProjects().catch(() => undefined);
 
-    if (task.id === currentTask.value?.id) {
-      const parentID = task.parent_id;
-      void router.push(parentID ? `/tasks/${parentID}` : '/tasks');
+    if (change.id === currentChange.value?.id) {
+      void router.push('/changes');
     }
   } catch (err) {
-    requirementError.value = err instanceof Error ? err.message : 'Unable to delete task.';
+    requirementError.value = err instanceof Error ? err.message : 'Unable to delete change.';
   } finally {
-    deletingTaskIds.value = deletingTaskIds.value.filter((id) => id !== task.id);
+    deletingChangeIds.value = deletingChangeIds.value.filter((id) => id !== change.id);
   }
 }
 
@@ -603,8 +466,8 @@ async function deleteRequirementConfirmed(requirement: Requirement) {
 
   try {
     const mutation = await deleteRequirement(requirement.id);
-    applyRequirementMutation(mutation.requirements, mutation.task);
-    await taskCache.loadProjectTasks(mutation.task.project_id);
+    applyRequirementMutation(mutation.requirements, mutation.change);
+    await changeCache.loadProjectChanges(mutation.change.project_id);
     if (editingRequirement.value?.id === requirement.id) closeRequirementEdit();
   } catch (err) {
     requirementError.value = err instanceof Error ? err.message : 'Unable to delete requirement.';
@@ -621,8 +484,8 @@ async function toggleRequirement(requirement: Requirement, done: boolean) {
 
   try {
     const mutation = await updateRequirementDone(requirement.id, done);
-    applyRequirementMutation(mutation.requirements, mutation.task);
-    await taskCache.loadProjectTasks(mutation.task.project_id);
+    applyRequirementMutation(mutation.requirements, mutation.change);
+    await changeCache.loadProjectChanges(mutation.change.project_id);
   } catch (err) {
     requirementError.value = err instanceof Error ? err.message : 'Unable to update requirement.';
   } finally {
@@ -633,6 +496,7 @@ async function toggleRequirement(requirement: Requirement, done: boolean) {
 function openRequirementEdit(requirement: Requirement) {
   editingRequirement.value = requirement;
   editingRequirementDefinition.value = requirement.definition;
+  editingRequirementChangeId.value = requirement.change_id;
   requirementEditOpen.value = true;
 }
 
@@ -642,6 +506,7 @@ function closeRequirementEdit() {
   requirementEditOpen.value = false;
   editingRequirement.value = null;
   editingRequirementDefinition.value = '';
+  editingRequirementChangeId.value = null;
 }
 
 function openRequirementCreate() {
@@ -657,7 +522,7 @@ function closeRequirementCreate() {
 }
 
 async function saveRequirementCreate() {
-  if (!currentTask.value) return;
+  if (!currentChange.value) return;
 
   const definition = newRequirementDefinition.value.trim();
   if (!definition) return;
@@ -666,11 +531,11 @@ async function saveRequirementCreate() {
   requirementError.value = '';
 
   try {
-    const mutation = await createRequirement(currentTask.value.id, definition);
-    applyRequirementMutation(mutation.requirements, mutation.task);
+    const mutation = await createRequirement(currentChange.value.id, definition);
+    applyRequirementMutation(mutation.requirements, mutation.change);
     requirementCreateOpen.value = false;
     newRequirementDefinition.value = '';
-    await taskCache.loadProjectTasks(mutation.task.project_id);
+    await changeCache.loadProjectChanges(mutation.change.project_id);
   } catch (err) {
     requirementError.value = err instanceof Error ? err.message : 'Unable to create requirement.';
   } finally {
@@ -688,15 +553,20 @@ async function saveRequirementEdit() {
   requirementError.value = '';
 
   try {
-    const mutation = await updateRequirement({
+    let mutation = await updateRequirement({
       id: editingRequirement.value.id,
       definition,
     });
-    applyRequirementMutation(mutation.requirements, mutation.task);
+    if (editingRequirementChangeId.value && editingRequirementChangeId.value !== editingRequirement.value.change_id) {
+      mutation = await updateRequirementChange(editingRequirement.value.id, editingRequirementChangeId.value);
+    }
+    applyRequirementMutation(mutation.requirements, mutation.change);
     requirementEditOpen.value = false;
     editingRequirement.value = null;
     editingRequirementDefinition.value = '';
-    await taskCache.loadProjectTasks(mutation.task.project_id);
+    editingRequirementChangeId.value = null;
+    await changeCache.loadProjectChanges(mutation.change.project_id);
+    if (mutation.change.id !== changeId.value) await loadChangeDetail();
   } catch (err) {
     requirementError.value = err instanceof Error ? err.message : 'Unable to update requirement.';
   } finally {
@@ -704,16 +574,8 @@ async function saveRequirementEdit() {
   }
 }
 
-function openTask(id: number) {
-  void router.push(`/tasks/${id}`);
-}
-
-function openTaskCreate(parentId: number) {
-  void router.push(`/tasks/create/${parentId}`);
-}
-
-function openTaskEdit(taskID: number) {
-  void router.push(`/tasks/edit/${taskID}`);
+function openChangeEdit(changeID: number) {
+  void router.push(`/changes/edit/${changeID}`);
 }
 
 function formatModified(value: string) {
@@ -729,30 +591,27 @@ function formatModified(value: string) {
   }).format(date);
 }
 
-function completionLabel(task: Task) {
-  return `${task.done_req}/${task.total_req} - ${task.completed}%`;
+function completionLabel(change: Change) {
+  return `${change.done_req}/${change.total_req} - ${change.completed}%`;
 }
 
-function taskTypeColor(type: string) {
-  if (type === 'epic' || type === 'group') return 'purple';
-  if (type === 'issue') return 'red';
-
-  return 'teal';
+function epicName(id: number | null | undefined) {
+  if (!id) return 'Standalone';
+  return epics.value.find((epic) => epic.id === id)?.name || `#${id}`;
 }
 
 onMounted(() => {
   void ensureProjectsLoaded();
-  void loadTaskDetail();
+  void loadChangeDetail();
 });
 
-watch(taskId, () => {
+watch(changeId, () => {
   closeRequirementEdit();
   closeRequirementCreate();
-  ancestorDescriptionHTML.value = {};
   projectMismatchOpen.value = false;
   projectMismatch.value = null;
   void ensureProjectsLoaded();
-  void loadTaskDetail();
+  void loadChangeDetail();
 });
 </script>
 
@@ -761,78 +620,20 @@ watch(taskId, () => {
   width: min(720px, calc(100vw - 32px));
 }
 
-.project-mismatch-dialog {
-  width: min(420px, calc(100vw - 32px));
+.requirement-edit-fields {
+  display: grid;
+  gap: 16px;
 }
 
-.task-detail-table {
-  margin-top: 32px;
+.change-detail-table {
+  margin-top: 16px;
 }
 
-.task-actions-cell {
-  padding-left: 4px;
-  padding-right: 4px;
-  text-align: center;
-  width: 1%;
-  white-space: nowrap;
+.change-actions-cell {
+  width: 64px;
 }
 
-.task-detail-table :deep(table) {
-  table-layout: fixed;
-  width: 100%;
-}
-
-.task-detail-title-cell,
-.task-detail-description-cell {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.task-detail-description-cell {
-  white-space: normal;
-  width: 100%;
-}
-
-.apply-markdown {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
-}
-
-.apply-markdown :deep(pre) {
-  max-width: 100%;
-  overflow-x: auto;
-  white-space: pre;
-}
-
-.apply-markdown :deep(:not(pre, pre *)) {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.apply-markdown :deep(p),
-.apply-markdown :deep(li),
-.apply-markdown :deep(blockquote),
-.apply-markdown :deep(td),
-.apply-markdown :deep(th) {
-  white-space: normal;
-}
-
-.apply-markdown :deep(table) {
-  table-layout: fixed;
-  width: 100%;
-}
-
-.apply-markdown :deep(table td),
-.apply-markdown :deep(table th) {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.apply-markdown :deep(img),
-.apply-markdown :deep(table) {
-  max-width: 100%;
+.change-detail-body-cell {
+  min-height: 160px;
 }
 </style>

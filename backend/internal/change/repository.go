@@ -154,9 +154,7 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	if err != nil {
 		return dto.Change{}, err
 	}
-	if _, err := tx.Exec(ctx, "call public.sp_epic_requirement_recalculate($1)", req.EpicID); err != nil {
-		return dto.Change{}, err
-	}
+
 	return finishMutation(ctx, tx, id)
 }
 

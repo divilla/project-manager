@@ -3,7 +3,7 @@
     <section class="page-heading">
       <div>
         <h1>Planning</h1>
-        <p>AI-assisted planning workspace for decomposing features into tasks and requirements.</p>
+        <p>AI-assisted planning workspace for decomposing features into changes and requirements.</p>
       </div>
     </section>
 
@@ -12,12 +12,12 @@
         <div v-if="currentProject" class="empty-state">
           <q-icon name="psychology" size="44px" />
           <span>Planning workspace is scoped to {{ currentProject.name }}.</span>
-          <q-btn color="primary" label="Commit tasks" no-caps disabled />
+          <q-btn color="primary" label="Commit changes" no-caps disabled />
         </div>
         <div v-else class="empty-state">
           <q-icon name="folder_open" size="44px" />
-          <span>Create a project before committing planned tasks.</span>
-          <q-btn color="primary" label="Commit tasks" no-caps disabled />
+          <span>Create a project before committing planned changes.</span>
+          <q-btn color="primary" label="Commit changes" no-caps disabled />
         </div>
       </q-card-section>
     </q-card>

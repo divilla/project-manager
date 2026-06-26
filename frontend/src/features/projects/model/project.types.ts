@@ -3,5 +3,5 @@ export interface Project {
   name: string;
   created: string;
   modified: string;
-  task_count: number;
+  change_count: number;
 }

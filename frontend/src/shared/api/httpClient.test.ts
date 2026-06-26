@@ -35,7 +35,7 @@ describe('httpClient', () => {
       status: 204,
     });
 
-    await expect(post('/api/v1/task/delete', { id: 1 })).resolves.toBeUndefined();
+    await expect(post('/api/v1/change/delete', { id: 1 })).resolves.toBeUndefined();
   });
 
   it('throws backend error messages', async () => {
@@ -45,7 +45,7 @@ describe('httpClient', () => {
       json: () => Promise.resolve({ message: 'invalid payload' }),
     });
 
-    await expect(post('/api/v1/task/create', {})).rejects.toThrow('invalid payload');
+    await expect(post('/api/v1/change/create', {})).rejects.toThrow('invalid payload');
   });
 
   it('throws fallback errors when backend response has no message', async () => {

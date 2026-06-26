@@ -4,7 +4,7 @@
       <span>Name</span>
       <span>Created</span>
       <span>Modified</span>
-      <span>Tasks</span>
+      <span>Changes</span>
       <span></span>
     </div>
 
@@ -28,7 +28,7 @@
       </q-item-section>
       <q-item-section class="project-count-cell">
         <q-item-label caption>
-          {{ project.task_count }}
+          {{ project.change_count }}
         </q-item-label>
       </q-item-section>
       <q-item-section side class="project-actions-cell">
@@ -42,13 +42,13 @@
             round
             icon="delete"
             color="negative"
-            :disable="project.task_count > 0"
+            :disable="project.change_count > 0"
             @click.stop="$emit('delete', project)"
           >
             <q-tooltip>
               {{
-                project.task_count > 0
-                  ? 'Delete all project tasks before deleting this project'
+                project.change_count > 0
+                  ? 'Delete all project changes before deleting this project'
                   : 'Delete project'
               }}
             </q-tooltip>
@@ -60,7 +60,7 @@
 
   <div v-if="!projects.length && !loading" class="empty-state compact-empty">
     <q-icon name="folder_open" size="32px" />
-    <span>Create a project to start tracking tasks.</span>
+    <span>Create a project to start tracking changes.</span>
   </div>
 </template>
 

@@ -1,4 +1,4 @@
-const PROJECT_SCOPED_TOPICS = new Set(['tasks', 'projects', 'planning']);
+const PROJECT_SCOPED_TOPICS = new Set(['changes', 'projects', 'planning']);
 
 export const PROJECT_CHANGE_LOADING_PATH = '/loading';
 

@@ -69,5 +69,5 @@ const {
   saveProjectName,
   removeProject,
   confirm,
-} = useProjectsPage({ tasksEnabled: false });
+} = useProjectsPage({ changesEnabled: false });
 </script>

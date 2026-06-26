@@ -22,7 +22,7 @@ const quasarStubs = {
   QTooltip: { template: '<span><slot /></span>' },
 };
 
-function projectFixture(project: Pick<Project, 'id' | 'name' | 'task_count'>): Project {
+function projectFixture(project: Pick<Project, 'id' | 'name' | 'change_count'>): Project {
   return {
     created: '2026-06-23T10:15:00Z',
     modified: '2026-06-24T11:30:00Z',
@@ -39,7 +39,7 @@ function formattedDate(value: string) {
 
 describe('ProjectList', () => {
   it('emits select, rename, and delete events with the expected project', async () => {
-    const project = projectFixture({ id: 1, name: 'Project', task_count: 0 });
+    const project = projectFixture({ id: 1, name: 'Project', change_count: 0 });
     const wrapper = mount(ProjectList, {
       props: {
         projects: [project],
@@ -61,7 +61,7 @@ describe('ProjectList', () => {
   });
 
   it('renders created and modified timestamps', () => {
-    const project = projectFixture({ id: 1, name: 'Project', task_count: 0 });
+    const project = projectFixture({ id: 1, name: 'Project', change_count: 0 });
     const wrapper = mount(ProjectList, {
       props: {
         projects: [project],
@@ -79,8 +79,8 @@ describe('ProjectList', () => {
     expect(wrapper.text()).toContain(formattedDate(project.modified));
   });
 
-  it('disables delete for projects that still have tasks', async () => {
-    const project = projectFixture({ id: 1, name: 'Project', task_count: 2 });
+  it('disables delete for projects that still have changes', async () => {
+    const project = projectFixture({ id: 1, name: 'Project', change_count: 2 });
     const wrapper = mount(ProjectList, {
       props: {
         projects: [project],

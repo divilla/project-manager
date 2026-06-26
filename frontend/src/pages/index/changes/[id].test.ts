@@ -3,26 +3,29 @@ import { createPinia, setActivePinia } from 'pinia';
 import { listProjects } from '@/features/projects/api/projectApi';
 import type { Project } from '@/features/projects/model/project.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
-import { deleteRequirement } from '@/features/requirements/api/requirementApi';
+import {
+  deleteRequirement,
+  updateRequirementChange,
+} from '@/features/requirements/api/requirementApi';
 import {
   requirementFixture,
   requirementMutationFixture,
 } from '@/features/requirements/model/requirement.fixtures';
 import {
-  deleteTask,
-  getRenderedTaskDescriptions,
-  getTask,
-  listTasks,
-} from '@/features/tasks/api/taskApi';
-import { taskDetailFixture, taskFixture } from '@/features/tasks/model/task.fixtures';
-import TaskDetailPage from './[id].vue';
+  deleteChange,
+  getChange,
+  listChanges,
+  listEpics,
+} from '@/features/changes/api/changeApi';
+import { changeDetailFixture, changeFixture, epicFixture } from '@/features/changes/model/change.fixtures';
+import ChangeDetailPage from './[id].vue';
 
 const routerMock = vi.hoisted(() => ({
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
   route: {
-    fullPath: '/tasks/2',
+    fullPath: '/changes/2',
     params: {
       id: '2',
     },
@@ -42,21 +45,22 @@ vi.mock('@/features/projects/api/projectApi', () => ({
   listProjects: vi.fn(),
 }));
 
-vi.mock('@/features/tasks/api/taskApi', () => ({
-  deleteTask: vi.fn(),
-  getRenderedTaskDescriptions: vi.fn(),
-  getTask: vi.fn(),
-  listTasks: vi.fn(),
+vi.mock('@/features/changes/api/changeApi', () => ({
+  deleteChange: vi.fn(),
+  getChange: vi.fn(),
+  listChanges: vi.fn(),
+  listEpics: vi.fn(),
 }));
 
 vi.mock('@/features/requirements/api/requirementApi', () => ({
   createRequirement: vi.fn(),
   deleteRequirement: vi.fn(),
   updateRequirement: vi.fn(),
+  updateRequirementChange: vi.fn(),
   updateRequirementDone: vi.fn(),
 }));
 
-function projectFixture(project: Pick<Project, 'id' | 'name' | 'task_count'>): Project {
+function projectFixture(project: Pick<Project, 'id' | 'name' | 'change_count'>): Project {
   return {
     created: '2026-06-23T00:00:00Z',
     modified: '2026-06-23T00:00:00Z',
@@ -86,11 +90,7 @@ const quasarStubs = {
     props: ['dropdownIcon'],
     template: `
       <div>
-        <button
-          :data-icon="dropdownIcon"
-          type="button"
-          @click="$emit('click', $event)"
-        />
+        <button :data-icon="dropdownIcon" type="button" @click="$emit('click', $event)" />
         <slot />
       </div>
     `,
@@ -127,33 +127,38 @@ const quasarStubs = {
   QList: { template: '<div><slot /></div>' },
   QMarkupTable: { template: '<table><slot /></table>' },
   QPage: { template: '<main><slot /></main>' },
+  QSelect: {
+    emits: ['update:modelValue'],
+    props: ['modelValue', 'options'],
+    template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', Number($event.target.value))"><option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option></select>',
+  },
   QSpinner: { template: '<span />' },
 };
 
-describe('TaskDetailPage', () => {
+describe('ChangeDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setActivePinia(createPinia());
     localStorage.clear();
     routerMock.route.params.id = '2';
-    routerMock.route.fullPath = '/tasks/2';
+    routerMock.route.fullPath = '/changes/2';
     vi.mocked(listProjects).mockResolvedValue([
-      projectFixture({ id: 1, name: 'Project', task_count: 3 }),
+      projectFixture({ id: 1, name: 'Project', change_count: 3 }),
     ]);
-    vi.mocked(getTask).mockResolvedValue(
-      taskDetailFixture({
-        task: taskFixture({ id: 2, name: 'Current task', project_id: 1, parent_id: 1 }),
+    vi.mocked(getChange).mockResolvedValue(
+      changeDetailFixture({
+        change: changeFixture({ id: 2, title: 'Current change', project_id: 1, epic_id: 1 }),
         requirements: [],
       }),
     );
-    vi.mocked(listTasks).mockResolvedValue([
-      taskFixture({ id: 1, name: 'Parent task', project_id: 1 }),
-      taskFixture({ id: 2, name: 'Current task', project_id: 1, parent_id: 1 }),
-      taskFixture({ id: 3, name: 'Leaf child', project_id: 1, parent_id: 2 }),
+    vi.mocked(listChanges).mockResolvedValue([
+      changeFixture({ id: 2, title: 'Current change', project_id: 1, epic_id: 1 }),
+      changeFixture({ id: 3, title: 'Other change', project_id: 1 }),
     ]);
-    vi.mocked(getRenderedTaskDescriptions).mockResolvedValue({ descriptions: [] });
-    vi.mocked(deleteTask).mockResolvedValue(undefined);
+    vi.mocked(listEpics).mockResolvedValue([epicFixture({ id: 1, name: 'Project Epic' })]);
+    vi.mocked(deleteChange).mockResolvedValue(undefined);
     vi.mocked(deleteRequirement).mockResolvedValue(requirementMutationFixture());
+    vi.mocked(updateRequirementChange).mockResolvedValue(requirementMutationFixture());
   });
 
   afterEach(() => {
@@ -162,7 +167,7 @@ describe('TaskDetailPage', () => {
   });
 
   function mountPage() {
-    return mount(TaskDetailPage, {
+    return mount(ChangeDetailPage, {
       global: {
         directives: {
           ClosePopup: {},
@@ -172,29 +177,30 @@ describe('TaskDetailPage', () => {
     });
   }
 
-  it('renders the actions menu for the current task row and child task rows', async () => {
+  it('renders current change actions and change metadata', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
-    expect(wrapper.text()).not.toContain('Actions');
-    expect(wrapper.findAll('[data-icon="more_vert"]')).toHaveLength(2);
-    expect(wrapper.findAll('[data-action="edit-task"]')).toHaveLength(2);
-    expect(wrapper.findAll('[data-action="delete-task"]')).toHaveLength(2);
+    expect(wrapper.text()).toContain('Current change');
+    expect(wrapper.text()).toContain('Project Epic');
+    expect(wrapper.findAll('[data-icon="more_vert"]')).toHaveLength(1);
+    expect(wrapper.findAll('[data-action="edit-change"]')).toHaveLength(1);
+    expect(wrapper.findAll('[data-action="delete-change"]')).toHaveLength(1);
   });
 
-  it('asks before switching project context for a pasted task URL', async () => {
+  it('asks before switching project context for a pasted change URL', async () => {
     vi.mocked(listProjects).mockResolvedValue([
-      projectFixture({ id: 1, name: 'Project A', task_count: 1 }),
-      projectFixture({ id: 2, name: 'Project B', task_count: 1 }),
+      projectFixture({ id: 1, name: 'Project A', change_count: 1 }),
+      projectFixture({ id: 2, name: 'Project B', change_count: 1 }),
     ]);
-    vi.mocked(getTask).mockResolvedValue(
-      taskDetailFixture({
-        task: taskFixture({ id: 2, name: 'Current task', project_id: 2 }),
+    vi.mocked(getChange).mockResolvedValue(
+      changeDetailFixture({
+        change: changeFixture({ id: 2, title: 'Current change', project_id: 2 }),
         requirements: [],
       }),
     );
-    vi.mocked(listTasks).mockResolvedValue([
-      taskFixture({ id: 2, name: 'Current task', project_id: 2 }),
+    vi.mocked(listChanges).mockResolvedValue([
+      changeFixture({ id: 2, title: 'Current change', project_id: 2 }),
     ]);
     const wrapper = mountPage();
     await flushPromises();
@@ -208,89 +214,41 @@ describe('TaskDetailPage', () => {
 
     const projectSelection = useProjectSelectionStore();
     expect(projectSelection.currentProjectId).toBe(2);
-    expect(projectSelection.routeDrivenTargetPath).toBe('/tasks/2');
+    expect(projectSelection.routeDrivenTargetPath).toBe('/changes/2');
   });
 
-  it('renders parent descriptions from the rendered descriptions endpoint', async () => {
-    vi.mocked(listTasks).mockResolvedValue([
-      taskFixture({
-        id: 1,
-        name: 'Parent task',
-        project_id: 1,
-        description: '**Parent**',
-        description_html: '',
-      }),
-      taskFixture({ id: 2, name: 'Current task', project_id: 1, parent_id: 1 }),
-    ]);
-    vi.mocked(getRenderedTaskDescriptions).mockResolvedValue({
-      descriptions: [{ id: 1, description_html: '<p><strong>Parent</strong></p>' }],
-    });
+  it('opens the change edit route from the menu action', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
-    expect(getRenderedTaskDescriptions).toHaveBeenCalledWith([1]);
-    expect(wrapper.html()).toContain('<strong>Parent</strong>');
+    await wrapper.find('[data-action="edit-change"]').trigger('click');
+
+    expect(routerMock.push).toHaveBeenCalledWith('/changes/edit/2');
   });
 
-  it('opens the task edit route from the menu action', async () => {
+  it('confirms change deletion', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
-    await wrapper.find('[data-action="edit-task"]').trigger('click');
-
-    expect(routerMock.push).toHaveBeenCalledWith('/tasks/edit/2');
-  });
-
-  it('disables delete for the current task when it has children', async () => {
-    const wrapper = mountPage();
-    await flushPromises();
-
-    expect(wrapper.find('[data-action="delete-task"]').attributes('disabled')).toBeDefined();
-  });
-
-  it('confirms current task deletion when it is a leaf task', async () => {
-    vi.mocked(listTasks).mockResolvedValue([
-      taskFixture({ id: 1, name: 'Parent task', project_id: 1 }),
-      taskFixture({ id: 2, name: 'Current task', project_id: 1, parent_id: 1 }),
-    ]);
-    const wrapper = mountPage();
-    await flushPromises();
-
-    await wrapper.find('[data-action="delete-task"]').trigger('click');
+    await wrapper.find('[data-action="delete-change"]').trigger('click');
     await flushPromises();
 
     expect(wrapper.text()).toContain('Are you sure?');
-    expect(wrapper.text()).toContain('Cancel');
-    expect(wrapper.find('[data-persistent="true"]').exists()).toBe(true);
-    expect(deleteTask).not.toHaveBeenCalled();
+    expect(deleteChange).not.toHaveBeenCalled();
 
     const confirmButton = wrapper.findAll('button').find((button) => button.text() === 'OK');
-    expect(confirmButton).toBeDefined();
     await confirmButton?.trigger('click');
     await flushPromises();
 
-    expect(deleteTask).toHaveBeenCalledWith(2);
-    expect(listTasks).toHaveBeenCalledWith(1);
+    expect(deleteChange).toHaveBeenCalledWith(2);
+    expect(listChanges).toHaveBeenCalledWith(1);
   });
 
-  it('does not delete a leaf task before confirmation', async () => {
-    vi.mocked(listTasks).mockResolvedValue([
-      taskFixture({ id: 1, name: 'Parent task', project_id: 1 }),
-      taskFixture({ id: 2, name: 'Current task', project_id: 1, parent_id: 1 }),
-    ]);
-    const wrapper = mountPage();
-    await flushPromises();
-
-    await wrapper.find('[data-action="delete-task"]').trigger('click');
-
-    expect(deleteTask).not.toHaveBeenCalled();
-  });
-
-  it('renders requirement actions in the last-column menu and opens the edit dialog', async () => {
-    vi.mocked(getTask).mockResolvedValue(
-      taskDetailFixture({
-        task: taskFixture({ id: 2, name: 'Current task', project_id: 1, parent_id: 1 }),
-        requirements: [requirementFixture({ id: 9, task_id: 2, definition: 'Existing req' })],
+  it('renders requirement actions and opens the edit dialog', async () => {
+    vi.mocked(getChange).mockResolvedValue(
+      changeDetailFixture({
+        change: changeFixture({ id: 2, title: 'Current change', project_id: 1 }),
+        requirements: [requirementFixture({ id: 9, change_id: 2, definition: 'Existing req' })],
       }),
     );
     const wrapper = mountPage();
@@ -305,16 +263,16 @@ describe('TaskDetailPage', () => {
   });
 
   it('confirms requirement deletion with the shared delete dialog', async () => {
-    const requirement = requirementFixture({ id: 9, task_id: 2, definition: 'Delete me' });
-    vi.mocked(getTask).mockResolvedValue(
-      taskDetailFixture({
-        task: taskFixture({ id: 2, name: 'Current task', project_id: 1, parent_id: 1 }),
+    const requirement = requirementFixture({ id: 9, change_id: 2, definition: 'Delete me' });
+    vi.mocked(getChange).mockResolvedValue(
+      changeDetailFixture({
+        change: changeFixture({ id: 2, title: 'Current change', project_id: 1 }),
         requirements: [requirement],
       }),
     );
     vi.mocked(deleteRequirement).mockResolvedValue(
       requirementMutationFixture({
-        task: taskFixture({ id: 2, project_id: 1 }),
+        change: changeFixture({ id: 2, project_id: 1 }),
         requirements: [],
       }),
     );
@@ -325,8 +283,6 @@ describe('TaskDetailPage', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain('Are you sure?');
-    expect(wrapper.text()).toContain('Cancel');
-    expect(wrapper.find('[data-persistent="true"]').exists()).toBe(true);
     expect(deleteRequirement).not.toHaveBeenCalled();
 
     const okButton = wrapper.findAll('button').find((button) => button.text() === 'OK');
@@ -335,6 +291,6 @@ describe('TaskDetailPage', () => {
     await flushPromises();
 
     expect(deleteRequirement).toHaveBeenCalledWith(9);
-    expect(listTasks).toHaveBeenCalledWith(1);
+    expect(listChanges).toHaveBeenCalledWith(1);
   });
 });

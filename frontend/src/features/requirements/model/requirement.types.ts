@@ -1,9 +1,9 @@
-import type { Task } from '@/features/tasks/model/task.types';
+import type { Change } from '@/features/changes/model/change.types';
 
 export interface Requirement {
   id: number;
   version: number;
-  task_id: number;
+  change_id: number;
   definition: string;
   done: boolean;
   created: string;
@@ -12,7 +12,7 @@ export interface Requirement {
 
 export interface RequirementMutation {
   requirement?: Requirement;
-  task: Task;
+  change: Change;
   requirements: Requirement[];
 }
 

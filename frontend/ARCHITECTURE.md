@@ -10,7 +10,7 @@ features -> may import shared
 pages -> may import features and shared
 ```
 
-`src/shared` contains reusable app infrastructure such as HTTP helpers and generic UI/utilities. It must not know about project, task, or requirement domains.
+`src/shared` contains reusable app infrastructure such as HTTP helpers and generic UI/utilities. It must not know about project, change, epic, or requirement domains.
 
 Feature folders own their API modules, model types, composables, and domain components. Components should not call `fetch` directly.
 
@@ -18,9 +18,9 @@ Route pages should stay thin. They compose feature components and route-level co
 
 ## Projects Area
 
-The Projects route uses `features/projects/composables/useProjectsPage.ts` as the page-level coordinator across projects, tasks, and requirements.
+The Projects route uses `features/projects/composables/useProjectsPage.ts` as the page-level coordinator across projects, epics, changes, and requirements.
 
-Backend mutations that can recalculate ancestor task values refresh the selected project's task list after applying the immediate mutation response, so the board stays current while the open dialog remains responsive.
+Backend mutations that recalculate change or epic completeness refresh the selected project's change and epic lists after applying the immediate mutation response, so the board stays current while the open dialog remains responsive.
 
 Project selection is global app-shell state owned by `features/projects/model/projectSelection.store.ts`.
 Use `currentProjectId` and `currentProject` for this shared context. Do not introduce route-local project selectors for project-scoped screens.
@@ -29,31 +29,31 @@ When the user changes the current project from the top menu, the app-shell flow 
 
 1. Set `isSwitchingProject` so the project selector is disabled and shows loading.
 2. Redirect immediately to `/loading`.
-3. Run `features/projects/services/projectScopeRefresh.ts` to reload shared project-scope data. Today that reloads projects and all tasks for `currentProjectId`; future project-scoped caches should be added there.
-4. Redirect to the current topic index, for example `/tasks/123` and `/tasks/create/123` both return to `/tasks`.
+3. Run `features/projects/services/projectScopeRefresh.ts` to reload shared project-scope data. Today that reloads projects, changes, and epics for `currentProjectId`; future project-scoped caches should be added there.
+4. Redirect to the current topic index, for example `/changes/123` and `/changes/edit/123` both return to `/changes`.
 5. Clear `isSwitchingProject` so the selector is enabled again.
 
 Nested project-scoped routes must not keep stale entity context across a project switch. Add new topic routes to `src/router/projectChangeRedirect.ts` when they need the same topic-index behavior.
 
-Direct route entry is handled separately from explicit selector changes. If a user opens a task URL whose task belongs to a different project than `currentProjectId`, the task page asks whether to switch from the selected project to the task's project. Accepting the switch stores a route-driven target path in `projectSelection.store.ts`, selects the task's project, runs the same `/loading` refresh flow, and returns to the original task URL instead of collapsing to `/tasks`. Declining the switch keeps the selected project and leaves the mismatched route.
+Direct route entry is handled separately from explicit selector changes. If a user opens a change URL whose change belongs to a different project than `currentProjectId`, the change page asks whether to switch from the selected project to the change's project. Accepting the switch stores a route-driven target path in `projectSelection.store.ts`, selects the change's project, runs the same `/loading` refresh flow, and returns to the original change URL instead of collapsing to `/changes`. Declining the switch keeps the selected project and leaves the mismatched route.
 
 Do not implement this as a loose global boolean. Keep the intended route in Pinia so the app shell can consume and clear it after the project refresh flow.
 
-## Task Descriptions
+## Change Bodies
 
-Task descriptions are stored and edited as raw markdown. Backend task detail and mutation responses include sanitized `description_html` rendered through `backend/pkg/markdown`.
+Change bodies are stored and edited as raw markdown. Backend change detail and mutation responses include sanitized `body_html` rendered through `backend/pkg/markdown`.
 
-When a frontend screen needs rendered descriptions for known task IDs but does not need full task detail records, use `POST /api/v1/task/rendered-descriptions` with `{"ids":[...]}`. The response is scoped to rendered description fragments:
+When a frontend screen needs rendered bodies for known change IDs but does not need full change detail records, use `POST /api/v1/change/rendered-bodies` with `{"ids":[...]}`. The response is scoped to rendered body fragments:
 
 ```json
 {
-  "descriptions": [
-    { "id": 1, "description_html": "<p>...</p>" }
+  "bodies": [
+    { "id": 1, "body_html": "<p>...</p>" }
   ]
 }
 ```
 
-This keeps board/list payloads lean while still letting detail pages render ancestor markdown safely.
+This keeps board/list payloads lean while still letting detail pages render markdown safely.
 
 ## Testing
 
@@ -70,7 +70,7 @@ Use colocated tests for feature code:
 ```text
 src/features/projects/components/ProjectList.test.ts
 src/features/projects/composables/useProjectsPage.test.ts
-src/features/tasks/components/TaskBoard.test.ts
+src/features/changes/components/ChangeBoard.test.ts
 src/shared/api/httpClient.test.ts
 ```
 
@@ -83,7 +83,7 @@ Current coverage focuses on:
 Use factories for complete valid test data:
 
 ```text
-src/features/tasks/model/task.fixtures.ts
+src/features/changes/model/change.fixtures.ts
 src/features/requirements/model/requirement.fixtures.ts
 ```
 

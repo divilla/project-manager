@@ -34,6 +34,10 @@ The frontend uses Quasar and talks to the local backend.
 ## Database
 Use the supplied PostgreSQL contract. Application work must not mutate schema outside explicitly approved database changes.
 
+The repository-root `db` folder is database-owner territory. Agents must not edit, create, delete, move, or regenerate files under `db` or any of its subfolders unless the user explicitly requests that exact file change.
+
+Agents must not run PostgreSQL commands that alter database structure, including create, alter, drop, truncate, grant, revoke, migration, or restore operations, unless the user explicitly requests that exact structural change.
+
 Backup helpers live under `db/backup`. Restore commands can replace database contents, so use the correct target database.
 
 ## Failure States

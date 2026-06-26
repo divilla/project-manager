@@ -1,16 +1,16 @@
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
-import { useTaskCacheStore } from '@/features/tasks/model/taskCache.store';
+import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
 
 export async function refreshProjectScope() {
   const projectSelection = useProjectSelectionStore();
-  const taskCache = useTaskCacheStore();
+  const changeCache = useChangeCacheStore();
 
   await projectSelection.loadProjects();
 
   if (projectSelection.currentProjectId) {
-    await taskCache.loadProjectTasks(projectSelection.currentProjectId);
+    await changeCache.loadProjectChanges(projectSelection.currentProjectId);
     return;
   }
 
-  taskCache.setTasks([], 0);
+  changeCache.setChanges([], 0);
 }

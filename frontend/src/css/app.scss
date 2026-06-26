@@ -130,11 +130,11 @@ body.body--dark {
 }
 
 .project-panel,
-.task-board {
+.change-board {
   min-width: 0;
 }
 
-.tasks-page-actions {
+.changes-page-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -142,14 +142,14 @@ body.body--dark {
   margin-bottom: 16px;
 }
 
-.tasks-page-actions .task-search-row {
+.changes-page-actions .change-search-row {
   flex: 1 1 auto;
   margin-bottom: 0;
 }
 
 .create-row,
-.task-create-row,
-.task-search-row {
+.change-create-row,
+.change-search-row {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -161,7 +161,7 @@ body.body--dark {
   min-width: 0;
 }
 
-.task-select {
+.change-select {
   width: 150px;
 }
 
@@ -255,17 +255,17 @@ body.body--dark {
   text-transform: uppercase;
 }
 
-.task-card {
+.change-card {
   margin-bottom: 10px;
   cursor: pointer;
 }
 
-.task-card-title {
+.change-card-title {
   font-weight: 700;
   color: #202939;
 }
 
-.task-card-meta {
+.change-card-meta {
   margin-top: 4px;
   color: #697586;
   font-size: 13px;
@@ -351,14 +351,14 @@ body.body--dark {
     display: block;
   }
 
-  .task-create-row,
-  .task-search-row,
+  .change-create-row,
+  .change-search-row,
   .create-row {
     align-items: stretch;
   }
 
-  .task-create-row,
-  .task-search-row {
+  .change-create-row,
+  .change-search-row {
     flex-direction: column;
   }
 
@@ -366,7 +366,7 @@ body.body--dark {
     align-items: stretch;
   }
 
-  .task-select {
+  .change-select {
     width: 100%;
   }
 

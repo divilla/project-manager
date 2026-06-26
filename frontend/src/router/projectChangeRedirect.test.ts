@@ -3,10 +3,10 @@ import { PROJECT_CHANGE_LOADING_PATH, projectChangeTargetPath } from './projectC
 
 describe('projectChangeTargetPath', () => {
   it('targets project-scoped topic indexes', () => {
-    expect(projectChangeTargetPath('/tasks')).toBe('/tasks');
-    expect(projectChangeTargetPath('/tasks/12')).toBe('/tasks');
-    expect(projectChangeTargetPath('/tasks/create/12')).toBe('/tasks');
-    expect(projectChangeTargetPath('/tasks/edit/12')).toBe('/tasks');
+    expect(projectChangeTargetPath('/changes')).toBe('/changes');
+    expect(projectChangeTargetPath('/changes/12')).toBe('/changes');
+    expect(projectChangeTargetPath('/changes/create')).toBe('/changes');
+    expect(projectChangeTargetPath('/changes/edit/12')).toBe('/changes');
     expect(projectChangeTargetPath('/projects/12')).toBe('/projects');
     expect(projectChangeTargetPath('/planning/session/12')).toBe('/planning');
   });

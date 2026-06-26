@@ -35,7 +35,7 @@
           <div class="text-subtitle1">Project Completeness</div>
           <div v-if="currentProject" class="empty-state">
             <q-icon name="donut_large" size="40px" />
-            <span>{{ currentProject.name }} has {{ currentProject.task_count }} tracked tasks.</span>
+            <span>{{ currentProject.name }} has {{ currentProject.change_count }} tracked changes.</span>
           </div>
           <div v-else class="empty-state">
             <q-icon name="folder_open" size="40px" />

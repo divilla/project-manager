@@ -5,15 +5,15 @@ import type {
   RequirementUpdateInput,
 } from '../model/requirement.types';
 
-export function listRequirements(taskId: number): Promise<Requirement[]> {
-  return post<Requirement[]>('/api/v1/requirement/list', { task_id: taskId });
+export function listRequirements(changeId: number): Promise<Requirement[]> {
+  return post<Requirement[]>('/api/v1/requirement/list', { change_id: changeId });
 }
 
 export function createRequirement(
-  taskId: number,
+  changeId: number,
   definition: string,
 ): Promise<RequirementMutation> {
-  return post<RequirementMutation>('/api/v1/requirement/create', { task_id: taskId, definition });
+  return post<RequirementMutation>('/api/v1/requirement/create', { change_id: changeId, definition });
 }
 
 export function updateRequirement(input: RequirementUpdateInput): Promise<RequirementMutation> {
@@ -24,8 +24,8 @@ export function updateRequirementDone(id: number, done: boolean): Promise<Requir
   return post<RequirementMutation>('/api/v1/requirement/update-done', { id, done });
 }
 
-export function updateRequirementTask(id: number, taskId: number): Promise<RequirementMutation> {
-  return post<RequirementMutation>('/api/v1/requirement/update-task', { id, task_id: taskId });
+export function updateRequirementChange(id: number, changeId: number): Promise<RequirementMutation> {
+  return post<RequirementMutation>('/api/v1/requirement/update-change', { id, change_id: changeId });
 }
 
 export function deleteRequirement(id: number): Promise<RequirementMutation> {

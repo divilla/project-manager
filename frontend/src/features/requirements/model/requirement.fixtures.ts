@@ -1,11 +1,11 @@
-import { taskFixture } from '@/features/tasks/model/task.fixtures';
+import { changeFixture } from '@/features/changes/model/change.fixtures';
 import type { Requirement, RequirementMutation } from './requirement.types';
 
 export function requirementFixture(overrides: Partial<Requirement> = {}): Requirement {
   return {
     id: 1,
     version: 0,
-    task_id: 1,
+    change_id: 1,
     definition: 'Requirement',
     done: false,
     created: '2026-01-01T00:00:00Z',
@@ -20,7 +20,7 @@ export function requirementMutationFixture(
   const requirement = requirementFixture(overrides.requirement ?? {});
   return {
     requirement,
-    task: taskFixture({ id: requirement.task_id }),
+    change: changeFixture({ id: requirement.change_id }),
     requirements: [requirement],
     ...overrides,
   };

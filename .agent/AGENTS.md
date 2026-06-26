@@ -54,7 +54,9 @@ Strong constraints:
 
 ## Database
 
-- no database objects should be created, altered or dropped (refactored, optimized) under any circumstances, unless there is explicit command to do so in prompt or specification.
+- AI agents must never edit, create, delete, move, or otherwise alter files under the repository-root `db` folder or any of its subfolders unless the user explicitly instructs that exact database-file change.
+- AI agents must never run `create`, `alter`, `drop`, `truncate`, `grant`, `revoke`, migration, restore, or any other PostgreSQL command that changes database structure unless the user explicitly instructs that exact database-structure change.
+- If the database contract appears wrong, blocks implementation, or causes a test hang or failure, report the database blocker to the user instead of changing SQL files or mutating live database structure.
 - Use simple, conventional transactions (`Begin`, deferred `Rollback`, and `Commit`) to keep multi-step mutations atomic.
 - Do not introduce project-wide or aggregate locking protocols, advisory locks, isolation-level escalation, or coordinated locking across repository paths unless explicitly requested.
 - Prefer the simpler transaction design when stronger concurrency control would add substantial implementation and maintenance complexity. Accept the documented concurrency trade-off until requirements justify that complexity.

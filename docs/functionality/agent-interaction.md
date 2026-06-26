@@ -33,5 +33,12 @@ During implementation, the agent:
 ## Autonomy
 The agent may edit code, docs, and tests within the active Change. It should stop when a product decision is missing, when docs conflict with requested behavior, or when unrelated worktree changes make the workflow unsafe.
 
+## Database Safety
+Agents must treat the repository-root `db` folder as read-only unless the user explicitly requests a specific database-file change. This applies to every file and subfolder under `db`.
+
+Agents must not run PostgreSQL commands that alter database structure, including create, alter, drop, truncate, grant, revoke, migration, or restore operations, unless the user explicitly requests that exact structural change.
+
+When a database function, procedure, schema object, seed file, or backup appears incorrect or blocks implementation, the agent must report the blocker and adapt only application or test code that is within scope.
+
 ## Text Quality
 Generated Change and documentation text should be grammar-checked, readable, and concise.

@@ -7,7 +7,7 @@
         <div class="desktop-tabs-wrap">
           <q-tabs :model-value="activeTab" shrink stretch class="desktop-tabs">
             <q-route-tab name="home" to="/" label="Home" exact />
-            <q-route-tab name="tasks" to="/tasks" label="Tasks" />
+            <q-route-tab name="changes" to="/changes" label="Changes" />
             <q-route-tab name="projects" to="/projects" label="Projects" />
             <q-route-tab name="planning" to="/planning" label="Planning" />
             <q-route-tab name="help" to="/help" label="Help" />
@@ -46,9 +46,9 @@
           <q-item-section avatar><q-icon name="dashboard" /></q-item-section>
           <q-item-section>Home</q-item-section>
         </q-item>
-        <q-item clickable to="/tasks" @click="drawerOpen = false">
-          <q-item-section avatar><q-icon name="task_alt" /></q-item-section>
-          <q-item-section>Tasks</q-item-section>
+        <q-item clickable to="/changes" @click="drawerOpen = false">
+          <q-item-section avatar><q-icon name="published_with_changes" /></q-item-section>
+          <q-item-section>Changes</q-item-section>
         </q-item>
         <q-item clickable to="/projects" @click="drawerOpen = false">
           <q-item-section avatar><q-icon name="view_kanban" /></q-item-section>
@@ -102,7 +102,7 @@ let projectSwitchToken = 0;
 const activeTab = computed(() => {
   if (route.path.startsWith('/planning')) return 'planning';
   if (route.path.startsWith('/projects')) return 'projects';
-  if (route.path.startsWith('/tasks')) return 'tasks';
+  if (route.path.startsWith('/changes')) return 'changes';
   if (route.path.startsWith('/help')) return 'help';
   return 'home';
 });

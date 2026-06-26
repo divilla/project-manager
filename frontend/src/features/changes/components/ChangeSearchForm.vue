@@ -1,24 +1,24 @@
 <template>
-  <form v-if="visible" class="task-search-row" @submit.prevent="$emit('search')">
+  <form v-if="visible" class="change-search-row" @submit.prevent="$emit('search')">
     <q-btn
       color="primary"
-      icon="add_task"
+      icon="add_circle"
       type="button"
       :loading="loading"
       no-caps
-      label="New Task"
-      @click="$emit('new-task')"
+      label="New Change"
+      @click="$emit('new-change')"
     />
     <q-input
-      :model-value="name"
+      :model-value="title"
       dense
       outlined
-      label="Task name"
+      label="Change title"
       class="create-input"
-      @update:model-value="(value) => $emit('update:name', value == null ? '' : String(value))"
+      @update:model-value="(value) => $emit('update:title', value == null ? '' : String(value))"
     />
     <q-select
-      :model-value="taskType"
+      :model-value="changeType"
       dense
       outlined
       emit-value
@@ -26,11 +26,11 @@
       clearable
       label="Type"
       :options="typeOptions"
-      class="task-select"
-      @update:model-value="(value) => $emit('update:taskType', value == null ? '' : String(value))"
+      class="change-select"
+      @update:model-value="(value) => $emit('update:changeType', value == null ? '' : String(value))"
     />
     <q-select
-      :model-value="taskPhase"
+      :model-value="changePhase"
       dense
       outlined
       emit-value
@@ -38,8 +38,8 @@
       clearable
       label="Phase"
       :options="phaseOptions"
-      class="task-select"
-      @update:model-value="(value) => $emit('update:taskPhase', value == null ? '' : String(value))"
+      class="change-select"
+      @update:model-value="(value) => $emit('update:changePhase', value == null ? '' : String(value))"
     />
     <q-btn color="primary" icon="search" type="submit" :loading="loading" no-caps label="Search" />
     <q-btn
@@ -56,23 +56,23 @@
 </template>
 
 <script setup lang="ts">
-import type { SelectOption } from '../model/task.types';
+import type { SelectOption } from '../model/change.types';
 
 defineProps<{
   visible: boolean;
-  name: string;
-  taskType: string;
-  taskPhase: string;
+  title: string;
+  changeType: string;
+  changePhase: string;
   typeOptions: SelectOption[];
   phaseOptions: SelectOption[];
   loading: boolean;
 }>();
 
 defineEmits<{
-  'update:name': [value: string];
-  'update:taskType': [value: string];
-  'update:taskPhase': [value: string];
-  'new-task': [];
+  'update:title': [value: string];
+  'update:changeType': [value: string];
+  'update:changePhase': [value: string];
+  'new-change': [];
   search: [];
   clear: [];
 }>();

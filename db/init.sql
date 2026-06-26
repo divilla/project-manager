@@ -1,6 +1,6 @@
-drop procedure if exists public.sp_requirement_to_history;
-drop procedure if exists public.sp_change_to_history;
 drop procedure if exists public.sp_epic_to_history;
+drop procedure if exists public.sp_change_to_history;
+drop procedure if exists public.sp_requirement_to_history;
 drop procedure if exists public.sp_change_requirement_recalculate;
 drop procedure if exists public.sp_epic_requirement_recalculate;
 
@@ -149,6 +149,21 @@ left join public.change c on p.id = c.project_id
 group by p.id, p.name, p.created, p.modified
 order by p.id;
 
+create procedure public.sp_epic_to_history(IN _id bigint, IN _deleted boolean)
+    language plpgsql
+as
+$$
+begin
+    insert into public.epic_history (
+        id, version, project_id, name, modified, deleted
+    )
+    select
+        id, version, project_id, name, modified, _deleted
+    from public.epic
+    where id = _id;
+end;
+$$;
+
 create procedure public.sp_requirement_to_history(in _id bigint, in _deleted boolean)
     language plpgsql
 as
@@ -179,22 +194,7 @@ begin
 end;
 $$;
 
-create procedure public.sp_epic_to_history(in _id bigint, in _deleted boolean)
-    language plpgsql
-as
-$$
-begin
-    insert into public.epic_history (
-        id, version, project_id, name, modified, deleted
-    )
-    select
-        id, version, project_id, name, modified, _deleted
-    from public.epic
-    where id = _id;
-end;
-$$;
-
-create procedure public.sp_epic_requirement_recalculate(in _epic_id bigint)
+create procedure public.sp_epic_requirement_recalculate(IN _epic_id bigint)
     language plpgsql
 as
 $$
@@ -202,25 +202,22 @@ declare
     _done_req smallint;
     _total_req smallint;
 begin
-    if _epic_id is null then
-        return;
-    end if;
+    if _epic_id is null then return; end if;
 
     select
-        coalesce(sum(done_req), 0)::smallint,
-        coalesce(sum(total_req), 0)::smallint
+        coalesce(sum(done_req), 0),
+        coalesce(sum(total_req), 0)
     into
         _done_req,
         _total_req
     from public.change
-    where epic_id = _epic_id;
+    where epic_id=_epic_id;
 
     update public.epic
     set
-        done_req = _done_req,
-        total_req = _total_req,
-        modified = now()
-    where id = _epic_id;
+        done_req=_done_req,
+        total_req=_total_req
+    where id=_epic_id;
 end;
 $$;
 
