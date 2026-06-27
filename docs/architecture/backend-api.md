@@ -28,7 +28,7 @@ Epics are managed with POST endpoints:
 - `POST /api/v1/epic/update`
 - `POST /api/v1/epic/delete`
 
-Epic responses include aggregate completeness fields derived from linked changes.
+Epic responses include aggregate completeness fields derived from linked changes. List and get responses also include `change_count` so the UI can disable deletion when an epic has linked changes.
 
 ## Changes
 Changes are managed with POST endpoints:

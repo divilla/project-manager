@@ -6,9 +6,6 @@ import type {
   ChangeReferences,
   ChangeRenderedBodiesResponse,
   ChangeUpdateInput,
-  Epic,
-  EpicCreateInput,
-  EpicUpdateInput,
 } from '../model/change.types';
 
 export function getChangeReferences(): Promise<ChangeReferences> {
@@ -49,24 +46,4 @@ export function updateChangeClosed(id: number, closed: boolean): Promise<Change>
 
 export function deleteChange(id: number): Promise<void> {
   return post<void>('/api/v1/change/delete', { id });
-}
-
-export function listEpics(projectId: number): Promise<Epic[]> {
-  return post<Epic[]>('/api/v1/epic/list', { project_id: projectId });
-}
-
-export function getEpic(id: number): Promise<Epic> {
-  return post<Epic>('/api/v1/epic/get', { id });
-}
-
-export function createEpic(input: EpicCreateInput): Promise<Epic> {
-  return post<Epic>('/api/v1/epic/create', input);
-}
-
-export function updateEpic(input: EpicUpdateInput): Promise<Epic> {
-  return post<Epic>('/api/v1/epic/update', input);
-}
-
-export function deleteEpic(id: number): Promise<void> {
-  return post<void>('/api/v1/epic/delete', { id });
 }

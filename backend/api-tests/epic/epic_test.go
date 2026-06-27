@@ -16,15 +16,16 @@ type project struct {
 }
 
 type epic struct {
-	ID        int       `json:"id"`
-	Version   int16     `json:"version"`
-	ProjectID int       `json:"project_id"`
-	Name      string    `json:"name"`
-	DoneReq   int16     `json:"done_req"`
-	TotalReq  int16     `json:"total_req"`
-	Completed int16     `json:"completed"`
-	Created   time.Time `json:"created"`
-	Modified  time.Time `json:"modified"`
+	ID          int       `json:"id"`
+	Version     int16     `json:"version"`
+	ProjectID   int       `json:"project_id"`
+	Name        string    `json:"name"`
+	DoneReq     int16     `json:"done_req"`
+	TotalReq    int16     `json:"total_req"`
+	Completed   int16     `json:"completed"`
+	ChangeCount int       `json:"change_count"`
+	Created     time.Time `json:"created"`
+	Modified    time.Time `json:"modified"`
 }
 
 type change struct {
@@ -54,6 +55,7 @@ func TestEpicCRUDAndProjectScopedList(t *testing.T) {
 	assert.Equal(t, int16(0), created.DoneReq)
 	assert.Equal(t, int16(0), created.TotalReq)
 	assert.Equal(t, int16(0), created.Completed)
+	assert.Equal(t, 0, created.ChangeCount)
 	assert.False(t, created.Created.IsZero())
 	assert.False(t, created.Modified.IsZero())
 
@@ -89,6 +91,7 @@ func TestEpicCRUDAndProjectScopedList(t *testing.T) {
 	assert.Equal(t, projectID, updated.ProjectID)
 	assert.Equal(t, updatedName, updated.Name)
 	assert.Equal(t, created.Version+1, updated.Version)
+	assert.Equal(t, 0, updated.ChangeCount)
 	assert.False(t, updated.Modified.Before(updated.Created))
 	shared.AssertHistoryNotDeleted(t, db, "epic_history", created.ID)
 
@@ -117,6 +120,17 @@ func TestEpicDeleteRejectsEpicsWithChanges(t *testing.T) {
 	}, &createdChange)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, createdChange.ID)
+
+	var listed []epic
+	status = client.Post(t, "/api/v1/epic/list", map[string]any{"project_id": projectID}, &listed)
+	require.Equal(t, http.StatusOK, status)
+	require.Len(t, listed, 1)
+	assert.Equal(t, 1, listed[0].ChangeCount)
+
+	var fetched epic
+	status = client.Post(t, "/api/v1/epic/get", map[string]any{"id": epicID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, 1, fetched.ChangeCount)
 
 	status = client.Post(t, "/api/v1/epic/delete", map[string]any{"id": epicID}, nil)
 	assert.Equal(t, http.StatusConflict, status)

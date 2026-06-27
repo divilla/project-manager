@@ -38,6 +38,7 @@ export function epicFixture(overrides: Partial<Epic> = {}): Epic {
     done_req: 0,
     total_req: 0,
     completed: 0,
+    change_count: 0,
     created: '2026-01-01T00:00:00Z',
     modified: '2026-01-01T00:00:00Z',
   };

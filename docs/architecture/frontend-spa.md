@@ -8,6 +8,7 @@ Top navigation includes:
 - Home
 - Planning
 - Projects
+- Epics
 - Changes
 - Help
 
@@ -20,6 +21,7 @@ Product code is organized by feature:
 frontend/src/
   features/
     projects/
+    epics/
     changes/
     requirements/
   shared/
@@ -35,6 +37,9 @@ Pinia stores durable client state such as current project selection and project-
 
 ## Change Board
 The Changes route shows change cards grouped by workflow phase. Search filters by title, type, and phase. Creating a new change opens a dedicated create route. Detail and edit routes must work from pasted URLs.
+
+## Epic Management
+The Epics route owns epic list, create, edit, and delete workflows. The list uses a Quasar markup table and relies on backend epic response data, including linked change counts, to disable unsafe deletes. Epics do not have a detail route.
 
 ## Detail View
 The change detail view shows the opened change, linked requirements, and sanitized markdown body. Requirement create, edit, done toggle, and delete actions update visible completeness from backend responses.

@@ -8,6 +8,8 @@ This file provides guidance to Agent when working with code in this repository. 
 - `make-change implement`
 - `make-change pr`
 
+AGENTS.md file must never be altered unless there is an explicit prompt to override rule and make change in AGENTS.md.
+
 ## Artifacts
 
 ### Epics
@@ -47,16 +49,51 @@ This file provides guidance to Agent when working with code in this repository. 
 
 When explicitly asked to review a PR, the agent must post the review comment with `gh`, but only for repositories owned by the user's GitHub account `divilla`.
 
+## Review guidelines
+
+When reviewing a PR, build fresh context from the repository instead of conversation memory:
+
+- Read the active Change file and linked docs.
+- Inspect the full diff against the PR base branch.
+- Identify changed public contracts, data model changes, migrations, tests, docs, and workflows.
+- Run or inspect the listed verification commands when feasible.
+- Treat `agent/changes/<change-name>.md` as the PR contract; verify every Requirement and Acceptance Criteria item against the diff and tests.
+
+Prioritize findings only. Focus on correctness bugs, behavioral regressions, data loss or migration risk, security or privacy issues, broken API/UI contracts, missing tests for changed behavior, and brittle tests that can pass while behavior is broken.
+
+For each finding include severity (`P0`, `P1`, `P2`, or `P3`), file and line reference, concrete impact, and a specific fix direction. Do not list style nits, preferences, praise, or summaries unless there are no findings. If no blocking issues exist, say exactly `No blocking issues found.`
+
 Strong constraints:
 
 - Do not post PR comments unless the user explicitly requested a review.
 - Do not post PR comments on repositories outside the `divilla` account/organization.
 
-## Database
+## Database Hard Boundary
 
-- AI agents must never edit, create, delete, move, or otherwise alter files under the repository-root `db` folder or any of its subfolders unless the user explicitly instructs that exact database-file change.
-- AI agents must never run `create`, `alter`, `drop`, `truncate`, `grant`, `revoke`, migration, restore, or any other PostgreSQL command that changes database structure unless the user explicitly instructs that exact database-structure change.
+AI agents may read database-related source files only for context.
+
+AI agents must never perform any action that writes to, mutates, resets, migrates, seeds, restores, truncates, recreates, or changes data or structure in any database unless the user explicitly instructs that exact database operation.
+
+This ban includes direct and indirect database mutation through:
+- `psql`
+- application commands
+- Make targets
+- test commands
+- migration tools
+- seed scripts
+- restore/import commands
+- SQL files under `db/**`
+- backend servers or scripts started for the purpose of changing database state
+
+Agents must never run PostgreSQL structure-changing commands, including `create`, `alter`, `drop`, `truncate`, `grant`, `revoke`, migration, restore, or any SQL file/Make target/test target that may execute those operations, unless the user explicitly
+names the exact intended database operation.
+
+Agents must never run read queries against a live or local database unless the user explicitly asks for that exact inspection.
+
 - If the database contract appears wrong, blocks implementation, or causes a test hang or failure, report the database blocker to the user instead of changing SQL files or mutating live database structure.
+- AI agents may read files under `db/**`, but must never write to them unless the user gives an explicit instruction naming the exact database file and the exact intended change.
+- This ban includes creating, editing, deleting, moving, renaming, formatting, reverting, restoring, conflict-resolving, chmodding, staging generated edits, or applying patches to any file under `db/**`.
+- If an agent discovers that `db/**` is modified, including by the agent itself, it must stop immediately. It must not revert, clean up, stage, commit, or further edit the file.
 - Use simple, conventional transactions (`Begin`, deferred `Rollback`, and `Commit`) to keep multi-step mutations atomic.
 - Do not introduce project-wide or aggregate locking protocols, advisory locks, isolation-level escalation, or coordinated locking across repository paths unless explicitly requested.
 - Prefer the simpler transaction design when stronger concurrency control would add substantial implementation and maintenance complexity. Accept the documented concurrency trade-off until requirements justify that complexity.
@@ -131,6 +168,34 @@ Always use core external packages for all the relevant code built. Warn when cor
 
 - Use `backend/api-tests` for all API integration tests.
 - Add a subfolder to `backend/api-tests` for each backend API group specified in code, such as `project` or `change`.
-- New backend endpoints and endpoint groups require API integration-test coverage in the same Change that introduces them.
+- New or changed backend endpoints and endpoint groups require API integration-test coverage in the same Change that introduces them.
 - Reviewers must inspect backend endpoint additions for matching API integration tests under `backend/api-tests`.
-- Every endpoint must be covered by at least one API-test.
+- Every endpoint must be covered by at least one API-test - all possible request and response fields must be included in tests.
+
+## Test Integrity
+
+Tests are evidence, not obstacles.
+
+If tests fail, agents must treat the failure as a real signal until proven otherwise. Agents must not hide, bypass, weaken, delete, skip, rebaseline, or adapt test setup just to make tests pass.
+
+A failing test is allowed and expected when the implementation, environment, contract, or assumptions are wrong. The agent must preserve that evidence and report it honestly.
+
+Agents must not make verification pass by changing the thing being verified unless the user explicitly requested that exact change and it is within scope of the active task.
+
+Agents must not:
+- change schema, seed data, fixtures, mocks, snapshots, golden files, expected values, or test harness behavior just to convert a failure into a pass
+- rerun tests after an unauthorized setup change and present the result as valid
+- remove or revert the evidence of a failure without reporting it
+- claim tests passed if they passed only after unrelated, unauthorized, or hidden changes
+- treat a failing integration test as a reason to mutate external state automatically
+
+When tests fail, agents must report:
+- the exact command that failed
+- the failing test or error message
+- the current relevant diff
+- whether any local uncommitted changes may have influenced the result
+- whether the failure indicates a product bug, test bug, environment issue, or unclear database/contract dependency
+
+If the agent caused the failure or contaminated the verification environment, it must say so plainly and invalidate any affected test result.
+
+Passing tests are not valid evidence if they only passed after the agent changed setup, schema, fixtures, or expectations outside the authorized scope.

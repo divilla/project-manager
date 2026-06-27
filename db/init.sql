@@ -149,6 +149,22 @@ left join public.change c on p.id = c.project_id
 group by p.id, p.name, p.created, p.modified
 order by p.id;
 
+create view public.vw_epic as
+select e.id,
+       e.version,
+       e.project_id,
+       e.name,
+       e.done_req,
+       e.total_req,
+       e.completed,
+       count(c.*)::integer as change_count,
+       e.created,
+       e.modified
+from public.epic e
+left join public.change c on e.id = c.epic_id
+group by e.id, e.version, e.project_id, e.name, e.done_req, e.total_req, e.completed, e.created, e.modified
+order by e.name;
+
 create procedure public.sp_epic_to_history(IN _id bigint, IN _deleted boolean)
     language plpgsql
 as
@@ -164,21 +180,6 @@ begin
 end;
 $$;
 
-create procedure public.sp_requirement_to_history(in _id bigint, in _deleted boolean)
-    language plpgsql
-as
-$$
-begin
-    insert into public.requirement_history (
-        id, version, change_id, definition, modified, deleted
-    )
-    select
-        id, version, change_id, definition, modified, _deleted
-    from public.requirement
-    where id = _id;
-end;
-$$;
-
 create procedure public.sp_change_to_history(in _id bigint, in _deleted boolean)
     language plpgsql
 as
@@ -190,6 +191,21 @@ begin
     select
         id, version, project_id, epic_id, change_phase, change_types, title, body, closed, modified, _deleted
     from public.change
+    where id = _id;
+end;
+$$;
+
+create procedure public.sp_requirement_to_history(in _id bigint, in _deleted boolean)
+    language plpgsql
+as
+$$
+begin
+    insert into public.requirement_history (
+        id, version, change_id, definition, modified, deleted
+    )
+    select
+        id, version, change_id, definition, modified, _deleted
+    from public.requirement
     where id = _id;
 end;
 $$;

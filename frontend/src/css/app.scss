@@ -233,6 +233,21 @@ body.body--dark {
   min-height: 140px;
 }
 
+.epics-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.epic-list-table {
+  background: #fff;
+}
+
+.epic-list-table th,
+.epic-list-table td {
+  white-space: nowrap;
+}
+
 .phase-board {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -372,6 +387,11 @@ body.body--dark {
 
   .project-panel {
     margin-bottom: 20px;
+  }
+
+  .epic-list-table {
+    display: block;
+    overflow-x: auto;
   }
 
   .project-table-header {

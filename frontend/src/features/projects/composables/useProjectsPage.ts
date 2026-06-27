@@ -4,14 +4,11 @@ import type { Project } from '@/features/projects/model/project.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
 import {
-  createEpic,
   deleteChange,
-  deleteEpic,
   getChangeReferences,
-  updateEpic,
   updateChangePhase,
 } from '@/features/changes/api/changeApi';
-import type { ReferenceOption, SelectOption, Change, Epic } from '@/features/changes/model/change.types';
+import type { ReferenceOption, SelectOption, Change } from '@/features/changes/model/change.types';
 
 function errorMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
@@ -39,10 +36,6 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
   const projectDialogOpen = ref(false);
   const projectEditId = ref(0);
   const projectEditName = ref('');
-  const epicName = ref('');
-  const epicEditId = ref(0);
-  const epicEditName = ref('');
-  const epicDialogOpen = ref(false);
 
   const confirmationDialogOpen = ref(false);
   let confirmationAction: (() => Promise<void>) | null = null;
@@ -189,39 +182,6 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     requestConfirmation(() => removeProjectConfirmed(project));
   }
 
-  async function createEpicFromForm() {
-    const name = epicName.value.trim();
-    if (!name || !currentProjectId.value) return;
-
-    try {
-      const epic = await createEpic({ project_id: currentProjectId.value, name });
-      epicName.value = '';
-      changeCache.upsertEpic(epic);
-      await refreshCurrentProjectChanges();
-    } catch (err) {
-      error.value = errorMessage(err, 'Unable to create epic.');
-    }
-  }
-
-  function startEpicRename(epic: Epic) {
-    epicEditId.value = epic.id;
-    epicEditName.value = epic.name;
-    epicDialogOpen.value = true;
-  }
-
-  async function saveEpicName() {
-    const name = epicEditName.value.trim();
-    if (!epicEditId.value || !name) return;
-
-    try {
-      const epic = await updateEpic({ id: epicEditId.value, name });
-      changeCache.upsertEpic(epic);
-      epicDialogOpen.value = false;
-    } catch (err) {
-      error.value = errorMessage(err, 'Unable to update epic.');
-    }
-  }
-
   async function removeProjectConfirmed(project: Project) {
     try {
       const wasSelected = currentProjectId.value === project.id;
@@ -266,10 +226,6 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     requestConfirmation(() => removeChangeConfirmed(change));
   }
 
-  function removeEpic(epic: Epic) {
-    requestConfirmation(() => removeEpicConfirmed(epic));
-  }
-
   async function removeChangeConfirmed(change: Change) {
     try {
       await deleteChange(change.id);
@@ -277,16 +233,6 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
       await projectSelection.loadProjects();
     } catch (err) {
       error.value = errorMessage(err, 'Unable to delete change.');
-    }
-  }
-
-  async function removeEpicConfirmed(epic: Epic) {
-    try {
-      await deleteEpic(epic.id);
-      changeCache.removeEpic(epic.id);
-      await refreshCurrentProjectChanges();
-    } catch (err) {
-      error.value = errorMessage(err, 'Unable to delete epic.');
     }
   }
 
@@ -310,10 +256,6 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     projectDialogOpen,
     projectEditId,
     projectEditName,
-    epicName,
-    epicEditId,
-    epicEditName,
-    epicDialogOpen,
     confirmationDialogOpen,
     currentProject,
     phaseOptions,
@@ -326,14 +268,10 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     startProjectRename,
     saveProjectName,
     removeProject,
-    createEpicFromForm,
-    startEpicRename,
-    saveEpicName,
     searchChanges,
     clearChangeSearch,
     moveChange,
     removeChange,
-    removeEpic,
     confirm,
   };
 }

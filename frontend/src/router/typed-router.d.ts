@@ -41,6 +41,9 @@ declare module 'vue-router/auto-routes' {
       | '//changes/[id]'
       | '//changes/create'
       | '//changes/edit/[changeId]'
+      | '//epics/(index)'
+      | '//epics/create'
+      | '//epics/edit/[id]'
       | '//help'
       | '//loading'
       | '//planning'
@@ -79,6 +82,27 @@ declare module 'vue-router/auto-routes' {
       '/changes/edit/:changeId',
       { changeId: ParamValue<true> },
       { changeId: ParamValue<false> },
+      | never
+    >,
+    '//epics/(index)': RouteRecordInfo<
+      '//epics/(index)',
+      '/epics',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '//epics/create': RouteRecordInfo<
+      '//epics/create',
+      '/epics/create',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '//epics/edit/[id]': RouteRecordInfo<
+      '//epics/edit/[id]',
+      '/epics/edit/:id',
+      { id: ParamValue<true> },
+      { id: ParamValue<false> },
       | never
     >,
     '//help': RouteRecordInfo<
@@ -137,6 +161,9 @@ declare module 'vue-router/auto-routes' {
         | '//changes/[id]'
         | '//changes/create'
         | '//changes/edit/[changeId]'
+        | '//epics/(index)'
+        | '//epics/create'
+        | '//epics/edit/[id]'
         | '//help'
         | '//loading'
         | '//planning'
@@ -185,6 +212,30 @@ declare module 'vue-router/auto-routes' {
         | never
       pathParamNames:
         | 'changeId'
+    }
+    'src/pages/index/epics/(index).vue': {
+      routes:
+        | '//epics/(index)'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/index/epics/create.vue': {
+      routes:
+        | '//epics/create'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/index/epics/edit/[id].vue': {
+      routes:
+        | '//epics/edit/[id]'
+      views:
+        | never
+      pathParamNames:
+        | 'id'
     }
     'src/pages/index/help.vue': {
       routes:

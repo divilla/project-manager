@@ -1,5 +1,7 @@
 import type { Requirement } from '@/features/requirements/model/requirement.types';
 
+export type { Epic } from '@/features/epics/model/epic.types';
+
 export interface ReferenceOption {
   slug: string;
   priority: number;
@@ -61,26 +63,4 @@ export interface ChangeUpdateInput {
 export interface SelectOption {
   label: string;
   value: string;
-}
-
-export interface Epic {
-  id: number;
-  version: number;
-  project_id: number;
-  name: string;
-  done_req: number;
-  total_req: number;
-  completed: number;
-  created: string;
-  modified: string;
-}
-
-export interface EpicCreateInput {
-  project_id: number;
-  name: string;
-}
-
-export interface EpicUpdateInput {
-  id: number;
-  name: string;
 }

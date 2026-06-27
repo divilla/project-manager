@@ -15,8 +15,8 @@ import {
   deleteChange,
   getChange,
   listChanges,
-  listEpics,
 } from '@/features/changes/api/changeApi';
+import { listEpics } from '@/features/epics/api/epicApi';
 import { changeDetailFixture, changeFixture, epicFixture } from '@/features/changes/model/change.fixtures';
 import ChangeDetailPage from './[id].vue';
 
@@ -49,6 +49,9 @@ vi.mock('@/features/changes/api/changeApi', () => ({
   deleteChange: vi.fn(),
   getChange: vi.fn(),
   listChanges: vi.fn(),
+}));
+
+vi.mock('@/features/epics/api/epicApi', () => ({
   listEpics: vi.fn(),
 }));
 

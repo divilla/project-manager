@@ -22,6 +22,7 @@ Completeness is derived from requirements, not hours, points, or guesses.
 - Home shows project progress, phase summaries, and bottlenecks.
 - Planning turns rough intent into reviewable changes and requirements.
 - Projects manages project records and current project context.
+- Epics manages planning containers that group related changes.
 - Changes manages the delivery board and change detail flows.
 - Help explains the completeness method and prompt patterns.
 

@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { listChanges, listEpics } from '../api/changeApi';
+import { listChanges } from '../api/changeApi';
 import type { Change, Epic } from './change.types';
+import { listEpics } from '@/features/epics/api/epicApi';
 
 export const useChangeCacheStore = defineStore('changeCache', () => {
   const changes = ref<Change[]>([]);

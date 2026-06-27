@@ -34,6 +34,17 @@ api-test: ## Run integration tests
 		cat /tmp/aipm-api-test.log; \
 		exit 1
 
+api-test-existing: ## Run integration tests against an existing local backend
+	@test -n "$$AIPM_API_BASE_URL" || (echo "AIPM_API_BASE_URL is required"; exit 1)
+	@case "$$AIPM_API_BASE_URL" in \
+		http://localhost:*|http://127.0.0.1:*|https://localhost:*|https://127.0.0.1:*) ;; \
+		*) if [ "$$AIPM_API_TEST_ALLOW_NONLOCAL" != "1" ]; then \
+			echo "Refusing to run mutating API tests against non-local AIPM_API_BASE_URL"; \
+			exit 1; \
+		fi ;; \
+	esac
+	@go test -count=1 ./api-tests/...
+
 race: ## Run tests with data race detector
 	@go test -race ${PKG_LIST}
 

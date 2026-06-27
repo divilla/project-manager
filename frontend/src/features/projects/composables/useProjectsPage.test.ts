@@ -11,11 +11,11 @@ import { useProjectSelectionStore } from '@/features/projects/model/projectSelec
 import type { Project } from '@/features/projects/model/project.types';
 import {
   deleteChange,
-  listEpics,
   getChangeReferences,
   listChanges,
   updateChangePhase,
 } from '@/features/changes/api/changeApi';
+import { listEpics } from '@/features/epics/api/epicApi';
 import { changeFixture, changeReferencesFixture } from '@/features/changes/model/change.fixtures';
 import { useProjectsPage } from './useProjectsPage';
 
@@ -29,9 +29,12 @@ vi.mock('@/features/projects/api/projectApi', () => ({
 vi.mock('@/features/changes/api/changeApi', () => ({
   deleteChange: vi.fn(),
   getChangeReferences: vi.fn(),
-  listEpics: vi.fn(),
   listChanges: vi.fn(),
   updateChangePhase: vi.fn(),
+}));
+
+vi.mock('@/features/epics/api/epicApi', () => ({
+  listEpics: vi.fn(),
 }));
 
 type ProjectsPageState = ReturnType<typeof useProjectsPage>;

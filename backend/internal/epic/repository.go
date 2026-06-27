@@ -14,7 +14,7 @@ type Repo struct {
 	pool *pgxpool.Pool
 }
 
-const epicColumns = "id, version, project_id, name, done_req, total_req, completed, created, modified"
+const epicColumns = "id, version, project_id, name, done_req, total_req, completed, change_count, created, modified"
 
 func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
@@ -23,7 +23,7 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Epic, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+epicColumns+`
-		from public.epic
+		from public.vw_epic
 		where project_id = $1
 		order by created, id
 	`, projectID)
@@ -43,7 +43,7 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Epic, error) {
 }
 
 func (r *Repo) Get(ctx context.Context, id int) (dto.Epic, error) {
-	epic, err := scanEpic(r.pool.QueryRow(ctx, "select "+epicColumns+" from public.epic where id = $1", id))
+	epic, err := scanEpic(r.pool.QueryRow(ctx, "select "+epicColumns+" from public.vw_epic where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Epic{}, ErrNotFound
 	}
@@ -150,7 +150,7 @@ func (r *Repo) ensureProject(ctx context.Context, id int) error {
 }
 
 func getEpic(ctx context.Context, q queryer, id int) (dto.Epic, error) {
-	epic, err := scanEpic(q.QueryRow(ctx, "select "+epicColumns+" from public.epic where id = $1", id))
+	epic, err := scanEpic(q.QueryRow(ctx, "select "+epicColumns+" from public.vw_epic where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Epic{}, ErrNotFound
 	}
@@ -161,7 +161,7 @@ func scanEpic(row pgx.Row) (dto.Epic, error) {
 	var epic dto.Epic
 	err := row.Scan(
 		&epic.ID, &epic.Version, &epic.ProjectID, &epic.Name, &epic.DoneReq,
-		&epic.TotalReq, &epic.Completed, &epic.Created, &epic.Modified,
+		&epic.TotalReq, &epic.Completed, &epic.ChangeCount, &epic.Created, &epic.Modified,
 	)
 	return epic, err
 }
