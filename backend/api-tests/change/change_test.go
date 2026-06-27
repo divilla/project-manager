@@ -2,7 +2,6 @@ package change_test
 
 import (
 	"aipm/api-tests/shared"
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -52,6 +51,14 @@ type detail struct {
 	Change change `json:"change"`
 }
 
+type requirement struct {
+	ID int `json:"id"`
+}
+
+type requirementMutation struct {
+	Requirement *requirement `json:"requirement"`
+}
+
 type renderedBodies struct {
 	Bodies []struct {
 		ID       int    `json:"id"`
@@ -61,8 +68,6 @@ type renderedBodies struct {
 
 func TestChangeCRUDAndReferences(t *testing.T) {
 	client := shared.NewClient(t)
-	db := shared.NewDB(t)
-	ctx := context.Background()
 
 	projectID := createProject(t, client)
 	defer shared.CleanupProject(t, client, projectID)
@@ -121,7 +126,7 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, title+"-updated", updated.Title)
 	assert.Equal(t, []string{"fix"}, updated.ChangeTypes)
-	shared.AssertHistoryNotDeleted(t, db, "change_history", created.ID)
+	assert.Equal(t, created.Version+1, updated.Version)
 
 	status = client.Post(t, "/api/v1/change/update-phase", map[string]any{"id": created.ID, "change_phase": "review"}, &updated)
 	require.Equal(t, http.StatusOK, status)
@@ -135,20 +140,15 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	assert.Nil(t, updated.EpicID)
 
-	var requirementID int
-	err := db.QueryRow(ctx, `
-		insert into requirement (definition, change_id)
-		values ($1, $2)
-		returning id
-	`, "Change delete archives this requirement.", created.ID).Scan(&requirementID)
-	require.NoError(t, err)
+	requirementID := createRequirement(t, client, created.ID)
 
 	status = client.Post(t, "/api/v1/change/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusNoContent, status)
-	shared.AssertHistoryDeleted(t, db, "change_history", created.ID)
-	shared.AssertHistoryDeleted(t, db, "requirement_history", requirementID)
 
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/requirement/delete", map[string]any{"id": requirementID}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 }
 
@@ -242,4 +242,18 @@ func createEpic(t *testing.T, client *shared.Client, projectID int) int {
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
 	return created.ID
+}
+
+func createRequirement(t *testing.T, client *shared.Client, changeID int) int {
+	t.Helper()
+
+	var created requirementMutation
+	status := client.Post(t, "/api/v1/requirement/create", map[string]any{
+		"change_id":  changeID,
+		"definition": "Change delete removes this requirement.",
+	}, &created)
+	require.Equal(t, http.StatusCreated, status)
+	require.NotNil(t, created.Requirement)
+	require.NotEmpty(t, created.Requirement.ID)
+	return created.Requirement.ID
 }

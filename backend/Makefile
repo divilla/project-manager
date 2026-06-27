@@ -1,5 +1,8 @@
 PKG := "aipm"
 PKG_LIST := $(shell go list ${PKG}/... | grep -v '/api-tests')
+override API_TEST_DB_URL := postgres://postgres:postgres@localhost:5432/changes_test
+override API_TEST_PORT := 18080
+override API_TEST_BASE_URL := http://localhost:$(API_TEST_PORT)
 
 .DEFAULT_GOAL := check
 check: lint vet race ## Check project
@@ -18,32 +21,22 @@ vet: ## Vet the files
 test: ## Run tests
 	@go test -short ${PKG_LIST}
 
-api-test: ## Run integration tests
-	@psql postgres://postgres:postgres@localhost:5432/changes_test -v ON_ERROR_STOP=1 -f ../db/init.sql >/tmp/aipm-api-test-db.log 2>&1
-	@psql postgres://postgres:postgres@localhost:5432/changes_test -v ON_ERROR_STOP=1 -f ../db/seed.sql >>/tmp/aipm-api-test-db.log 2>&1
+api-test: ## Rebuild changes_test and run HTTP integration tests
+	@test "$(API_TEST_DB_URL)" = "postgres://postgres:postgres@localhost:5432/changes_test"
+	@psql $(API_TEST_DB_URL) -v ON_ERROR_STOP=1 -f ../db/init.sql >/tmp/aipm-api-test-db.log 2>&1
+	@psql $(API_TEST_DB_URL) -v ON_ERROR_STOP=1 -f ../db/seed.sql >>/tmp/aipm-api-test-db.log 2>&1
 	@go build -o aipm-server cmd/server/*.go
-	@./aipm-server -db postgres://postgres:postgres@localhost:5432/changes_test -port 18080 >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
+	@./aipm-server -db $(API_TEST_DB_URL) -port $(API_TEST_PORT) >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
 		trap 'kill $$pid >/dev/null 2>&1 || true; rm -f aipm-server' EXIT; \
 		for _ in $$(seq 1 50); do \
-			if curl -fsS http://localhost:18080/api/v1/health >/dev/null 2>&1; then \
-				AIPM_API_BASE_URL=http://localhost:18080 go test -count=1 ./api-tests/...; \
+			if curl -fsS $(API_TEST_BASE_URL)/api/v1/health >/dev/null 2>&1; then \
+				go test -count=1 ./api-tests/...; \
 				exit $$?; \
 			fi; \
 			sleep 0.1; \
 		done; \
 		cat /tmp/aipm-api-test.log; \
 		exit 1
-
-api-test-existing: ## Run integration tests against an existing local backend
-	@test -n "$$AIPM_API_BASE_URL" || (echo "AIPM_API_BASE_URL is required"; exit 1)
-	@case "$$AIPM_API_BASE_URL" in \
-		http://localhost:*|http://127.0.0.1:*|https://localhost:*|https://127.0.0.1:*) ;; \
-		*) if [ "$$AIPM_API_TEST_ALLOW_NONLOCAL" != "1" ]; then \
-			echo "Refusing to run mutating API tests against non-local AIPM_API_BASE_URL"; \
-			exit 1; \
-		fi ;; \
-	esac
-	@go test -count=1 ./api-tests/...
 
 race: ## Run tests with data race detector
 	@go test -race ${PKG_LIST}

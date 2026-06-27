@@ -2,13 +2,11 @@ package project_test
 
 import (
 	"aipm/api-tests/shared"
-	"context"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -62,8 +60,6 @@ func TestProjectCRUD(t *testing.T) {
 
 func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
 	client := shared.NewClient(t)
-	db := shared.NewDB(t)
-	ctx := context.Background()
 
 	var created project
 	status := client.Post(t, "/api/v1/project/create", map[string]string{
@@ -84,22 +80,26 @@ func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
 		shared.CleanupProject(t, client, created.ID)
 	})
 
-	var requirementID int
-	err := db.QueryRow(ctx, `
-		insert into requirement (definition, change_id)
-		values ($1, $2)
-		returning id
-	`, "Project delete keeps this requirement.", createdChange.ID).Scan(&requirementID)
-	require.NoError(t, err)
+	createdRequirement := createRequirement(t, client, createdChange.ID)
 
 	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusConflict, status)
 
-	assertRowExists(t, db, "project", created.ID)
-	assertRowExists(t, db, "change", createdChange.ID)
-	assertRowExists(t, db, "requirement", requirementID)
-	shared.AssertHistoryCount(t, db, "change_history", createdChange.ID, true, 0)
-	shared.AssertHistoryCount(t, db, "requirement_history", requirementID, true, 0)
+	var fetched project
+	status = client.Post(t, "/api/v1/project/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, created.ID, fetched.ID)
+
+	var fetchedChange changeDetail
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": createdChange.ID}, &fetchedChange)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, createdChange.ID, fetchedChange.Change.ID)
+
+	var requirements []requirement
+	status = client.Post(t, "/api/v1/requirement/list", map[string]any{"change_id": createdChange.ID}, &requirements)
+	require.Equal(t, http.StatusOK, status)
+	require.Len(t, requirements, 1)
+	assert.Equal(t, createdRequirement.ID, requirements[0].ID)
 }
 
 func TestProjectRejectsInvalidInputAndMissingRows(t *testing.T) {
@@ -134,11 +134,31 @@ type change struct {
 	ID int `json:"id"`
 }
 
-func assertRowExists(t *testing.T, db *pgxpool.Pool, table string, id int) {
+type changeDetail struct {
+	Change change `json:"change"`
+}
+
+type requirement struct {
+	ID         int    `json:"id"`
+	ChangeID   int    `json:"change_id"`
+	Definition string `json:"definition"`
+}
+
+type requirementMutation struct {
+	Requirement *requirement `json:"requirement"`
+}
+
+func createRequirement(t *testing.T, client *shared.Client, changeID int) requirement {
 	t.Helper()
 
-	var exists bool
-	err := db.QueryRow(context.Background(), "select exists(select 1 from "+table+" where id = $1)", id).Scan(&exists)
-	require.NoError(t, err)
-	assert.True(t, exists)
+	var created requirementMutation
+	status := client.Post(t, "/api/v1/requirement/create", map[string]any{
+		"change_id":  changeID,
+		"definition": "Project delete keeps this requirement.",
+	}, &created)
+	require.Equal(t, http.StatusCreated, status)
+	require.NotNil(t, created.Requirement)
+	require.NotEmpty(t, created.Requirement.ID)
+	assert.Equal(t, changeID, created.Requirement.ChangeID)
+	return *created.Requirement
 }

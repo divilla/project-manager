@@ -34,7 +34,6 @@ type change struct {
 
 func TestEpicCRUDAndProjectScopedList(t *testing.T) {
 	client := shared.NewClient(t)
-	db := shared.NewDB(t)
 
 	projectID := createProject(t, client)
 	defer shared.CleanupProject(t, client, projectID)
@@ -93,11 +92,9 @@ func TestEpicCRUDAndProjectScopedList(t *testing.T) {
 	assert.Equal(t, created.Version+1, updated.Version)
 	assert.Equal(t, 0, updated.ChangeCount)
 	assert.False(t, updated.Modified.Before(updated.Created))
-	shared.AssertHistoryNotDeleted(t, db, "epic_history", created.ID)
 
 	status = client.Post(t, "/api/v1/epic/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusNoContent, status)
-	shared.AssertHistoryDeleted(t, db, "epic_history", created.ID)
 
 	status = client.Post(t, "/api/v1/epic/get", map[string]any{"id": created.ID}, nil)
 	assert.Equal(t, http.StatusNotFound, status)

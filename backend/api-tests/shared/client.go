@@ -2,20 +2,18 @@ package shared
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const apiTestBaseURL = "http://localhost:18080"
 
 type Client struct {
 	baseURL string
@@ -29,13 +27,8 @@ type cleanupChange struct {
 func NewClient(t *testing.T) *Client {
 	t.Helper()
 
-	baseURL := strings.TrimRight(os.Getenv("AIPM_API_BASE_URL"), "/")
-	if baseURL == "" {
-		baseURL = "http://localhost:8080"
-	}
-
 	client := &Client{
-		baseURL: baseURL,
+		baseURL: apiTestBaseURL,
 		http: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -45,61 +38,10 @@ func NewClient(t *testing.T) *Client {
 	require.NoError(t, err)
 
 	res, err := client.http.Do(req)
-	if err != nil {
-		if os.Getenv("AIPM_API_BASE_URL") == "" {
-			t.Skipf("backend is not available at %s", client.baseURL)
-		}
-		require.NoErrorf(t, err, "backend is not available at %s", client.baseURL)
-	}
+	require.NoErrorf(t, err, "backend is not available at %s", client.baseURL)
 	defer res.Body.Close()
 
 	return client
-}
-
-func NewDB(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-
-	databaseURL := os.Getenv("AIPM_DATABASE_URL")
-	if databaseURL == "" {
-		databaseURL = "postgres://postgres:postgres@localhost:5432/changes_test?sslmode=disable"
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	pool, err := pgxpool.New(ctx, databaseURL)
-	require.NoError(t, err)
-	t.Cleanup(pool.Close)
-
-	require.NoError(t, pool.Ping(ctx))
-
-	return pool
-}
-
-func AssertHistoryNotDeleted(t *testing.T, db *pgxpool.Pool, table string, id int) {
-	t.Helper()
-	AssertHistoryCountAtLeast(t, db, table, id, false, 1)
-}
-
-func AssertHistoryDeleted(t *testing.T, db *pgxpool.Pool, table string, id int) {
-	t.Helper()
-	AssertHistoryCountAtLeast(t, db, table, id, true, 1)
-}
-
-func AssertHistoryCountAtLeast(t *testing.T, db *pgxpool.Pool, table string, id int, deleted bool, minimum int) {
-	t.Helper()
-	var count int
-	err := db.QueryRow(context.Background(), "select count(*) from "+table+" where id = $1 and deleted = $2", id, deleted).Scan(&count)
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, count, minimum)
-}
-
-func AssertHistoryCount(t *testing.T, db *pgxpool.Pool, table string, id int, deleted bool, expected int) {
-	t.Helper()
-	var count int
-	err := db.QueryRow(context.Background(), "select count(*) from "+table+" where id = $1 and deleted = $2", id, deleted).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, expected, count)
 }
 
 func CleanupProject(t *testing.T, client *Client, projectID int) {

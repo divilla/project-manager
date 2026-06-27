@@ -46,7 +46,6 @@ type mutation struct {
 
 func TestRequirementCRUDRecalculatesChangeAndEpicCompleteness(t *testing.T) {
 	client := shared.NewClient(t)
-	db := shared.NewDB(t)
 
 	projectID := createProject(t, client)
 	defer shared.CleanupProject(t, client, projectID)
@@ -75,7 +74,6 @@ func TestRequirementCRUDRecalculatesChangeAndEpicCompleteness(t *testing.T) {
 	assert.True(t, updated.Requirement.Done)
 	assert.Equal(t, int16(50), updated.Change.Completed)
 	require.Len(t, updated.Requirements, 2)
-	shared.AssertHistoryCount(t, db, "requirement_history", first.ID, false, 0)
 	assert.Equal(t, first.Version, updated.Requirement.Version)
 	first = *updated.Requirement
 	assertEpicCompleteness(t, client, epicID, 1, 2, 50)
@@ -92,6 +90,7 @@ func TestRequirementCRUDRecalculatesChangeAndEpicCompleteness(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	require.NotNil(t, updated.Requirement)
 	assert.Equal(t, "Updated requirement definition.", updated.Requirement.Definition)
+	assert.Equal(t, second.Version+1, updated.Requirement.Version)
 	second = *updated.Requirement
 
 	status = client.Post(t, "/api/v1/requirement/update-done", map[string]any{"id": second.ID, "done": false}, &updated)
@@ -99,7 +98,7 @@ func TestRequirementCRUDRecalculatesChangeAndEpicCompleteness(t *testing.T) {
 	require.NotNil(t, updated.Requirement)
 	assert.False(t, updated.Requirement.Done)
 	assert.Equal(t, int16(50), updated.Change.Completed)
-	shared.AssertHistoryCountAtLeast(t, db, "requirement_history", second.ID, false, 1)
+	assert.Equal(t, second.Version, updated.Requirement.Version)
 
 	newChangeID := createChange(t, client, projectID, &epicID)
 	previousVersion := updated.Requirement.Version
@@ -118,7 +117,9 @@ func TestRequirementCRUDRecalculatesChangeAndEpicCompleteness(t *testing.T) {
 	assert.Nil(t, deleted.Requirement)
 	assert.Equal(t, int16(0), deleted.Change.Completed)
 	assert.Empty(t, deleted.Requirements)
-	shared.AssertHistoryDeleted(t, db, "requirement_history", first.ID)
+
+	status = client.Post(t, "/api/v1/requirement/delete", map[string]any{"id": first.ID}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
 }
 
 func TestRequirementRejectsInvalidInputAndMissingRows(t *testing.T) {

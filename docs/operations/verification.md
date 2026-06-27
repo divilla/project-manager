@@ -12,9 +12,9 @@ Backend checks should cover service logic, repository behavior where feasible, A
 
 `make api-test` runs API integration tests from `backend/api-tests`. These tests exercise backend endpoints over HTTP and should be organized by API endpoint group.
 
-`make api-test` recreates the `changes_test` database from `db/init.sql` and `db/seed.sql`, then starts a temporary backend. It verifies fresh-schema behavior only.
+`make api-test` recreates the disposable `changes_test` database from `db/init.sql` and `db/seed.sql`, then starts a temporary backend on port `18080` with `-db postgres://postgres:postgres@localhost:5432/changes_test` and `-port 18080`.
 
-Use `AIPM_API_BASE_URL=http://localhost:8080 make api-test-existing` from `backend` to run the same API tests against an already-running local backend without recreating schema or restarting the server. This mode mutates data through the API and must not target production. Use it when repository SQL, database views, or endpoint response contracts changed, or when an existing backend reports a database-contract error.
+API integration tests must interact with the backend only through HTTP requests and responses. They must not choose targets from environment variables, open database connections, run SQL, or inspect tables directly.
 
 ## Frontend
 From the repository root:

@@ -73,3 +73,4 @@ Make backend API integration tests exercise the backend only through HTTP reques
 ## Follow-Ups
 
 - Consider a separate Change for a deliberate history-read API if history behavior must be verified through public contracts.
+- Fixed PR comment `IC_kwDOTA2Xls8AAAABHvm6Dg`: pinned `make api-test` variables against command-line overrides before any database rebuild command runs.
