@@ -12,8 +12,11 @@ Creating a change requires:
 - workflow phase from `change_phase`
 - one or more types from `change_type`
 - optional epic ID
+- optional nullable `codex_session_id` when the change was produced by a Codex-assisted planning session
 
 The backend validates the project and reference options before insert.
+
+Codex-assisted planning tools may create planned changes after the user confirms the generated requirement. These changes use the `backlog` phase until the user moves them through the normal lifecycle.
 
 ## List
 Project-scoped lists show active changes grouped by workflow phase. Ordering follows database-provided phase priority and change ordering rules.

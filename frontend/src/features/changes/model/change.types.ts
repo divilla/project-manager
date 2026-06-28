@@ -17,6 +17,7 @@ export interface Change {
   title: string;
   body: string;
   body_html: string;
+  codex_session_id?: string | null;
   closed: boolean;
   done_req: number;
   total_req: number;
@@ -51,6 +52,7 @@ export interface ChangeCreateInput {
   body?: string;
   change_phase: string;
   change_types: string[];
+  codex_session_id?: string | null;
 }
 
 export interface ChangeUpdateInput {

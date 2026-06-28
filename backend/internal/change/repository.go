@@ -40,6 +40,7 @@ const changeColumns = `
 	change_types,
 	title,
 	coalesce(body, ''),
+	codex_session_id,
 	closed,
 	done_req,
 	total_req,
@@ -146,11 +147,11 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	var id int
 	err = tx.QueryRow(ctx, `
 		insert into public.change (
-			project_id, epic_id, change_phase, change_types, title, body
+			project_id, epic_id, change_phase, change_types, title, body, codex_session_id
 		)
-		values ($1, $2, $3, $4, $5, nullif($6, ''))
+		values ($1, $2, $3, $4, $5, nullif($6, ''), $7)
 		returning id
-	`, req.ProjectID, req.EpicID, req.ChangePhase, req.ChangeTypes, req.Title, req.Body).Scan(&id)
+	`, req.ProjectID, req.EpicID, req.ChangePhase, req.ChangeTypes, req.Title, req.Body, req.CodexSessionID).Scan(&id)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -443,9 +444,10 @@ func listRequirements(ctx context.Context, q queryer, changeID int) ([]dto.Requi
 func scanChange(row pgx.Row) (dto.Change, error) {
 	var change dto.Change
 	var epicID pgtype.Int8
+	var codexSessionID pgtype.Text
 	err := row.Scan(
 		&change.ID, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
-		&change.ChangeTypes, &change.Title, &change.Body, &change.Closed, &change.DoneReq,
+		&change.ChangeTypes, &change.Title, &change.Body, &codexSessionID, &change.Closed, &change.DoneReq,
 		&change.TotalReq, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
@@ -454,6 +456,10 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	if epicID.Valid {
 		value := int(epicID.Int64)
 		change.EpicID = &value
+	}
+	if codexSessionID.Valid {
+		value := codexSessionID.String
+		change.CodexSessionID = &value
 	}
 	return change, nil
 }

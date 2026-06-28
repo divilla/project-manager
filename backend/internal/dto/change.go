@@ -9,21 +9,22 @@ type (
 	}
 
 	Change struct {
-		ID          int       `json:"id"`
-		Version     int16     `json:"version"`
-		ProjectID   int       `json:"project_id"`
-		EpicID      *int      `json:"epic_id"`
-		ChangePhase string    `json:"change_phase"`
-		ChangeTypes []string  `json:"change_types"`
-		Title       string    `json:"title"`
-		Body        string    `json:"body"`
-		BodyHTML    string    `json:"body_html"`
-		Closed      bool      `json:"closed"`
-		DoneReq     int16     `json:"done_req"`
-		TotalReq    int16     `json:"total_req"`
-		Completed   int16     `json:"completed"`
-		Created     time.Time `json:"created"`
-		Modified    time.Time `json:"modified"`
+		ID             int       `json:"id"`
+		Version        int16     `json:"version"`
+		ProjectID      int       `json:"project_id"`
+		EpicID         *int      `json:"epic_id"`
+		ChangePhase    string    `json:"change_phase"`
+		ChangeTypes    []string  `json:"change_types"`
+		Title          string    `json:"title"`
+		Body           string    `json:"body"`
+		BodyHTML       string    `json:"body_html"`
+		CodexSessionID *string   `json:"codex_session_id"`
+		Closed         bool      `json:"closed"`
+		DoneReq        int16     `json:"done_req"`
+		TotalReq       int16     `json:"total_req"`
+		Completed      int16     `json:"completed"`
+		Created        time.Time `json:"created"`
+		Modified       time.Time `json:"modified"`
 	}
 
 	ChangeDetail struct {
@@ -53,12 +54,13 @@ type (
 	}
 
 	ChangeCreateRequest struct {
-		ProjectID   int      `json:"project_id"`
-		EpicID      *int     `json:"epic_id"`
-		ChangePhase string   `json:"change_phase"`
-		ChangeTypes []string `json:"change_types"`
-		Title       string   `json:"title"`
-		Body        string   `json:"body"`
+		ProjectID      int      `json:"project_id"`
+		EpicID         *int     `json:"epic_id"`
+		ChangePhase    string   `json:"change_phase"`
+		ChangeTypes    []string `json:"change_types"`
+		Title          string   `json:"title"`
+		Body           string   `json:"body"`
+		CodexSessionID *string  `json:"codex_session_id"`
 	}
 
 	ChangeUpdateRequest struct {

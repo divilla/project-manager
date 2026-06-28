@@ -72,6 +72,7 @@ func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest)
 	req.Body = strings.TrimSpace(req.Body)
 	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
+	req.CodexSessionID = normalizeOptionalString(req.CodexSessionID)
 	if req.ProjectID <= 0 || req.Title == "" || req.ChangePhase == "" || len(req.ChangeTypes) == 0 || invalidOptionalID(req.EpicID) {
 		return dto.Change{}, ErrInvalidInput
 	}
@@ -172,4 +173,15 @@ func normalizeTypes(values []string) []string {
 
 func invalidOptionalID(value *int) bool {
 	return value != nil && *value <= 0
+}
+
+func normalizeOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	normalized := strings.TrimSpace(*value)
+	if normalized == "" {
+		return nil
+	}
+	return &normalized
 }

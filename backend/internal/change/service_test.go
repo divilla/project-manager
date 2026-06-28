@@ -43,7 +43,7 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	assert.Equal(t, 2, repo.id)
 
 	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{
-		ProjectID: 1, Title: " Change Title ", Body: " Body ",
+		ProjectID: 1, Title: " Change Title ", Body: " Body ", CodexSessionID: stringPtr(" codex-session-1 "),
 		ChangePhase: " backlog ", ChangeTypes: []string{" feature ", "feature", " fix "}, EpicID: &epicID,
 	})
 	require.NoError(t, err)
@@ -51,6 +51,8 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	assert.Equal(t, "Body", repo.createReq.Body)
 	assert.Equal(t, "backlog", repo.createReq.ChangePhase)
 	assert.Equal(t, []string{"feature", "fix"}, repo.createReq.ChangeTypes)
+	require.NotNil(t, repo.createReq.CodexSessionID)
+	assert.Equal(t, "codex-session-1", *repo.createReq.CodexSessionID)
 
 	_, err = service.UpdateChange(context.Background(), dto.ChangeUpdateRequest{
 		ID: 2, Title: " Updated Change ", Body: " Updated Body ", ChangeTypes: []string{" docs "},
@@ -178,4 +180,8 @@ func (r *fakeChangeRepository) UpdateClosed(_ context.Context, req dto.ChangeUpd
 func (r *fakeChangeRepository) Delete(_ context.Context, req dto.ChangeIDRequest) error {
 	r.id = req.ID
 	return nil
+}
+
+func stringPtr(value string) *string {
+	return &value
 }
