@@ -3,18 +3,84 @@ You are helping turn a rough software idea into a clear, testable requirement sp
 The user will provide an initial idea below. Treat it as raw intent, not as a complete requirement.
 
 Initial idea:
-- I'd like to build TUI app for planning changes
-- The app build will spread across multiple requirements with this one being the first
-- I'd like TUI to be built using Go
-- I'd like AI to propose me reference software architecture for TUI aps built with bubbletea
-- The app name is `make-change`, version `0.1`, executable name is `mch`
-- I'd like to mimic as much as possible the UI design and color scheme of the: https://github.com/google-gemini/gemini-cli
 
-Go External Libraries
+State based navigation specification for `mch`:
+MainState
+- /changes -> ChangesListState
+- - [select change] -> ChangeDetailsState
+- - - [select requirement] -> RequirementDetailsState
+- - - - /edit -> RequirementUpdateState
+- - - - - /save -> ChangeDetailsState
+- - - - - /cancel -> ChangeDetailsState            
+- - - - /delete -> AreYouSureDropDown
+- - - - - /yes -> ChangeDetailsState
+- - - - - /cancel -> ChangeDetailsState
+- - - - /return -> ChangesDetailsState
+- - - /new-requirement -> RequirementCreateState
+- - - - /save -> ChangeDetailsState
+- - - - /cancel -> ChangeDetailsState
+- - - /phase -> SelectPhaseDropDown -> ChangeDetailsState
+- - - /epic -> SelectEpicDropDown -> ChangeDetailsState
+- - - /types -> SelectTypesDropDown -> ChangeDetailsState
+- - - /edit -> ChangeUpdateState
+- - - - /save -> ChangeDetailsState
+- - - - /cancel -> ChangeDetailsState
+- - - /delete -> AreYouSureDropDown
+- - - - /yes -> ChangesListState
+- - - - /cancel -> ChangeDetailsState
+- - - /return -> ChangesListState
+- - /new ->ChangeCreateState
+- - - /save -> ChangeDetailsState
+- - - /cancel -> ChangesListState
+- - /phase-filter -> SelectPhaseDropDown -> ChangesListState
+- - /type-filter -> SelectTypeDropDown -> ChangesListState
+- - /find-filter -> FindInput -> ChangesListState
+- - /clear-filters -> ChangesListState
+- - /help -> ChangesHelpState
+- - - /find -> FindInput -> [highlights text] -> ChangesHelpState
+- - - /return -> ChangesListState
+- - /return -> MainState
+- /epics -> EpicsListState
+- - [select epic] -> EpicDetailsState
+- - - /edit -> EpicUpdateState
+- - - - /save -> EpicDetailsState
+- - - - /cancel -> EpicDetailsState
+- - - /delete -> AreYouSureDropDown
+- - - - /yes -> EpicsListState
+- - - - /cancel -> EpicDetailsState
+- - - /return -> EpicsListState
+- - /new ->EpicCreateState
+- - - /save -> EpicDetailsState
+- - - /cancel -> EpicsListState
+- - /help -> EpicsHelpState
+- - - /find -> FindInput -> [highlights text] -> EpicsHelpState
+- - - /return -> EpicsListState
+- - /return -> MainState
+- /projects -> ProjectsListState
+- - [select project] -> ProjectDetailsState
+- - - /edit -> ProjectUpdateState
+- - - - /save -> ProjectDetailsState
+- - - - /cancel -> ProjectDetailsState
+- - - /delete -> AreYouSureDropDown
+- - - - /yes -> ProjectsListState
+- - - - /cancel -> ProjectDetailsState
+- - - /return -> ProjectsListState
+- - /new ->ProjectCreateState
+- - - /save -> ProjectDetailsState
+- - - /cancel -> ProjectsListState
+- - /help -> ProjectsHelpState
+- - - /find -> FindInput -> [highlights text] -> ProjectsHelpState
+- - - /return -> ProjectsListState
+- - /return -> MainState
+- /select-project -> SelectProjectDropDown -> MainState
+- /help -> MainHelpState
+- - /find -> FindInput -> [highlights text] -> MainHelpState
+- - /return -> MainState
+- /quit -> [exit to terminal]
 
-- https://github.com/charmbracelet/bubbletea
-- https://github.com/charmbracelet/bubbles
-- https://github.com/charmbracelet/lipgloss
+Use the one you prefer for requirement specification.
+
+In the scope of this requirement all the screens and navigation must be built and working. Screens must show dummy titles - MainScreen - Title: Main, or EpicsListScreen - Epics List.
 
 Work in phases:
 

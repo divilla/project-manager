@@ -23,19 +23,17 @@ var Default = Tokens{
 		Background(lipgloss.Color("235")),
 	Surface: lipgloss.NewStyle().
 		Background(lipgloss.Color("235")).
-		Foreground(lipgloss.Color("252")).
-		Padding(1, 2),
+		Foreground(lipgloss.Color("252")),
 	Foreground: lipgloss.NewStyle().
 		Foreground(lipgloss.Color("252")),
 	Muted: lipgloss.NewStyle().
 		Foreground(lipgloss.Color("245")),
 	InputBand: lipgloss.NewStyle().
 		Background(lipgloss.Color("240")).
-		Foreground(lipgloss.Color("252")).
-		Padding(0, 1),
+		Foreground(lipgloss.Color("252")),
 	Selection: lipgloss.NewStyle().
 		Background(lipgloss.Color("60")).
-		Foreground(lipgloss.Color("231")),
+		Foreground(lipgloss.Color("15")),
 	Error: lipgloss.NewStyle().
 		Foreground(lipgloss.Color("203")),
 	Success: lipgloss.NewStyle().

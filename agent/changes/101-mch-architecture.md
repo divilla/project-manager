@@ -2,7 +2,7 @@
 
 ## Goal
 
-Define the reference architecture and visual baseline for the Go-based `mch` terminal UI, then add a minimal Hello World TUI under `make-change/` that proves the architecture, executable name, version, styling approach, and test shape are usable.
+Define the reference architecture and visual baseline for the Go-based `mch` terminal UI, then add a minimal Hello World TUI under `make-a-change/` that proves the architecture, executable name, version, styling approach, and test shape are usable.
 
 ## Scope
 
@@ -11,7 +11,7 @@ Define the reference architecture and visual baseline for the Go-based `mch` ter
 - Document Bubble Tea, Bubbles, and Lip Gloss conventions for model ownership, commands, rendering, reusable components, async work, and long-running AI calls.
 - Document the screen/state model for future Change planning flows, including ready, project selection, idea entry, AI running, review, save confirmation, error, and done states.
 - Document how `mch` loads, overrides, saves, and validates backend URL and current project context.
-- Add a new `make-change/` Go module that builds an executable named `mch`.
+- Add a new `make-a-change/` Go module that builds an executable named `mch`.
 - Implement a minimal Bubble Tea Hello World TUI using Bubbles where a reusable component is needed and Lip Gloss style tokens from the new reference document.
 - Implement `mch --version` output for version `0.1`.
 - Add focused tests for the Hello World TUI startup state, version output, one key transition, and rendered output.
@@ -50,8 +50,8 @@ Define the reference architecture and visual baseline for the Go-based `mch` ter
 - The document defines Lip Gloss style tokens for background, foreground, muted text, input band, selection highlight, error, success, accent cyan, accent purple, and border colors.
 - The UI style guide includes observable Gemini CLI-inspired layout references: dark background, full-width input band, compact slash-command menu, muted footer/status metadata, and minimal borders.
 - The UI style guide avoids Gemini product branding, Gemini command names, and copied product copy.
-- A Go module exists at repository-root `make-change/`.
-- The `make-change/` module builds an executable named `mch`.
+- A Go module exists at repository-root `make-a-change/`.
+- The `make-a-change/` module builds an executable named `mch`.
 - The Hello World TUI is implemented with Bubble Tea.
 - The Hello World TUI uses Bubbles where a reusable input, viewport, spinner, or related component is needed.
 - The Hello World TUI uses Lip Gloss styles that correspond to the documented style tokens.
@@ -99,9 +99,9 @@ Define the reference architecture and visual baseline for the Go-based `mch` ter
 
 ## Verification
 
-- From the repository root: `cd make-change && go test ./...`
-- From the repository root: `cd make-change && go build -o ./bin/mch ./cmd/mch`
-- From the repository root: `cd make-change && ./bin/mch --version`
+- From the repository root: `cd make-a-change && go test ./...`
+- From the repository root: `cd make-a-change && go build -o ./bin/mch ./cmd/mch`
+- From the repository root: `cd make-a-change && ./bin/mch --version`
 - From the repository root: `find docs -type f -name '*.md' -not -path 'docs/research/*' -exec wc -l {} +`
 
 ## Review Focus
@@ -117,4 +117,4 @@ Define the reference architecture and visual baseline for the Go-based `mch` ter
 - Fixed PR comment `IC_kwDOTA2Xls8AAAABH8PvBw` by moving reusable Lip Gloss style tokens from `internal/app` to `internal/styles` and updating the app model to import the shared styles package.
 - Add the full `mch` Change planning workflow after the architecture baseline is approved.
 - Add backend API client integration for Projects, Epics, Changes, reference data, validation, and persistence.
-- Decide whether `cli-proto/` should be migrated, archived, or removed after `make-change/` becomes the active TUI surface.
+- Decide whether `cli-proto/` should be migrated, archived, or removed after `make-a-change/` becomes the active TUI surface.

@@ -30,6 +30,8 @@ Epics are managed with POST endpoints:
 
 Epic responses include aggregate completeness fields derived from linked changes. List and get responses also include `change_count` so the UI can disable deletion when an epic has linked changes.
 
+`POST /api/v1/epic/list` requires a numeric `project_id` JSON field, for example `{"project_id": 7}`. Clients must not send `project_id` as a JSON string.
+
 ## Changes
 Changes are managed with POST endpoints:
 

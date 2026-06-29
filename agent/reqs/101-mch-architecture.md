@@ -6,7 +6,7 @@ Types: feature|docs|spike|test
 
 Developers need a clear architecture and visual design baseline before expanding `mch` into a Go-based terminal UI for planning Changes. The app’s formal name is `Make a Change`, but product documentation, UI text, commands, and requirements must refer to it as `mch`. The baseline must define how the `mch` executable, version `0.1`, should structure Bubble Tea models, commands, API clients, config, state transitions, styling, and tests so later requirements can add workflows without reworking the foundation.
 
-A minimal Hello World TUI must also be built in the `make-change` folder using the proposed reference architecture. Useful code from `cli-proto/` may be migrated only when it fits the reference architecture.
+A minimal Hello World TUI must also be built in the `make-a-change` folder using the proposed reference architecture. Useful code from `cli-proto/` may be migrated only when it fits the reference architecture.
 
 The TUI should visually align with the Gemini CLI reference style where practical: dark terminal surface, muted gray input/status bands, compact monospace layout, cyan/purple accents, command palette behavior, and footer/status metadata. This must be a product-specific adaptation, not a copy of Gemini branding or product text.
 
@@ -14,7 +14,7 @@ The TUI should visually align with the Gemini CLI reference style where practica
 
 1. An engineer reads the architecture reference under the existing docs path and can identify where to add a new planning workflow, API integration, screen state, reusable component, style token, and test.
 2. An engineer reads the UI reference and can reproduce the intended `mch` look using Bubble Tea, Bubbles, and Lip Gloss.
-3. An engineer runs the Hello World TUI from the `make-change` folder and sees a working Bubble Tea application using the reference architecture.
+3. An engineer runs the Hello World TUI from the `make-a-change` folder and sees a working Bubble Tea application using the reference architecture.
 4. An engineer runs `mch --version` and sees version `0.1`.
 5. An engineer can compare the current `cli-proto` implementation against the reference architecture and migrate only compatible code.
 6. Future requirements can cite the architecture document and Hello World app for app naming, executable naming, versioning, package boundaries, command handling, state ownership, and rendering conventions.
@@ -35,8 +35,8 @@ The TUI should visually align with the Gemini CLI reference style where practica
 12. The document defines a Lip Gloss style guide with named style tokens for background, foreground, muted text, input band, selection highlight, error, success, accent cyan, accent purple, and border colors.
 13. The UI style guide includes observable references to the Gemini CLI-inspired layout: dark background, full-width input band, compact slash-command menu, muted footer/status metadata, and minimal borders.
 14. The UI style guide avoids Gemini product branding, Gemini command names, and any copied product copy.
-15. A Go module exists under repository-root `make-change/`.
-16. The `make-change/` module builds an executable named `mch`.
+15. A Go module exists under repository-root `make-a-change/`.
+16. The `make-a-change/` module builds an executable named `mch`.
 17. The Hello World TUI is implemented with Bubble Tea.
 18. The Hello World TUI uses Bubbles where a reusable input, viewport, spinner, or related component is needed.
 19. The Hello World TUI uses Lip Gloss styles from the documented style tokens.
@@ -64,10 +64,10 @@ The TUI should visually align with the Gemini CLI reference style where practica
 9. User cancels during planning, review, confirmation, or save.
 10. UI rendering changes cause text overlap, clipped input, or unreadable selection states.
 11. Gemini CLI reference visuals change upstream after this requirement is written.
-12. `make-change/` cannot build because Go dependencies are missing or incompatible.
+12. `make-a-change/` cannot build because Go dependencies are missing or incompatible.
 13. `mch` is run in a terminal that does not support interactive TUI behavior.
 14. `mch --version` is run from a non-interactive shell or script.
-15. Code, docs, or UI copy accidentally refer to the app as `make-change` or `Make a Change` where `mch` is required.
+15. Code, docs, or UI copy accidentally refer to the app as `make-a-change` or `Make a Change` where `mch` is required.
 
 ## Non-Goals
 
@@ -93,6 +93,6 @@ The TUI should visually align with the Gemini CLI reference style where practica
 6. Local screenshot references exist as `gemini-cli.png` and `mch-01.png`.
 7. The local sandbox could not call `POST http://localhost:8080/api/v1/change/reference`; selected type slugs should be verified against the live endpoint before saving.
 8. Mimicking Gemini CLI too closely could create UX confusion or branding risk, so the design should adapt patterns rather than clone identity.
-9. Creating a new `make-change/` folder while `cli-proto/` already exists may create duplicate TUI surfaces unless follow-up requirements define migration or retirement behavior.
+9. Creating a new `make-a-change/` folder while `cli-proto/` already exists may create duplicate TUI surfaces unless follow-up requirements define migration or retirement behavior.
 10. Migrating `cli-proto/` code may preserve accidental prototype constraints unless each migrated piece is checked against the reference architecture.
 11. The formal name `Make a Change` and required user-facing reference `mch` may create inconsistent copy unless naming rules are tested in docs and UI output.
