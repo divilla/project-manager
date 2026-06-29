@@ -1,0 +1,54 @@
+package styles
+
+import "github.com/charmbracelet/lipgloss"
+
+type Tokens struct {
+	Background   lipgloss.Style
+	Surface      lipgloss.Style
+	Foreground   lipgloss.Style
+	Muted        lipgloss.Style
+	InputBand    lipgloss.Style
+	Selection    lipgloss.Style
+	Error        lipgloss.Style
+	Success      lipgloss.Style
+	AccentCyan   lipgloss.Style
+	AccentPurple lipgloss.Style
+	Border       lipgloss.Style
+	Title        lipgloss.Style
+	Footer       lipgloss.Style
+}
+
+var Default = Tokens{
+	Background: lipgloss.NewStyle().
+		Background(lipgloss.Color("235")),
+	Surface: lipgloss.NewStyle().
+		Background(lipgloss.Color("235")).
+		Foreground(lipgloss.Color("252")).
+		Padding(1, 2),
+	Foreground: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("252")),
+	Muted: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")),
+	InputBand: lipgloss.NewStyle().
+		Background(lipgloss.Color("240")).
+		Foreground(lipgloss.Color("252")).
+		Padding(0, 1),
+	Selection: lipgloss.NewStyle().
+		Background(lipgloss.Color("60")).
+		Foreground(lipgloss.Color("231")),
+	Error: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("203")),
+	Success: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("114")),
+	AccentCyan: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("86")),
+	AccentPurple: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("183")),
+	Border: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")),
+	Title: lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("86")),
+	Footer: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("245")),
+}

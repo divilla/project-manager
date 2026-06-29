@@ -3,14 +3,18 @@ You are helping turn a rough software idea into a clear, testable requirement sp
 The user will provide an initial idea below. Treat it as raw intent, not as a complete requirement.
 
 Initial idea:
-I'd like to wire enable application to use codex for change (requirements) building.
-I'd like to use following flow:
-- ask user for starting prompt roughly defining requirement
-- parse user entry through `agent/prompts/build-requirement-with-agent.md`
-- the starting entry will start new sessions so we need to capture codex_session_id
-- the agent then asks for next prompt or answer agent's question
-- the app must continue a session `printf <next-prompt> | codex exec -C /home/vito/go/src/project-manager/ resume <codex-session-id> -`
-- final output must be 
+- I'd like to build TUI app for planning changes
+- The app build will spread across multiple requirements with this one being the first
+- I'd like TUI to be built using Go
+- I'd like AI to propose me reference software architecture for TUI aps built with bubbletea
+- The app name is `make-change`, version `0.1`, executable name is `mch`
+- I'd like to mimic as much as possible the UI design and color scheme of the: https://github.com/google-gemini/gemini-cli
+
+Go External Libraries
+
+- https://github.com/charmbracelet/bubbletea
+- https://github.com/charmbracelet/bubbles
+- https://github.com/charmbracelet/lipgloss
 
 Work in phases:
 
@@ -26,15 +30,22 @@ Hard boundaries:
 - Do not produce vague acceptance criteria. Every acceptance criterion must be observable and testable.
 - Do not use markdown tables unless the user explicitly asks for them.
 
-Requirement types list must be retrieved from :
+Reference data:
+
+- Retrieve valid requirement type options from `POST http://localhost:8080/api/v1/change/reference` and use the response `types` group. Use each option's `slug` value.
+- Retrieve available epics from `POST http://localhost:8080/api/v1/epic/list` with the current `project_id` when the current project is known.
+- Do not invent type slugs or epic names. If backend reference data is unavailable and the user has not provided valid options, ask a clarifying question or record the missing reference data under Open Questions.
 
 Final output contract:
 
 - The first non-blank line must be an H1 requirement title.
 - The H1 title must be concise enough to reuse as a planning item title.
-- The first non-blank line after the H1 title must be the requirement type line.
-- The requirement type line must contain only selected types joined by `|`, with no spaces.
-- Example type line: `feature|test`
+- The first non-blank line after the H1 title must be the type line.
+- The type line must be formatted exactly as `Types: <type-slugs>`.
+- `<type-slugs>` must contain only selected backend type slugs joined by `|`, with no spaces.
+- Example type line: `Types: feature|test`
+- If a suitable epic exists, the next non-blank line after the type line must be formatted exactly as `Epic: <epic-name>`.
+- If no suitable epic exists, omit the `Epic:` line entirely.
 - Do not include any preamble before the H1 title.
 - Do not wrap the final requirement in a code block.
 
@@ -44,7 +55,7 @@ Final requirement structure:
 
 Types: feature|test|docs
 
-Epic: xxx (optional)
+Epic: Existing Epic Name
 
 ## Problem Statement
 
@@ -72,10 +83,17 @@ List technical dependencies, external tools, data contracts, operational risks, 
 
 ## Open Questions
 
-List unresolved product or technical decisions. Use `None.` only if there are no open questions.
+List unresolved product or technical decisions.
+
+Use a numbered list so the user can answer by number instead of rewriting each question.
+
+Use `None.` only if there are no open questions.
 
 Quality bar:
 
+- Title, Types, and Epic lines must be strictly formatted to enable precise extraction.
+- Title and Types are mandatory.
+- Epic is optional. If there is no adequate epic to use, omit the line instead of writing `Epic: none`.
 - Use the repository's product vocabulary.
 - Prefer practical, implementation-ready language.
 - Optimize for a requirement an engineer can implement without re-litigating scope.

@@ -11,6 +11,9 @@ The `cli-proto/` directory may contain experimental terminal prototypes. The fir
 
 The prototype stores its local config under `cli-proto/.config`. It may persist backend URL and current project selection there, but it must save product data only through supported backend APIs.
 
+## Reference TUI
+The `make-change/` module contains the reference `mch` TUI baseline. Its architecture, package boundaries, style tokens, state model, and test strategy are documented in `docs/architecture/mch.md`.
+
 ## Current Project
 Current project selection is user-specific application state. CLI commands that operate on project-scoped data should read the same user setting as the app or require an explicit project option.
 
