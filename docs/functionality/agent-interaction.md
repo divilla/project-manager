@@ -28,6 +28,7 @@ During implementation, the agent:
 - changes only files needed for the Change
 - records follow-ups instead of silently expanding scope
 - runs verification when feasible
+- runs `make lint` and fixes all findings after code changes in `backend` or `make-a-change`
 - commits with the implementation message
 
 ## Autonomy

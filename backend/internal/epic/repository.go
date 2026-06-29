@@ -10,16 +10,19 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Repo defines Repo values.
 type Repo struct {
 	pool *pgxpool.Pool
 }
 
 const epicColumns = "id, version, project_id, name, done_req, total_req, completed, change_count, created, modified"
 
+// NewRepo initializes or executes NewRepo behavior.
 func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
+// List executes List behavior.
 func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Epic, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+epicColumns+`
@@ -42,6 +45,7 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Epic, error) {
 	return epics, rows.Err()
 }
 
+// Get executes Get behavior.
 func (r *Repo) Get(ctx context.Context, id int) (dto.Epic, error) {
 	epic, err := scanEpic(r.pool.QueryRow(ctx, "select "+epicColumns+" from public.vw_epic where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -50,6 +54,7 @@ func (r *Repo) Get(ctx context.Context, id int) (dto.Epic, error) {
 	return epic, err
 }
 
+// Create executes Create behavior.
 func (r *Repo) Create(ctx context.Context, req dto.EpicCreateRequest) (dto.Epic, error) {
 	if err := r.ensureProject(ctx, req.ProjectID); err != nil {
 		return dto.Epic{}, err
@@ -65,6 +70,7 @@ func (r *Repo) Create(ctx context.Context, req dto.EpicCreateRequest) (dto.Epic,
 	return r.Get(ctx, id)
 }
 
+// Update executes Update behavior.
 func (r *Repo) Update(ctx context.Context, req dto.EpicUpdateRequest) (dto.Epic, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -108,6 +114,7 @@ func (r *Repo) Update(ctx context.Context, req dto.EpicUpdateRequest) (dto.Epic,
 	return epic, nil
 }
 
+// Delete executes Delete behavior.
 func (r *Repo) Delete(ctx context.Context, id int) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

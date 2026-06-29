@@ -9,8 +9,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// Version is the user-visible mch executable version.
 const Version = "0.1"
 
+// Run executes the mch command with the supplied process arguments and output writer.
 func Run(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("mch", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)

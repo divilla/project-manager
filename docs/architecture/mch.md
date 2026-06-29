@@ -22,29 +22,39 @@ Recommended layout:
 ```text
 make-a-change/
   cmd/mch/
+  pkg/client/
+  internal/dto/
   internal/app/
-  internal/api/
-  internal/commands/
-  internal/config/
-  internal/editor/
-  internal/markdown/
-  internal/screens/
+  internal/projects/
+  internal/changes/
+  internal/epics/
+  internal/requirements/
+  internal/planning/
+  internal/help/
+  internal/navigation/
+  internal/ui/
   internal/styles/
-  internal/testutil/
 ```
 
 Responsibilities:
 
 - `cmd/mch`: parse process arguments only far enough to call the app runner and set exit status.
-- `internal/app`: own startup wiring, top-level Bubble Tea model, version output, and command-line flags.
-- `internal/screens`: keep screen-specific state transitions and view helpers.
-- `internal/commands`: parse slash commands and create typed `tea.Cmd` functions for async work.
-- `internal/api`: call backend APIs for Projects, Epics, Changes, reference data, validation, and persistence.
-- `internal/config`: load, validate, override, and save local backend URL and current project context.
-- `internal/markdown`: parse and validate generated requirement and Change markdown.
-- `internal/editor`: isolate external editor launches and file handoff.
+- `pkg/client`: own reusable HTTP transport, endpoint methods, JSON request/response helpers, and backend error normalization.
+- `internal/dto`: own shared request, response, and view DTOs such as selector options and project rows.
+- `internal/app`: own startup wiring, config, version output, the root Bubble Tea model, and dispatch between feature packages. It must not own feature-specific table rendering or section navigation rules.
+- `internal/projects`: own project list/detail/create/update/delete state, project commands, project navigation, project rendering, and a section-local `api.go` interface used by the app.
+- `internal/changes`: own change list/detail/create/update/delete state, filters, change commands, change navigation, change rendering, and a section-local `api.go` interface.
+- `internal/epics`: own epic list/detail/create/update/delete state, epic commands, epic navigation, epic rendering, and a section-local `api.go` interface.
+- `internal/requirements`: own requirement detail/create/update/delete state, requirement commands, requirement navigation, requirement rendering, and a section-local `api.go` interface.
+- `internal/planning`: own future AI-assisted planning flow state, commands, navigation, rendering, and a section-local `api.go` interface.
+- `internal/help`: own help screen state, commands, navigation, and rendering.
+- `internal/navigation`: own shared state names, screen titles, return/cancel/delete route targets, and cross-section command assembly.
+- `internal/ui`: own reusable terminal UI primitives such as dropdowns, input bands, layout helpers, and generic table helpers.
 - `internal/styles`: define Lip Gloss style tokens and shared components.
-- `internal/testutil`: provide test messages, terminal widths, fixtures, and render assertions.
+
+Each feature package must split code by responsibility instead of using one catch-all file. Use `model.go` for feature state/data methods, `navigation.go` or `update.go` for key and route decisions, `view.go` or `screen.go` for rendering, `commands.go` for slash commands, and `api.go` for the app-facing API interface. Feature packages should not import `internal/app`; the root app should call feature packages.
+
+The tracked local config file is `make-a-change/.config/config.yaml`. No package under `internal/` may create or persist a `.config` directory. Config path resolution must anchor local config at the `make-a-change` module root, including when tests run from nested package directories.
 
 ## Model And Commands
 
@@ -90,6 +100,8 @@ Slash commands, list item selection, backend selectors, confirmations, and text 
 Changes navigation includes `ChangesListState`, `ChangeDetailsState`, `RequirementDetailsState`, Change create and update states, Requirement create and update states, filter overlays, help, find input, and delete confirmation states. Create-state commands are context-specific: `/new-change`, `/new-requirement`, `/new-epic`, or `/new-project`; internal state names still keep CRUD-style `CreateState` suffixes. Update-state commands are named `/edit` even though internal state names keep CRUD-style `UpdateState` suffixes. Create-state screen titles use user-facing `New ...` wording, such as `ChangeCreateScreen - Title: New Change`; update-state screen titles use `Edit ...` wording, such as `ChangeUpdateScreen - Title: Edit Change`. `ChangesListState` exposes exactly `/new-change`, `/phase-filter`, `/epic-filter`, `/type-filter`, `/find-filter`, `/clear-filters`, `/help`, and `/return` in that order; `/phase-filter`, `/epic-filter`, `/type-filter`, and `/find-filter` remain inside `ChangesListState` and must not be modeled as separate states or screens. Phase, epic, and type filter option lists render normal options with a leading `-`, such as `-done`, and append `/clear` as the final item to remove only that field's filter. `ChangeDetailsState` exposes exactly `/new-requirement`, `/phase`, `/epic`, `/types`, `/edit`, `/delete`, and `/return` in that order. Requirement detail commands include new requirement, edit, delete, save, cancel, and return. Phase and type selectors load from `POST /api/v1/change/reference`; epic selectors and `/epic-filter` load from `POST /api/v1/epic/list` using the current project ID as a numeric JSON value.
 
 Epics and Projects use the same state shape: list, detail, create, update, delete confirmation, help, find input, and return. List and detail screens may navigate to new epic or new project, edit, delete, help, find, and return states according to the commands available on each screen.
+
+`ProjectsListState` loads fresh project data from `POST /api/v1/project/list` each time `/projects` opens from `MainState`. `ProjectsListScreen - Title: Projects List` renders projects as a selectable table with columns `id`, `Name`, `Changes`, `Created`, and `Modified`; ID and Changes values are right-aligned, and IDs display without a leading `#`. The created and modified timestamps are displayed in the current local timezone as `YYYY-MM-DD HH:mm`. Up and down arrows move the selected row within bounds, enter opens `ProjectDetailsState` with the selected project data, and this list selection must not update or persist the current project context. Pressing `/` from the list opens the command menu overlay while preserving the project list screen title underneath it.
 
 `Esc` maps to the state-appropriate safe action: quit from `MainState`, return from returnable states, and cancel from create, update, dropdown, confirmation, loading selector, and input states. `/quit` outside `MainState` and unknown commands leave the current state unchanged and show a recoverable error.
 
@@ -144,6 +156,8 @@ UI text must remain product-specific to `mch`.
 ## Test Strategy
 
 All future `mch` tests must use `github.com/stretchr/testify/assert` and `github.com/stretchr/testify/require` for assertions. Do not add hand-written `if ... { t.Fatal... }` assertion blocks when a `testify` assertion can express the same expectation.
+
+After every `make-a-change` code change, run `make lint` from `make-a-change` and fix all findings before handoff. Treat lint rewrites such as import formatting as part of the intentional code change.
 
 Model tests should cover startup state, screen transitions, command parsing, async message handling, and cancellation paths.
 

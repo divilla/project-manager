@@ -13,10 +13,12 @@ import (
 )
 
 type (
+	// Repo defines Repo values.
 	Repo struct {
 		pool *pgxpool.Pool
 	}
 
+	// Repository defines Repository values.
 	Repository interface {
 		References(ctx context.Context) (dto.ChangeReferences, error)
 		List(ctx context.Context, projectID int) ([]dto.Change, error)
@@ -40,7 +42,6 @@ const changeColumns = `
 	change_types,
 	title,
 	coalesce(body, ''),
-	codex_session_id,
 	closed,
 	done_req,
 	total_req,
@@ -48,10 +49,12 @@ const changeColumns = `
 	created,
 	modified`
 
+// NewRepo initializes or executes NewRepo behavior.
 func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
+// References executes References behavior.
 func (r *Repo) References(ctx context.Context) (dto.ChangeReferences, error) {
 	phases, err := r.referenceOptions(ctx, "change_phase")
 	if err != nil {
@@ -64,6 +67,7 @@ func (r *Repo) References(ctx context.Context) (dto.ChangeReferences, error) {
 	return dto.ChangeReferences{Phases: phases, Types: types}, nil
 }
 
+// List executes List behavior.
 func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Change, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+changeColumns+`
@@ -87,6 +91,7 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Change, error) {
 	return changes, rows.Err()
 }
 
+// Get executes Get behavior.
 func (r *Repo) Get(ctx context.Context, id int) (dto.ChangeDetail, error) {
 	change, err := getChange(ctx, r.pool, id)
 	if err != nil {
@@ -99,6 +104,7 @@ func (r *Repo) Get(ctx context.Context, id int) (dto.ChangeDetail, error) {
 	return dto.ChangeDetail{Change: change, Requirements: requirements}, nil
 }
 
+// Bodies executes Bodies behavior.
 func (r *Repo) Bodies(ctx context.Context, ids []int) ([]dto.Change, error) {
 	rows, err := r.pool.Query(ctx, `
 		select requested.id::integer, coalesce(c.body, '')
@@ -122,6 +128,7 @@ func (r *Repo) Bodies(ctx context.Context, ids []int) ([]dto.Change, error) {
 	return changes, rows.Err()
 }
 
+// Create executes Create behavior.
 func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	if err := r.ensureProject(ctx, req.ProjectID); err != nil {
 		return dto.Change{}, err
@@ -147,11 +154,11 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	var id int
 	err = tx.QueryRow(ctx, `
 		insert into public.change (
-			project_id, epic_id, change_phase, change_types, title, body, codex_session_id
+			project_id, epic_id, change_phase, change_types, title, body
 		)
-		values ($1, $2, $3, $4, $5, nullif($6, ''), $7)
+		values ($1, $2, $3, $4, $5, nullif($6, ''))
 		returning id
-	`, req.ProjectID, req.EpicID, req.ChangePhase, req.ChangeTypes, req.Title, req.Body, req.CodexSessionID).Scan(&id)
+	`, req.ProjectID, req.EpicID, req.ChangePhase, req.ChangeTypes, req.Title, req.Body).Scan(&id)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -159,6 +166,7 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	return finishMutation(ctx, tx, id)
 }
 
+// Update executes Update behavior.
 func (r *Repo) Update(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Change, error) {
 	if err := r.ensureReferences(ctx, "change_type", req.ChangeTypes); err != nil {
 		return dto.Change{}, err
@@ -197,6 +205,7 @@ func (r *Repo) Update(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Cha
 	return finishMutation(ctx, tx, req.ID)
 }
 
+// UpdateEpic executes UpdateEpic behavior.
 func (r *Repo) UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -238,6 +247,7 @@ func (r *Repo) UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) 
 	return finishMutation(ctx, tx, req.ID)
 }
 
+// UpdatePhase executes UpdatePhase behavior.
 func (r *Repo) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error) {
 	if err := r.ensureReference(ctx, "change_phase", req.ChangePhase); err != nil {
 		return dto.Change{}, err
@@ -274,6 +284,7 @@ func (r *Repo) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest
 	return finishMutation(ctx, tx, req.ID)
 }
 
+// UpdateClosed executes UpdateClosed behavior.
 func (r *Repo) UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedRequest) (dto.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -307,6 +318,7 @@ func (r *Repo) UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedReque
 	return finishMutation(ctx, tx, req.ID)
 }
 
+// Delete executes Delete behavior.
 func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -444,10 +456,9 @@ func listRequirements(ctx context.Context, q queryer, changeID int) ([]dto.Requi
 func scanChange(row pgx.Row) (dto.Change, error) {
 	var change dto.Change
 	var epicID pgtype.Int8
-	var codexSessionID pgtype.Text
 	err := row.Scan(
 		&change.ID, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
-		&change.ChangeTypes, &change.Title, &change.Body, &codexSessionID, &change.Closed, &change.DoneReq,
+		&change.ChangeTypes, &change.Title, &change.Body, &change.Closed, &change.DoneReq,
 		&change.TotalReq, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
@@ -456,10 +467,6 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	if epicID.Valid {
 		value := int(epicID.Int64)
 		change.EpicID = &value
-	}
-	if codexSessionID.Valid {
-		value := codexSessionID.String
-		change.CodexSessionID = &value
 	}
 	return change, nil
 }

@@ -9,14 +9,16 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-type Api struct {
+// API defines API values.
+type API struct {
 	e *echo.Echo
 	g *echo.Group
 	s *Service
 }
 
-func NewAPI(e *echo.Echo, s *Service) *Api {
-	a := &Api{
+// NewAPI initializes or executes NewAPI behavior.
+func NewAPI(e *echo.Echo, s *Service) *API {
+	a := &API{
 		e: e,
 		g: e.Group("/api").Group("/v1").Group("/project"),
 		s: s,
@@ -31,7 +33,7 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 	return a
 }
 
-func (a *Api) listProjects(c *echo.Context) error {
+func (a *API) listProjects(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req dto.ProjectListRequest
 	if err := c.Bind(&req); err != nil {
@@ -46,7 +48,7 @@ func (a *Api) listProjects(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) getProject(c *echo.Context) error {
+func (a *API) getProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req dto.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {
@@ -61,7 +63,7 @@ func (a *Api) getProject(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) createProject(c *echo.Context) error {
+func (a *API) createProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req dto.ProjectCreateRequest
 	if err := c.Bind(&req); err != nil {
@@ -76,7 +78,7 @@ func (a *Api) createProject(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, &res)
 }
 
-func (a *Api) updateProject(c *echo.Context) error {
+func (a *API) updateProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req dto.ProjectUpdateRequest
 	if err := c.Bind(&req); err != nil {
@@ -91,7 +93,7 @@ func (a *Api) updateProject(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) deleteProject(c *echo.Context) error {
+func (a *API) deleteProject(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var req dto.ProjectIDRequest
 	if err := c.Bind(&req); err != nil {

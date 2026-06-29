@@ -12,6 +12,7 @@ init:
 	@go install honnef.co/go/tools/cmd/staticcheck@latest
 
 lint: ## Lint the files
+	@goimports -w .
 	@staticcheck ${PKG_LIST}
 	@golint -set_exit_status ${PKG_LIST}
 

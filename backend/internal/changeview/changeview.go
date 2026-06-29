@@ -5,15 +5,18 @@ import (
 	"aipm/pkg/markdown"
 )
 
+// ChangeRenderer defines ChangeRenderer values.
 type ChangeRenderer struct {
 	parser    markdown.Parser
 	sanitizer markdown.Sanitizer
 }
 
+// NewChangeRenderer initializes or executes NewChangeRenderer behavior.
 func NewChangeRenderer(parser markdown.Parser, sanitizer markdown.Sanitizer) ChangeRenderer {
 	return ChangeRenderer{parser: parser, sanitizer: sanitizer}
 }
 
+// RenderChange executes RenderChange behavior.
 func (r ChangeRenderer) RenderChange(change dto.Change) dto.Change {
 	if r.parser == nil || r.sanitizer == nil || change.Body == "" {
 		return change
@@ -22,6 +25,7 @@ func (r ChangeRenderer) RenderChange(change dto.Change) dto.Change {
 	return change
 }
 
+// RenderMutation executes RenderMutation behavior.
 func (r ChangeRenderer) RenderMutation(mutation dto.RequirementMutationResponse) dto.RequirementMutationResponse {
 	mutation.Change = r.RenderChange(mutation.Change)
 	return mutation

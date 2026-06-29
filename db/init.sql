@@ -72,7 +72,6 @@ create table public.change
     change_types text[]                                           not null,
     title        text                                             not null,
     body         text,
-    codex_session_id text,
     closed       boolean                  default false           not null,
     done_req     smallint                 default 0               not null,
     total_req    smallint                 default 0               not null,
@@ -92,7 +91,6 @@ create table public.change_history
     change_types text[]                   not null,
     title        text                     not null,
     body         text,
-    codex_session_id text,
     closed       boolean                  not null,
     modified     timestamp with time zone not null,
     deleted      boolean default false    not null,
@@ -131,7 +129,6 @@ select
     change_types,
     title,
     body,
-    codex_session_id,
     closed,
     done_req,
     total_req,
@@ -189,10 +186,10 @@ as
 $$
 begin
     insert into public.change_history (
-        id, version, project_id, epic_id, change_phase, change_types, title, body, codex_session_id, closed, modified, deleted
+        id, version, project_id, epic_id, change_phase, change_types, title, body, closed, modified, deleted
     )
     select
-        id, version, project_id, epic_id, change_phase, change_types, title, body, codex_session_id, closed, modified, _deleted
+        id, version, project_id, epic_id, change_phase, change_types, title, body, closed, modified, _deleted
     from public.change
     where id = _id;
 end;

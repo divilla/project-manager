@@ -32,20 +32,19 @@ type referenceOption struct {
 }
 
 type change struct {
-	ID             int      `json:"id"`
-	Version        int16    `json:"version"`
-	ProjectID      int      `json:"project_id"`
-	EpicID         *int     `json:"epic_id"`
-	ChangePhase    string   `json:"change_phase"`
-	ChangeTypes    []string `json:"change_types"`
-	Title          string   `json:"title"`
-	Body           string   `json:"body"`
-	BodyHTML       string   `json:"body_html"`
-	CodexSessionID *string  `json:"codex_session_id"`
-	Closed         bool     `json:"closed"`
-	DoneReq        int16    `json:"done_req"`
-	TotalReq       int16    `json:"total_req"`
-	Completed      int16    `json:"completed"`
+	ID          int      `json:"id"`
+	Version     int16    `json:"version"`
+	ProjectID   int      `json:"project_id"`
+	EpicID      *int     `json:"epic_id"`
+	ChangePhase string   `json:"change_phase"`
+	ChangeTypes []string `json:"change_types"`
+	Title       string   `json:"title"`
+	Body        string   `json:"body"`
+	BodyHTML    string   `json:"body_html"`
+	Closed      bool     `json:"closed"`
+	DoneReq     int16    `json:"done_req"`
+	TotalReq    int16    `json:"total_req"`
+	Completed   int16    `json:"completed"`
 }
 
 type detail struct {
@@ -83,13 +82,12 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	title := fmt.Sprintf("api-test-change-%d", time.Now().UnixNano())
 	var created change
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
-		"project_id":       projectID,
-		"epic_id":          epicID,
-		"title":            title,
-		"body":             "Created by change API integration test.",
-		"change_phase":     "backlog",
-		"change_types":     []string{"feature"},
-		"codex_session_id": "codex-session-api-test",
+		"project_id":   projectID,
+		"epic_id":      epicID,
+		"title":        title,
+		"body":         "Created by change API integration test.",
+		"change_phase": "backlog",
+		"change_types": []string{"feature"},
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
@@ -97,8 +95,6 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	assert.Equal(t, []string{"feature"}, created.ChangeTypes)
 	require.NotNil(t, created.EpicID)
 	assert.Equal(t, epicID, *created.EpicID)
-	require.NotNil(t, created.CodexSessionID)
-	assert.Equal(t, "codex-session-api-test", *created.CodexSessionID)
 
 	var listed []change
 	status = client.Post(t, "/api/v1/change/list", map[string]any{"project_id": projectID}, &listed)
@@ -107,13 +103,11 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	assert.Equal(t, created.ID, listed[0].ID)
 	assert.Equal(t, created.Title, listed[0].Title)
 	assert.Equal(t, created.EpicID, listed[0].EpicID)
-	assert.Equal(t, created.CodexSessionID, listed[0].CodexSessionID)
 
 	var fetched detail
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, created.ID, fetched.Change.ID)
-	assert.Equal(t, created.CodexSessionID, fetched.Change.CodexSessionID)
 	assert.Contains(t, fetched.Change.BodyHTML, "<p>Created by change API integration test.</p>")
 
 	var rendered renderedBodies

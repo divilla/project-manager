@@ -13,6 +13,7 @@ var (
 )
 
 type (
+	// Config defines Config values.
 	Config struct {
 		ConnectionString string `mapstructure:"connection_string"`
 		Port             string `mapstructure:"port"`
@@ -20,6 +21,7 @@ type (
 	}
 )
 
+// New initializes or executes New behavior.
 func New() {
 	config.WithOptions(config.ParseEnv)
 	config.AddDriver(yaml.Driver)
@@ -35,6 +37,7 @@ func New() {
 	applyEnv()
 }
 
+// Get initializes or executes Get behavior.
 func Get() *Config {
 	return &cfg
 }
@@ -63,6 +66,7 @@ func applyEnv() {
 	}
 }
 
+// Addr executes Addr behavior.
 func (c Config) Addr() string {
 	if strings.HasPrefix(c.Port, ":") {
 		return c.Port
@@ -70,6 +74,7 @@ func (c Config) Addr() string {
 	return ":" + c.Port
 }
 
+// AllowedOrigins executes AllowedOrigins behavior.
 func (c Config) AllowedOrigins() []string {
 	var origins []string
 	for _, origin := range strings.Split(c.CORSOrigins, ",") {

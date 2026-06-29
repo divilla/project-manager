@@ -9,14 +9,16 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-type Api struct {
+// API defines API values.
+type API struct {
 	e *echo.Echo
 	g *echo.Group
 	s *Service
 }
 
-func NewAPI(e *echo.Echo, s *Service) *Api {
-	a := &Api{
+// NewAPI initializes or executes NewAPI behavior.
+func NewAPI(e *echo.Echo, s *Service) *API {
+	a := &API{
 		e: e,
 		g: e.Group("/api").Group("/v1").Group("/requirement"),
 		s: s,
@@ -32,7 +34,7 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 	return a
 }
 
-func (a *Api) listRequirements(c *echo.Context) error {
+func (a *API) listRequirements(c *echo.Context) error {
 	var req dto.RequirementListRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement list payload")
@@ -44,7 +46,7 @@ func (a *Api) listRequirements(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) createRequirement(c *echo.Context) error {
+func (a *API) createRequirement(c *echo.Context) error {
 	var req dto.RequirementCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement create payload")
@@ -56,7 +58,7 @@ func (a *Api) createRequirement(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, &res)
 }
 
-func (a *Api) updateRequirement(c *echo.Context) error {
+func (a *API) updateRequirement(c *echo.Context) error {
 	var req dto.RequirementUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement update payload")
@@ -68,7 +70,7 @@ func (a *Api) updateRequirement(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) updateRequirementDone(c *echo.Context) error {
+func (a *API) updateRequirementDone(c *echo.Context) error {
 	var req dto.RequirementUpdateDoneRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement done payload")
@@ -80,7 +82,7 @@ func (a *Api) updateRequirementDone(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) updateRequirementChange(c *echo.Context) error {
+func (a *API) updateRequirementChange(c *echo.Context) error {
 	var req dto.RequirementUpdateChangeRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement change payload")
@@ -92,7 +94,7 @@ func (a *Api) updateRequirementChange(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) deleteRequirement(c *echo.Context) error {
+func (a *API) deleteRequirement(c *echo.Context) error {
 	var req dto.RequirementIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid requirement delete payload")

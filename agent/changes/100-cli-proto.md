@@ -12,9 +12,8 @@ Deliver a minimal Bubble Tea `mch` prototype that lets a user start Codex-assist
 - Store prototype config under `cli-proto/.config`, including backend URL and current project selection.
 - Build an interactive Bubble Tea UI that supports project selection, `/change-new`, refinement prompts, save, and `/cancel`.
 - Use `agent/prompts/build-requirement-with-agent.md` as the controlled prompt template for requirement generation.
-- Invoke Codex for new and resumed sessions and keep `codex_session_id` only in memory until save or cancel.
+- Invoke Codex for new and resumed sessions and keep the session identifier only in memory until save or cancel.
 - Parse, validate, edit, confirm, and persist the final markdown output as a backend Change.
-- Extend backend Change create behavior to accept and persist nullable `codex_session_id`.
 - Save CLI-created Changes in the `backlog` phase.
 
 ## Requirements
@@ -28,7 +27,7 @@ Deliver a minimal Bubble Tea `mch` prototype that lets a user start Codex-assist
 - Project selection must happen inside the interactive UI and must be persisted as the current project in config.
 - The app must show an input prompt after startup and recognize `/change-new` and `/cancel`.
 - `/change-new` must ask for an initial change idea, inject it into the controlled prompt template, and start Codex with `codex exec -C <resolved-repo-root> -`.
-- The app must extract `codex_session_id` from Codex output and display Codex output in the terminal UI.
+- The app must extract the session identifier from Codex output and display Codex output in the terminal UI.
 - Refinement prompts during an active planning flow must resume the same Codex session with `codex exec -C <resolved-repo-root> resume <codex-session-id> -`.
 - Refinement must not create or update backend Changes.
 - `/cancel` must exit the app; if no save occurred, no Change may be created.
@@ -39,7 +38,6 @@ Deliver a minimal Bubble Tea `mch` prototype that lets a user start Codex-assist
 - Save must remove the H1, `Types:`, and optional `Epic:` lines before persisting the Change body.
 - Save must open the body in `$EDITOR` before final confirmation.
 - Save must create the backend Change only after explicit confirmation.
-- Backend Change create must accept and persist nullable `codex_session_id`.
 - Saved planned Changes must use `backlog` as `change_phase`.
 
 ## Acceptance Criteria
@@ -55,9 +53,8 @@ Deliver a minimal Bubble Tea `mch` prototype that lets a user start Codex-assist
 - Empty initial ideas, missing Codex command, unauthenticated Codex, Codex failures, timeouts, and missing session ID are surfaced without saving a Change.
 - Save rejects markdown with no H1, multiple H1 headings, missing or malformed `Types:`, unknown type slugs, or an unknown epic.
 - `$EDITOR` failure aborts save before backend Change creation.
-- Confirmed save calls backend Change create with `change_phase: "backlog"` and the in-memory `codex_session_id` when present.
+- Confirmed save calls backend Change create with `change_phase: "backlog"`.
 - Cancel before save exits without creating or updating a backend Change.
-- Backend create, get, and list behavior expose persisted `codex_session_id` for saved Changes.
 
 ## Non-Goals
 
@@ -80,7 +77,7 @@ Deliver a minimal Bubble Tea `mch` prototype that lets a user start Codex-assist
 - The controlled prompt assets live in `agent/prompts/`.
 - The CLI prototype is intentionally scoped to `cli-proto/` so it can evolve without disrupting the backend, frontend, or future production CLI packaging.
 - Backend behavior remains authoritative for Change validation and persistence; the CLI validates references before save to give immediate feedback, then still relies on backend validation.
-- `codex_session_id` is process memory in the CLI until save, then persisted on the created Change for traceability.
+- The Codex session identifier remains process memory in the CLI and is not persisted on the created Change.
 - Bubble Tea command handling should keep the UI responsive while Codex runs.
 
 ## Relevant Specs
@@ -102,7 +99,7 @@ Deliver a minimal Bubble Tea `mch` prototype that lets a user start Codex-assist
 
 - Verify Codex is always invoked with the resolved repository root and that the same root is used for resume.
 - Verify save cannot create a backend Change before markdown, type, epic, editor, and confirmation checks pass.
-- Verify backend `codex_session_id` persistence is nullable and does not break existing Change create callers.
+- Verify backend Change creation does not depend on Codex session tracking.
 - Verify Bubble Tea async commands cannot start overlapping planning sessions or save stale output.
 
 ## Follow-Ups

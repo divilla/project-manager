@@ -9,14 +9,16 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-type Api struct {
+// API defines API values.
+type API struct {
 	e *echo.Echo
 	g *echo.Group
 	s *Service
 }
 
-func NewAPI(e *echo.Echo, s *Service) *Api {
-	a := &Api{
+// NewAPI initializes or executes NewAPI behavior.
+func NewAPI(e *echo.Echo, s *Service) *API {
+	a := &API{
 		e: e,
 		g: e.Group("/api").Group("/v1").Group("/epic"),
 		s: s,
@@ -31,7 +33,7 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 	return a
 }
 
-func (a *Api) listEpics(c *echo.Context) error {
+func (a *API) listEpics(c *echo.Context) error {
 	var req dto.EpicListRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic list payload")
@@ -43,7 +45,7 @@ func (a *Api) listEpics(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) getEpic(c *echo.Context) error {
+func (a *API) getEpic(c *echo.Context) error {
 	var req dto.EpicIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic get payload")
@@ -55,7 +57,7 @@ func (a *Api) getEpic(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) createEpic(c *echo.Context) error {
+func (a *API) createEpic(c *echo.Context) error {
 	var req dto.EpicCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic create payload")
@@ -67,7 +69,7 @@ func (a *Api) createEpic(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, &res)
 }
 
-func (a *Api) updateEpic(c *echo.Context) error {
+func (a *API) updateEpic(c *echo.Context) error {
 	var req dto.EpicUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic update payload")
@@ -79,7 +81,7 @@ func (a *Api) updateEpic(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) deleteEpic(c *echo.Context) error {
+func (a *API) deleteEpic(c *echo.Context) error {
 	var req dto.EpicIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid epic delete payload")

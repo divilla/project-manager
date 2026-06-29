@@ -2,6 +2,7 @@ package styles
 
 import "github.com/charmbracelet/lipgloss"
 
+// Tokens groups shared Lip Gloss styles used by mch views.
 type Tokens struct {
 	Background   lipgloss.Style
 	Surface      lipgloss.Style
@@ -18,6 +19,7 @@ type Tokens struct {
 	Footer       lipgloss.Style
 }
 
+// Default contains the standard mch style tokens.
 var Default = Tokens{
 	Background: lipgloss.NewStyle().
 		Background(lipgloss.Color("235")),

@@ -12,7 +12,6 @@ Creating a change requires:
 - workflow phase from `change_phase`
 - one or more types from `change_type`
 - optional epic ID
-- optional nullable `codex_session_id` when the change was produced by a Codex-assisted planning session
 
 The backend validates the project and reference options before insert.
 

@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Repo defines Repo values.
 type Repo struct {
 	pool *pgxpool.Pool
 }
@@ -31,10 +32,12 @@ const changeColumns = `
 	created,
 	modified`
 
+// NewRepo initializes or executes NewRepo behavior.
 func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
+// List executes List behavior.
 func (r *Repo) List(ctx context.Context, changeID int) ([]dto.Requirement, error) {
 	if err := ensureChangeExists(ctx, r.pool, changeID); err != nil {
 		return nil, err
@@ -42,6 +45,7 @@ func (r *Repo) List(ctx context.Context, changeID int) ([]dto.Requirement, error
 	return listRequirements(ctx, r.pool, changeID)
 }
 
+// Create executes Create behavior.
 func (r *Repo) Create(ctx context.Context, req dto.RequirementCreateRequest) (dto.RequirementMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -63,6 +67,7 @@ func (r *Repo) Create(ctx context.Context, req dto.RequirementCreateRequest) (dt
 	return finishMutation(ctx, tx, requirement.ChangeID, []int{requirement.ChangeID}, &requirement)
 }
 
+// Update executes Update behavior.
 func (r *Repo) Update(ctx context.Context, req dto.RequirementUpdateRequest) (dto.RequirementMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -97,6 +102,7 @@ func (r *Repo) Update(ctx context.Context, req dto.RequirementUpdateRequest) (dt
 	return finishMutation(ctx, tx, current.ChangeID, nil, &requirement)
 }
 
+// UpdateDone executes UpdateDone behavior.
 func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequest) (dto.RequirementMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -124,6 +130,7 @@ func (r *Repo) UpdateDone(ctx context.Context, req dto.RequirementUpdateDoneRequ
 	return finishMutation(ctx, tx, current.ChangeID, []int{current.ChangeID}, &requirement)
 }
 
+// UpdateChange executes UpdateChange behavior.
 func (r *Repo) UpdateChange(ctx context.Context, req dto.RequirementUpdateChangeRequest) (dto.RequirementMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -154,6 +161,7 @@ func (r *Repo) UpdateChange(ctx context.Context, req dto.RequirementUpdateChange
 	return finishMutation(ctx, tx, req.ChangeID, []int{current.ChangeID, req.ChangeID}, &requirement)
 }
 
+// Delete executes Delete behavior.
 func (r *Repo) Delete(ctx context.Context, req dto.RequirementIDRequest) (dto.RequirementMutationResponse, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

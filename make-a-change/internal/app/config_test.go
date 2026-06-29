@@ -38,6 +38,7 @@ func TestAppConfigCreatesDefaultsAndPersistsProjectID(t *testing.T) {
 
 func TestResolveConfigPathFindsParentConfig(t *testing.T) {
 	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module mch\n"), 0o644))
 	path := filepath.Join(root, ".config", "config.yaml")
 	require.NoError(t, saveAppConfig(path, appConfig{BackendURL: defaultBackendURL}))
 	nested := filepath.Join(root, "internal", "app")
@@ -51,4 +52,20 @@ func TestResolveConfigPathFindsParentConfig(t *testing.T) {
 	})
 
 	assert.Equal(t, path, resolveConfigPath(defaultConfigPath))
+}
+
+func TestResolveConfigPathUsesModuleRootWhenConfigIsMissing(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module mch\n"), 0o644))
+	nested := filepath.Join(root, "internal", "app")
+	require.NoError(t, os.MkdirAll(nested, 0o755))
+
+	previous, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(nested))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(previous))
+	})
+
+	assert.Equal(t, filepath.Join(root, ".config", "config.yaml"), resolveConfigPath(defaultConfigPath))
 }

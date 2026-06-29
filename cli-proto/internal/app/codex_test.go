@@ -8,11 +8,11 @@ import (
 )
 
 func TestExtractSessionID(t *testing.T) {
-	id, ok := ExtractSessionID("codex_session_id: abc-123\n")
+	id, ok := ExtractSessionID("session_id: abc-123\n")
 	require.True(t, ok)
 	assert.Equal(t, "abc-123", id)
 
-	id, ok = ExtractSessionID(`{"codex_session_id":"session.json"}`)
+	id, ok = ExtractSessionID(`{"session_id":"session.json"}`)
 	require.True(t, ok)
 	assert.Equal(t, "session.json", id)
 }

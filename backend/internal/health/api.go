@@ -6,14 +6,16 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-type Api struct {
+// API defines API values.
+type API struct {
 	e *echo.Echo
 	g *echo.Group
 	s *Service
 }
 
-func NewAPI(e *echo.Echo, s *Service) *Api {
-	a := &Api{
+// NewAPI initializes or executes NewAPI behavior.
+func NewAPI(e *echo.Echo, s *Service) *API {
+	a := &API{
 		e: e,
 		g: e.Group("/api").Group("/v1").Group("/health"),
 		s: s,
@@ -25,7 +27,7 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 	return a
 }
 
-func (a *Api) check(c *echo.Context) error {
+func (a *API) check(c *echo.Context) error {
 	ctx := c.Request().Context()
 
 	res := a.s.Check(ctx)

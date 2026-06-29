@@ -46,7 +46,7 @@ Changes are managed with POST endpoints:
 - `POST /api/v1/change/update-closed`
 - `POST /api/v1/change/delete`
 
-Create and update payloads use `title` and `body`. Create payloads may include nullable `codex_session_id` when a Change is created from a Codex-assisted planning session.
+Create and update payloads use `title` and `body`.
 
 ## Requirements
 Requirements are managed with POST endpoints:

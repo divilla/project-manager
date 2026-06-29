@@ -10,24 +10,31 @@ import (
 )
 
 var (
-	ErrInvalidInput     = errors.New("invalid change input")
+	// ErrInvalidInput is a package-level value.
+	ErrInvalidInput = errors.New("invalid change input")
+	// ErrInvalidReference is returned when a change reference is invalid.
 	ErrInvalidReference = errors.New("invalid change reference")
-	ErrNotFound         = errors.New("change not found")
+	// ErrNotFound is returned when a change cannot be found.
+	ErrNotFound = errors.New("change not found")
 )
 
+// Service defines Service values.
 type Service struct {
 	repo     Repository
 	renderer changeview.ChangeRenderer
 }
 
+// NewService initializes or executes NewService behavior.
 func NewService(changeRepository Repository, renderer changeview.ChangeRenderer) *Service {
 	return &Service{repo: changeRepository, renderer: renderer}
 }
 
+// References executes References behavior.
 func (s *Service) References(ctx context.Context) (dto.ChangeReferences, error) {
 	return s.repo.References(ctx)
 }
 
+// ListChanges executes ListChanges behavior.
 func (s *Service) ListChanges(ctx context.Context, req dto.ChangeListRequest) ([]dto.Change, error) {
 	if req.ProjectID <= 0 {
 		return nil, ErrInvalidInput
@@ -35,6 +42,7 @@ func (s *Service) ListChanges(ctx context.Context, req dto.ChangeListRequest) ([
 	return s.repo.List(ctx, req.ProjectID)
 }
 
+// GetChange executes GetChange behavior.
 func (s *Service) GetChange(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeDetail, error) {
 	if req.ID <= 0 {
 		return dto.ChangeDetail{}, ErrInvalidInput
@@ -47,6 +55,7 @@ func (s *Service) GetChange(ctx context.Context, req dto.ChangeIDRequest) (dto.C
 	return detail, nil
 }
 
+// RenderedBodies executes RenderedBodies behavior.
 func (s *Service) RenderedBodies(ctx context.Context, req dto.ChangeRenderedBodiesRequest) (dto.ChangeRenderedBodiesResponse, error) {
 	ids, err := normalizeIDs(req.IDs)
 	if err != nil {
@@ -67,12 +76,12 @@ func (s *Service) RenderedBodies(ctx context.Context, req dto.ChangeRenderedBodi
 	return dto.ChangeRenderedBodiesResponse{Bodies: bodies}, nil
 }
 
+// CreateChange executes CreateChange behavior.
 func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
 	req.Body = strings.TrimSpace(req.Body)
 	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
-	req.CodexSessionID = normalizeOptionalString(req.CodexSessionID)
 	if req.ProjectID <= 0 || req.Title == "" || req.ChangePhase == "" || len(req.ChangeTypes) == 0 || invalidOptionalID(req.EpicID) {
 		return dto.Change{}, ErrInvalidInput
 	}
@@ -83,6 +92,7 @@ func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest)
 	return s.renderer.RenderChange(change), nil
 }
 
+// UpdateChange executes UpdateChange behavior.
 func (s *Service) UpdateChange(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
 	req.Body = strings.TrimSpace(req.Body)
@@ -97,6 +107,7 @@ func (s *Service) UpdateChange(ctx context.Context, req dto.ChangeUpdateRequest)
 	return s.renderer.RenderChange(change), nil
 }
 
+// UpdateEpic executes UpdateEpic behavior.
 func (s *Service) UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {
 	if req.ID <= 0 || invalidOptionalID(req.EpicID) {
 		return dto.Change{}, ErrInvalidInput
@@ -108,6 +119,7 @@ func (s *Service) UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicReques
 	return s.renderer.RenderChange(change), nil
 }
 
+// UpdatePhase executes UpdatePhase behavior.
 func (s *Service) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error) {
 	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
 	if req.ID <= 0 || req.ChangePhase == "" {
@@ -120,6 +132,7 @@ func (s *Service) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequ
 	return s.renderer.RenderChange(change), nil
 }
 
+// UpdateClosed executes UpdateClosed behavior.
 func (s *Service) UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedRequest) (dto.Change, error) {
 	if req.ID <= 0 {
 		return dto.Change{}, ErrInvalidInput
@@ -131,6 +144,7 @@ func (s *Service) UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedRe
 	return s.renderer.RenderChange(change), nil
 }
 
+// DeleteChange executes DeleteChange behavior.
 func (s *Service) DeleteChange(ctx context.Context, req dto.ChangeIDRequest) error {
 	if req.ID <= 0 {
 		return ErrInvalidInput
@@ -173,15 +187,4 @@ func normalizeTypes(values []string) []string {
 
 func invalidOptionalID(value *int) bool {
 	return value != nil && *value <= 0
-}
-
-func normalizeOptionalString(value *string) *string {
-	if value == nil {
-		return nil
-	}
-	normalized := strings.TrimSpace(*value)
-	if normalized == "" {
-		return nil
-	}
-	return &normalized
 }

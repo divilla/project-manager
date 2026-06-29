@@ -10,17 +10,20 @@ import (
 )
 
 type (
+	// Service defines Service values.
 	Service struct {
 		repo Repository
 	}
 )
 
+// NewService initializes or executes NewService behavior.
 func NewService(healthRepository Repository) *Service {
 	return &Service{
 		repo: healthRepository,
 	}
 }
 
+// Check executes Check behavior.
 func (s *Service) Check(ctx context.Context) dto.Health {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()

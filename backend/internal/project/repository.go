@@ -11,10 +11,12 @@ import (
 )
 
 type (
+	// Repo defines Repo values.
 	Repo struct {
 		pool *pgxpool.Pool
 	}
 
+	// Repository defines Repository values.
 	Repository interface {
 		List(ctx context.Context, limit, offset int) ([]dto.Project, error)
 		Get(ctx context.Context, id int) (dto.Project, error)
@@ -24,12 +26,14 @@ type (
 	}
 )
 
+// NewRepo initializes or executes NewRepo behavior.
 func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
 const projectColumns = "id, name, created, modified, change_count"
 
+// List executes List behavior.
 func (r *Repo) List(ctx context.Context, limit, offset int) ([]dto.Project, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+projectColumns+`
@@ -51,6 +55,7 @@ func (r *Repo) List(ctx context.Context, limit, offset int) ([]dto.Project, erro
 	return projects, rows.Err()
 }
 
+// Get executes Get behavior.
 func (r *Repo) Get(ctx context.Context, id int) (dto.Project, error) {
 	project, err := scanProject(r.pool.QueryRow(ctx, `
 		select `+projectColumns+`
@@ -63,6 +68,7 @@ func (r *Repo) Get(ctx context.Context, id int) (dto.Project, error) {
 	return project, err
 }
 
+// Create executes Create behavior.
 func (r *Repo) Create(ctx context.Context, name string) (dto.Project, error) {
 	var id int
 	if err := r.pool.QueryRow(ctx, "insert into public.project (name) values ($1) returning id", name).Scan(&id); err != nil {
@@ -71,6 +77,7 @@ func (r *Repo) Create(ctx context.Context, name string) (dto.Project, error) {
 	return r.Get(ctx, id)
 }
 
+// Update executes Update behavior.
 func (r *Repo) Update(ctx context.Context, id int, name string) (dto.Project, error) {
 	tag, err := r.pool.Exec(ctx, `
 		update public.project
@@ -87,6 +94,7 @@ func (r *Repo) Update(ctx context.Context, id int, name string) (dto.Project, er
 	return r.Get(ctx, id)
 }
 
+// Delete executes Delete behavior.
 func (r *Repo) Delete(ctx context.Context, id int) error {
 	tag, err := r.pool.Exec(ctx, `
 		delete from public.project

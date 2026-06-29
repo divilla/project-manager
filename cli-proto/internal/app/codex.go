@@ -66,9 +66,8 @@ func (r CommandCodexRunner) Run(ctx context.Context, req CodexRequest) (CodexRes
 }
 
 var sessionIDPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?im)^\s*codex_session_id\s*[:=]\s*([A-Za-z0-9._:-]+)\s*$`),
 	regexp.MustCompile(`(?im)^\s*session[_ ]id\s*[:=]\s*([A-Za-z0-9._:-]+)\s*$`),
-	regexp.MustCompile(`(?i)"codex_session_id"\s*:\s*"([^"]+)"`),
+	regexp.MustCompile(`(?i)"session_id"\s*:\s*"([^"]+)"`),
 }
 
 func ExtractSessionID(output string) (string, bool) {

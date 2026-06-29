@@ -90,8 +90,8 @@ The app exits. If no save occurred, no Change is created.
 - App asks for the initial change idea after `/change-new`.
 - App uses `agent/prompts/build-requirement-with-agent.md` as the controlled prompt template.
 - App starts a new Codex session for the initial planning prompt.
-- App extracts `codex_session_id` from the session ID line in Codex output.
-- App stores `codex_session_id` only in process memory until save or cancel.
+- App extracts the session identifier from Codex output.
+- App stores the session identifier only in process memory until save or cancel.
 - App accepts refinement prompts during an active planning flow.
 - App resumes the same Codex session for refinement prompts.
 - App displays Codex output in the terminal UI.
@@ -106,7 +106,6 @@ The app exits. If no save occurred, no Change is created.
 - Save removes H1, `Types:`, and optional `Epic:` lines before persisting requirement body.
 - Save opens requirement body in `$EDITOR` before final confirmation.
 - Save creates a Change only after explicit confirmation.
-- Backend Change create accepts and persists nullable `codex_session_id`.
 - Saved planned Changes always use `backlog` as `change_phase`.
 
 ## Edge Cases

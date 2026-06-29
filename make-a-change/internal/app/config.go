@@ -48,14 +48,14 @@ func resolveConfigPath(path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
-	if _, err := os.Stat(path); err == nil {
-		return path
-	}
 	dir, err := os.Getwd()
 	if err != nil {
 		return path
 	}
 	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return filepath.Join(dir, path)
+		}
 		candidate := filepath.Join(dir, path)
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate

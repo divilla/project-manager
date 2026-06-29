@@ -35,19 +35,17 @@ type ChangeReferences struct {
 }
 
 type ChangeCreateInput struct {
-	ProjectID      int      `json:"project_id"`
-	EpicID         *int     `json:"epic_id"`
-	Title          string   `json:"title"`
-	Body           string   `json:"body"`
-	ChangePhase    string   `json:"change_phase"`
-	ChangeTypes    []string `json:"change_types"`
-	CodexSessionID *string  `json:"codex_session_id,omitempty"`
+	ProjectID   int      `json:"project_id"`
+	EpicID      *int     `json:"epic_id"`
+	Title       string   `json:"title"`
+	Body        string   `json:"body"`
+	ChangePhase string   `json:"change_phase"`
+	ChangeTypes []string `json:"change_types"`
 }
 
 type Change struct {
-	ID             int     `json:"id"`
-	Title          string  `json:"title"`
-	CodexSessionID *string `json:"codex_session_id"`
+	ID    int    `json:"id"`
+	Title string `json:"title"`
 }
 
 func newAPIClient(baseURL string) *APIClient {

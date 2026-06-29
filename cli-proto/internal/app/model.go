@@ -516,22 +516,13 @@ func (m model) prepareSaveCmd() tea.Cmd {
 func (m model) createChangeCmd() tea.Cmd {
 	return func() tea.Msg {
 		change, err := m.api.CreateChange(context.Background(), ChangeCreateInput{
-			ProjectID:      m.currentProject.ID,
-			EpicID:         m.finalReq.EpicID,
-			Title:          m.finalReq.Title,
-			Body:           m.editedBody,
-			ChangePhase:    "backlog",
-			ChangeTypes:    m.finalReq.Types,
-			CodexSessionID: stringPointer(m.sessionID),
+			ProjectID:   m.currentProject.ID,
+			EpicID:      m.finalReq.EpicID,
+			Title:       m.finalReq.Title,
+			Body:        m.editedBody,
+			ChangePhase: "backlog",
+			ChangeTypes: m.finalReq.Types,
 		})
 		return createMsg{change: change, err: err}
 	}
-}
-
-func stringPointer(value string) *string {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-	normalized := strings.TrimSpace(value)
-	return &normalized
 }

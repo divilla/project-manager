@@ -1,6 +1,7 @@
 package dto
 
 type (
+	// Health defines Health values.
 	Health struct {
 		Status   string `json:"status"`
 		API      string `json:"api"`

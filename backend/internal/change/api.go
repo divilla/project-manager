@@ -9,14 +9,16 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-type Api struct {
+// API defines API values.
+type API struct {
 	e *echo.Echo
 	g *echo.Group
 	s *Service
 }
 
-func NewAPI(e *echo.Echo, s *Service) *Api {
-	a := &Api{
+// NewAPI initializes or executes NewAPI behavior.
+func NewAPI(e *echo.Echo, s *Service) *API {
+	a := &API{
 		e: e,
 		g: e.Group("/api").Group("/v1").Group("/change"),
 		s: s,
@@ -36,7 +38,7 @@ func NewAPI(e *echo.Echo, s *Service) *Api {
 	return a
 }
 
-func (a *Api) references(c *echo.Context) error {
+func (a *API) references(c *echo.Context) error {
 	res, err := a.s.References(c.Request().Context())
 	if err != nil {
 		return err
@@ -44,7 +46,7 @@ func (a *Api) references(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) listChanges(c *echo.Context) error {
+func (a *API) listChanges(c *echo.Context) error {
 	var req dto.ChangeListRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change list payload")
@@ -56,7 +58,7 @@ func (a *Api) listChanges(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) getChange(c *echo.Context) error {
+func (a *API) getChange(c *echo.Context) error {
 	var req dto.ChangeIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change get payload")
@@ -68,7 +70,7 @@ func (a *Api) getChange(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) renderedBodies(c *echo.Context) error {
+func (a *API) renderedBodies(c *echo.Context) error {
 	var req dto.ChangeRenderedBodiesRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change rendered bodies payload")
@@ -80,7 +82,7 @@ func (a *Api) renderedBodies(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) createChange(c *echo.Context) error {
+func (a *API) createChange(c *echo.Context) error {
 	var req dto.ChangeCreateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change create payload")
@@ -92,7 +94,7 @@ func (a *Api) createChange(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, &res)
 }
 
-func (a *Api) updateChange(c *echo.Context) error {
+func (a *API) updateChange(c *echo.Context) error {
 	var req dto.ChangeUpdateRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change update payload")
@@ -104,7 +106,7 @@ func (a *Api) updateChange(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) updateEpic(c *echo.Context) error {
+func (a *API) updateEpic(c *echo.Context) error {
 	var req dto.ChangeUpdateEpicRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change epic payload")
@@ -116,7 +118,7 @@ func (a *Api) updateEpic(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) updatePhase(c *echo.Context) error {
+func (a *API) updatePhase(c *echo.Context) error {
 	var req dto.ChangeUpdatePhaseRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change phase payload")
@@ -128,7 +130,7 @@ func (a *Api) updatePhase(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) updateClosed(c *echo.Context) error {
+func (a *API) updateClosed(c *echo.Context) error {
 	var req dto.ChangeUpdateClosedRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change closed payload")
@@ -140,7 +142,7 @@ func (a *Api) updateClosed(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *Api) deleteChange(c *echo.Context) error {
+func (a *API) deleteChange(c *echo.Context) error {
 	var req dto.ChangeIDRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change delete payload")

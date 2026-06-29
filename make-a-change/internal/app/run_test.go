@@ -8,32 +8,41 @@ import (
 	"strings"
 	"testing"
 
+	"mch/internal/dto"
+	"mch/internal/projects"
+	"mch/internal/styles"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"mch/internal/api"
-	"mch/internal/styles"
 )
 
 type fakeClient struct {
-	projects   []api.Option
-	epics      []api.Option
-	phases     []api.Option
-	types      []api.Option
-	err        error
-	projectID  string
-	listCalls  int
-	phaseCalls int
-	typeCalls  int
-	epicCalls  int
+	projects     []dto.Option
+	projectRows  []dto.Project
+	epics        []dto.Option
+	phases       []dto.Option
+	types        []dto.Option
+	err          error
+	projectID    string
+	listCalls    int
+	rowListCalls int
+	phaseCalls   int
+	typeCalls    int
+	epicCalls    int
 }
 
-func (f *fakeClient) ListProjects() ([]api.Option, error) {
+func (f *fakeClient) ListProjects() ([]dto.Option, error) {
 	f.listCalls++
 	return f.projects, f.err
 }
 
-func (f *fakeClient) ListEpics(projectID string) ([]api.Option, error) {
+func (f *fakeClient) ListProjectRows() ([]dto.Project, error) {
+	f.rowListCalls++
+	return f.projectRows, f.err
+}
+
+func (f *fakeClient) ListEpics(projectID string) ([]dto.Option, error) {
 	f.epicCalls++
 	f.projectID = projectID
 	if f.err != nil {
@@ -45,12 +54,12 @@ func (f *fakeClient) ListEpics(projectID string) ([]api.Option, error) {
 	return f.epics, nil
 }
 
-func (f *fakeClient) ListPhases() ([]api.Option, error) {
+func (f *fakeClient) ListPhases() ([]dto.Option, error) {
 	f.phaseCalls++
 	return f.phases, f.err
 }
 
-func (f *fakeClient) ListTypes() ([]api.Option, error) {
+func (f *fakeClient) ListTypes() ([]dto.Option, error) {
 	f.typeCalls++
 	return f.types, f.err
 }
@@ -75,7 +84,7 @@ func TestNewModelStartupState(t *testing.T) {
 
 func TestStartupTriggersProjectSelectionWhenProjectIDIsUnset(t *testing.T) {
 	client := &fakeClient{
-		projects: []api.Option{{ID: "7", Label: "Project Seven"}},
+		projects: []dto.Option{{ID: "7", Label: "Project Seven"}},
 	}
 	m := NewModelWithClient(client)
 
@@ -89,7 +98,7 @@ func TestStartupTriggersProjectSelectionWhenProjectIDIsUnset(t *testing.T) {
 	got = applyMsg(got, load())
 
 	assert.Equal(t, SelectProjectDropDown, got.state)
-	assert.Equal(t, []api.Option{{ID: "7", Label: "Project Seven"}}, got.dropdown.options)
+	assert.Equal(t, []dto.Option{{ID: "7", Label: "Project Seven"}}, got.dropdown.options)
 }
 
 func TestStartupSkipsProjectSelectionWhenProjectIDIsSaved(t *testing.T) {
@@ -169,6 +178,150 @@ func TestMainCommandsTransition(t *testing.T) {
 	}
 }
 
+func TestProjectsCommandReloadsAndRendersSelectableTable(t *testing.T) {
+	client := &fakeClient{
+		projectRows: []dto.Project{
+			{
+				ID:          "7",
+				Name:        "Project Seven",
+				ChangeCount: 3,
+				Created:     "2026-06-29T08:15:00Z",
+				Modified:    "2026-06-29T10:45:00Z",
+			},
+			{
+				ID:          "8",
+				Name:        "Project Eight",
+				ChangeCount: 0,
+				Created:     "bad timestamp",
+				Modified:    "",
+			},
+		},
+	}
+	m := NewModelWithClient(client)
+
+	got, cmd := sendCommand(m, "/projects")
+	require.Equal(t, ProjectsListState, got.state)
+	require.NotNil(t, cmd)
+	assert.True(t, got.projectList.Loading)
+
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, 1, client.rowListCalls)
+	assert.False(t, got.projectList.Loading)
+	assert.Equal(t, 0, got.projectList.Selected)
+	view := stripANSI(got.View())
+	assert.Contains(t, view, "ProjectsListScreen - Title: Projects List")
+	assert.Contains(t, view, "id")
+	assert.Contains(t, view, "Name")
+	assert.Contains(t, view, "Changes")
+	assert.Contains(t, view, "Created")
+	assert.Contains(t, view, "Modified")
+	assert.Contains(t, view, "     7  Project Seven")
+	assert.Contains(t, view, "Project Seven")
+	assert.Contains(t, view, "3")
+	assert.Contains(t, view, "2026-06-29")
+	assert.Contains(t, view, "Invalid")
+
+	got, _ = sendCommand(got, "/return")
+	got, cmd = sendCommand(got, "/projects")
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, 2, client.rowListCalls)
+	assert.Equal(t, ProjectsListState, got.state)
+}
+
+func TestProjectsTableSelectionIsBounded(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectsListState
+	m.projectList.Rows = []dto.Project{
+		{ID: "1", Name: "One"},
+		{ID: "2", Name: "Two"},
+	}
+
+	got, _ := sendKey(m, tea.KeyUp)
+	assert.Equal(t, 0, got.projectList.Selected)
+
+	got, _ = sendKey(got, tea.KeyDown)
+	assert.Equal(t, 1, got.projectList.Selected)
+
+	got, _ = sendKey(got, tea.KeyDown)
+	assert.Equal(t, 1, got.projectList.Selected)
+
+	got, _ = sendKey(got, tea.KeyUp)
+	assert.Equal(t, 0, got.projectList.Selected)
+}
+
+func TestProjectsEnterOpensDetailsWithoutMutatingCurrentProject(t *testing.T) {
+	current := dto.Option{ID: "99", Label: "Current Project"}
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectsListState
+	m.currentProject = current
+	m.projectList.Rows = []dto.Project{
+		{ID: "7", Name: "Project Seven", ChangeCount: 3, Created: "2026-06-29T08:15:00Z", Modified: "2026-06-29T10:45:00Z"},
+		{ID: "8", Name: "Project Eight", ChangeCount: 4, Created: "2026-06-30T08:15:00Z", Modified: "2026-06-30T10:45:00Z"},
+	}
+	m.projectList.Selected = 1
+
+	got, _ := sendKey(m, tea.KeyEnter)
+
+	assert.Equal(t, ProjectDetailsState, got.state)
+	assert.Equal(t, current, got.currentProject)
+	assert.Equal(t, dto.Project{ID: "8", Name: "Project Eight", ChangeCount: 4, Created: "2026-06-30T08:15:00Z", Modified: "2026-06-30T10:45:00Z"}, got.projectList.Detail)
+	view := stripANSI(got.View())
+	assert.Contains(t, view, "ProjectDetailsScreen - Title: Project Details")
+	assert.Contains(t, view, "8 Project Eight")
+	assert.Contains(t, view, "Change Count: 4")
+}
+
+func TestProjectsEnterWithNoSelectableRowErrors(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectsListState
+
+	got, _ := sendKey(m, tea.KeyEnter)
+
+	assert.Equal(t, ProjectsListState, got.state)
+	assert.NotEmpty(t, got.err)
+}
+
+func TestProjectsLoadFailureAndEmptyListAreDeterministic(t *testing.T) {
+	failing := &fakeClient{err: errors.New("backend unavailable")}
+	m := NewModelWithClient(failing)
+
+	got, cmd := sendCommand(m, "/projects")
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, ProjectsListState, got.state)
+	assert.False(t, got.projectList.Loading)
+	assert.Equal(t, "backend unavailable", got.err)
+	assert.Contains(t, stripANSI(got.View()), "No projects.")
+
+	empty := NewModelWithClient(&fakeClient{})
+	got, cmd = sendCommand(empty, "/projects")
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, ProjectsListState, got.state)
+	assert.Contains(t, stripANSI(got.View()), "No projects.")
+}
+
+func TestProjectsTableNarrowWidthDoesNotOverflow(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectsListState
+	m.width = 24
+	m.projectList.Rows = []dto.Project{{
+		ID:          "777777",
+		Name:        "Very Long Project Name That Must Be Truncated",
+		ChangeCount: 123,
+		Created:     "2026-06-29T08:15:00Z",
+		Modified:    "2026-06-29T10:45:00Z",
+	}}
+
+	for _, line := range strings.Split(stripANSI(projects.TableView(m.projectList, 24)), "\n") {
+		assert.LessOrEqual(t, len(line), 24)
+	}
+}
+
 func TestMainNewChangeShortcutIsFirstCommand(t *testing.T) {
 	commands := commandsByState[MainState]
 	require.NotEmpty(t, commands)
@@ -205,7 +358,6 @@ func TestListSelectionDropdownTransitionsToDetails(t *testing.T) {
 		{start: ChangesListState, want: ChangeDetailsState},
 		{start: ChangeDetailsState, want: RequirementDetailsState},
 		{start: EpicsListState, want: EpicDetailsState},
-		{start: ProjectsListState, want: ProjectDetailsState},
 	}
 
 	for _, tt := range tests {
@@ -403,10 +555,10 @@ func TestReturnAndEscapeTransitions(t *testing.T) {
 
 func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	client := &fakeClient{
-		projects: []api.Option{{ID: "7", Label: "Project Seven"}},
-		phases:   []api.Option{{ID: "backlog", Label: "backlog"}},
-		types:    []api.Option{{ID: "feature", Label: "feature"}},
-		epics:    []api.Option{{ID: "3", Label: "Epic Three"}},
+		projects: []dto.Option{{ID: "7", Label: "Project Seven"}},
+		phases:   []dto.Option{{ID: "backlog", Label: "backlog"}},
+		types:    []dto.Option{{ID: "feature", Label: "feature"}},
+		epics:    []dto.Option{{ID: "3", Label: "Epic Three"}},
 	}
 
 	m := NewModelWithClient(client)
@@ -443,7 +595,7 @@ func TestSelectProjectPersistsProjectIDToConfig(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".config", "config.yaml")
 	require.NoError(t, saveAppConfig(path, appConfig{BackendURL: defaultBackendURL}))
 	client := &fakeClient{
-		projects: []api.Option{{ID: "7", Label: "Project Seven"}},
+		projects: []dto.Option{{ID: "7", Label: "Project Seven"}},
 	}
 	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL}, path)
 
@@ -475,13 +627,13 @@ func TestSelectorFailureAndEscapePreservePreviousState(t *testing.T) {
 
 func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 	client := &fakeClient{
-		phases: []api.Option{{ID: "done", Label: "done"}},
-		epics:  []api.Option{{ID: "epic-1", Label: "Epic One"}},
-		types:  []api.Option{{ID: "test", Label: "test"}},
+		phases: []dto.Option{{ID: "done", Label: "done"}},
+		epics:  []dto.Option{{ID: "epic-1", Label: "Epic One"}},
+		types:  []dto.Option{{ID: "test", Label: "test"}},
 	}
 	m := NewModelWithClient(client)
 	m.state = ChangesListState
-	m.currentProject = api.Option{ID: "project-1", Label: "Project One"}
+	m.currentProject = dto.Option{ID: "project-1", Label: "Project One"}
 
 	got, cmd := sendCommand(m, "/phase-filter")
 	require.NotNil(t, cmd)
@@ -612,6 +764,23 @@ func TestCommandDropdownPreservesUnderlyingScreenForEveryCommandState(t *testing
 	}
 }
 
+func TestProjectsCommandMenuPreservesListTitle(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectsListState
+	m.projectList.Rows = []dto.Project{{ID: "7", Name: "Project Seven"}}
+
+	got, _ := sendRune(m, '/')
+
+	assert.Equal(t, ProjectsListState, got.state)
+	assert.Equal(t, dropdownCommand, got.dropdown.kind)
+	view := stripANSI(got.View())
+	assert.Contains(t, view, "ProjectsListScreen - Title: Projects List")
+	assert.Contains(t, view, "/new-project")
+	assert.Contains(t, view, "/help")
+	assert.Contains(t, view, "/find")
+	assert.Contains(t, view, "/return")
+}
+
 func TestCreateStatesUseContextSpecificNewCommandVocabulary(t *testing.T) {
 	createCommands := map[State]string{
 		ChangesListState:        "/new-change",
@@ -648,7 +817,7 @@ func TestUpdateStatesUseEditCommandVocabulary(t *testing.T) {
 
 func TestNoPersistenceAPICallsForNavigationOnlyActions(t *testing.T) {
 	client := &fakeClient{
-		phases: []api.Option{{ID: "backlog", Label: "backlog"}},
+		phases: []dto.Option{{ID: "backlog", Label: "backlog"}},
 	}
 	m := NewModelWithClient(client)
 	m.state = ChangeDetailsState
@@ -658,6 +827,7 @@ func TestNoPersistenceAPICallsForNavigationOnlyActions(t *testing.T) {
 	got.dropdown.filter = "/yes"
 	got, _ = sendKey(got, tea.KeyEnter)
 	assert.Zero(t, client.listCalls)
+	assert.Zero(t, client.rowListCalls)
 	assert.Zero(t, client.phaseCalls)
 	assert.Zero(t, client.typeCalls)
 	assert.Zero(t, client.epicCalls)
