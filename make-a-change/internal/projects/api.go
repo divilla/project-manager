@@ -6,4 +6,7 @@ import "mch/internal/dto"
 type API interface {
 	ListProjects() ([]dto.Option, error)
 	ListProjectRows() ([]dto.Project, error)
+	GetProject(id int) (dto.Project, error)
+	CreateProject(name string) (dto.Project, error)
+	UpdateProject(id int, name string) (dto.Project, error)
 }

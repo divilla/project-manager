@@ -12,24 +12,39 @@ import (
 	"mch/internal/projects"
 	"mch/internal/styles"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 type fakeClient struct {
-	projects     []dto.Option
-	projectRows  []dto.Project
-	epics        []dto.Option
-	phases       []dto.Option
-	types        []dto.Option
-	err          error
-	projectID    string
-	listCalls    int
-	rowListCalls int
-	phaseCalls   int
-	typeCalls    int
-	epicCalls    int
+	projects       []dto.Option
+	projectRows    []dto.Project
+	createdProject dto.Project
+	updatedProject dto.Project
+	gotProject     dto.Project
+	epics          []dto.Option
+	phases         []dto.Option
+	types          []dto.Option
+	err            error
+	createErr      error
+	updateErr      error
+	getErr         error
+	projectID      string
+	listCalls      int
+	rowListCalls   int
+	createCalls    int
+	updateCalls    int
+	getCalls       int
+	phaseCalls     int
+	typeCalls      int
+	epicCalls      int
+	createNames    []string
+	updateIDs      []int
+	updateNames    []string
+	getIDs         []int
 }
 
 func (f *fakeClient) ListProjects() ([]dto.Option, error) {
@@ -40,6 +55,43 @@ func (f *fakeClient) ListProjects() ([]dto.Option, error) {
 func (f *fakeClient) ListProjectRows() ([]dto.Project, error) {
 	f.rowListCalls++
 	return f.projectRows, f.err
+}
+
+func (f *fakeClient) GetProject(id int) (dto.Project, error) {
+	f.getCalls++
+	f.getIDs = append(f.getIDs, id)
+	if f.getErr != nil {
+		return dto.Project{}, f.getErr
+	}
+	if f.err != nil {
+		return dto.Project{}, f.err
+	}
+	return f.gotProject, nil
+}
+
+func (f *fakeClient) CreateProject(name string) (dto.Project, error) {
+	f.createCalls++
+	f.createNames = append(f.createNames, name)
+	if f.createErr != nil {
+		return dto.Project{}, f.createErr
+	}
+	if f.err != nil {
+		return dto.Project{}, f.err
+	}
+	return f.createdProject, nil
+}
+
+func (f *fakeClient) UpdateProject(id int, name string) (dto.Project, error) {
+	f.updateCalls++
+	f.updateIDs = append(f.updateIDs, id)
+	f.updateNames = append(f.updateNames, name)
+	if f.updateErr != nil {
+		return dto.Project{}, f.updateErr
+	}
+	if f.err != nil {
+		return dto.Project{}, f.err
+	}
+	return f.updatedProject, nil
 }
 
 func (f *fakeClient) ListEpics(projectID string) ([]dto.Option, error) {
@@ -82,6 +134,19 @@ func TestNewModelStartupState(t *testing.T) {
 	assert.Contains(t, m.View(), "MainScreen - Title: Main")
 }
 
+func TestShellChromeRendersTitleAndCurrentProjectInFooter(t *testing.T) {
+	m := newModelWithConfig(&fakeClient{}, appConfig{BackendURL: defaultBackendURL, ProjectID: 7}, "")
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.width = 120
+
+	view := stripANSI(m.View())
+
+	assert.Contains(t, view, "Make a Change ver. 0.1")
+	assert.NotContains(t, view, "\nversion 0.1")
+	assert.NotContains(t, view, "\nProject: ")
+	assert.Contains(t, view, "Current Project: #7 Project Seven")
+}
+
 func TestStartupTriggersProjectSelectionWhenProjectIDIsUnset(t *testing.T) {
 	client := &fakeClient{
 		projects: []dto.Option{{ID: "7", Label: "Project Seven"}},
@@ -90,7 +155,7 @@ func TestStartupTriggersProjectSelectionWhenProjectIDIsUnset(t *testing.T) {
 
 	cmd := m.Init()
 	require.NotNil(t, cmd)
-	got := applyMsg(m, cmd())
+	got := applyCommand(m, cmd)
 	assert.Equal(t, SelectProjectDropDown, got.state)
 	assert.Equal(t, selectorProjects, got.dropdown.source)
 
@@ -102,11 +167,17 @@ func TestStartupTriggersProjectSelectionWhenProjectIDIsUnset(t *testing.T) {
 }
 
 func TestStartupSkipsProjectSelectionWhenProjectIDIsSaved(t *testing.T) {
-	m := newModelWithConfig(&fakeClient{}, appConfig{BackendURL: defaultBackendURL, ProjectID: 7}, "")
+	client := &fakeClient{gotProject: dto.Project{ID: "7", Name: "Project Seven"}}
+	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, ProjectID: 7}, "")
+	m.width = 120
 
-	assert.Nil(t, m.Init())
+	require.NotNil(t, m.Init())
+	got := applyCommand(m, m.Init())
 	assert.Equal(t, MainState, m.state)
-	assert.Equal(t, "7", m.currentProject.ID)
+	assert.Equal(t, MainState, got.state)
+	assert.Equal(t, "7", got.currentProject.ID)
+	assert.Equal(t, "Project Seven", got.currentProject.Label)
+	assert.Contains(t, stripANSI(got.View()), "Current Project: #7 Project Seven")
 }
 
 func TestStartupProjectSelectionShowsErrorWhenNoProjectsExist(t *testing.T) {
@@ -115,7 +186,7 @@ func TestStartupProjectSelectionShowsErrorWhenNoProjectsExist(t *testing.T) {
 
 	cmd := m.Init()
 	require.NotNil(t, cmd)
-	got := applyMsg(m, cmd())
+	got := applyCommand(m, cmd)
 	load := selectorCommand(client, got.dropdown.source, got.currentProject.ID)
 	got = applyMsg(got, load())
 
@@ -127,7 +198,7 @@ func TestStartupProjectSelectionShowsErrorWhenNoProjectsExist(t *testing.T) {
 func TestInputBandUsesCliProtoFullWidthBackground(t *testing.T) {
 	m := NewModel()
 	m.width = 40
-	assert.Equal(t, 0, m.input.Width)
+	assert.Equal(t, 1, m.input.Width())
 
 	band := m.inputBand(40)
 	lines := strings.Split(band, "\n")
@@ -139,11 +210,16 @@ func TestInputBandUsesCliProtoFullWidthBackground(t *testing.T) {
 	}
 	assert.True(t, strings.HasPrefix(stripANSI(lines[1]), "> Type / for commands"))
 
-	m.input.SetValue("typed text")
-	typedLine := stripANSI(strings.Split(m.inputBand(40), "\n")[1])
+	m = m.setPromptValue("typed text")
+	typedBand := m.inputBand(40)
+	assert.NotContains(t, typedBand, "48;5;0")
+	assert.NotContains(t, typedBand, "[40m")
+	typedLine := stripANSI(strings.Split(typedBand, "\n")[1])
 	assert.True(t, strings.HasPrefix(typedLine, "> typed text"))
-	assert.Equal(t, "15", fmt.Sprint(m.input.TextStyle.GetForeground()))
-	assert.Equal(t, "0", fmt.Sprint(m.input.PlaceholderStyle.GetForeground()))
+	assert.Equal(t, "15", fmt.Sprint(m.input.FocusedStyle.Text.GetForeground()))
+	assert.Equal(t, "15", fmt.Sprint(m.input.FocusedStyle.CursorLine.GetForeground()))
+	assert.Equal(t, "0", fmt.Sprint(m.input.FocusedStyle.Placeholder.GetForeground()))
+	assert.Equal(t, cursor.CursorStatic, m.input.Cursor.Mode())
 
 	wideBand := m.inputBand(180)
 	wideLines := strings.Split(wideBand, "\n")
@@ -151,6 +227,200 @@ func TestInputBandUsesCliProtoFullWidthBackground(t *testing.T) {
 	assert.Len(t, stripANSI(wideLines[0]), 180)
 	assert.Len(t, stripANSI(wideLines[1]), 180)
 	assert.Len(t, stripANSI(wideLines[2]), 180)
+}
+
+func TestPromptTextareaGrowsForExplicitNewlines(t *testing.T) {
+	m := NewModel()
+	m = m.setPromptValue("first line\nsecond line\n")
+
+	band := stripANSI(m.inputBand(40))
+	lines := strings.Split(band, "\n")
+
+	require.Len(t, lines, 5)
+	assert.True(t, strings.HasPrefix(lines[1], "> first line"))
+	assert.True(t, strings.HasPrefix(lines[2], "> second line"))
+	assert.True(t, strings.HasPrefix(lines[3], "> "))
+}
+
+func TestPromptNewlineKeyAddsBlankPromptLine(t *testing.T) {
+	m := NewModel()
+	m = m.setPromptValue("first line")
+
+	got, cmd := sendKeyMsg(m, tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, "first line\n", got.input.Value())
+	band := got.inputBand(40)
+	assert.NotContains(t, band, "48;5;0")
+	assert.NotContains(t, band, "[40m")
+	assert.Equal(t, 4, len(strings.Split(stripANSI(band), "\n")))
+}
+
+func TestPromptShiftEnterEscapeSequenceAddsNewline(t *testing.T) {
+	m := NewModel()
+	m = m.setPromptValue("first line")
+
+	got, cmd := sendKeyMsg(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'O'}, Alt: true})
+	assert.Nil(t, cmd)
+	assert.Equal(t, "first line", got.input.Value())
+	assert.True(t, got.pendingAltO)
+
+	got, cmd = sendKeyMsg(got, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'M'}})
+
+	assert.Nil(t, cmd)
+	assert.False(t, got.pendingAltO)
+	assert.Equal(t, "first line\n", got.input.Value())
+	assert.NotContains(t, got.input.Value(), "OM")
+	assert.Equal(t, 4, len(strings.Split(stripANSI(got.inputBand(40)), "\n")))
+}
+
+func TestPromptInputUsesTerminalWidthForTyping(t *testing.T) {
+	m := NewModel()
+	m.width = 40
+
+	got, cmd := sendRune(m, 'a')
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, "a", got.input.Value())
+	assert.Greater(t, got.input.Width(), 1)
+}
+
+func TestPromptUpDownMovesVisibleCursorBetweenLines(t *testing.T) {
+	m := NewModel()
+	m = m.setPromptValue("first\nsecond")
+
+	got, cmd := sendKey(m, tea.KeyUp)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, 0, got.promptCursorRow)
+	assert.Equal(t, len("first"), got.promptCursorCol)
+
+	got, cmd = sendKey(got, tea.KeyDown)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, 1, got.promptCursorRow)
+	assert.Equal(t, len("first"), got.promptCursorCol)
+}
+
+func TestViewAddsBlankLineBetweenPromptAndFooter(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.width = 40
+
+	lines := strings.Split(stripANSI(m.View()), "\n")
+	var promptLine int
+	for i, line := range lines {
+		if strings.HasPrefix(line, "> Type / for commands") {
+			promptLine = i
+			break
+		}
+	}
+	require.NotZero(t, promptLine)
+	require.Greater(t, len(lines), promptLine+3)
+	assert.Empty(t, strings.TrimSpace(lines[promptLine+1]))
+	assert.Empty(t, strings.TrimSpace(lines[promptLine+2]))
+	assert.Contains(t, lines[promptLine+3], "/ commands")
+}
+
+func TestNewProjectUsesNamePlaceholder(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectsListState
+
+	got, _ := sendCommand(m, "/new-project")
+
+	assert.Equal(t, ProjectCreateState, got.state)
+	assert.Equal(t, "Write a Name", got.input.Placeholder)
+	assert.Contains(t, stripANSI(got.inputBand(40)), "> Write a Name")
+
+	got, _ = sendCommand(got, "/cancel")
+	assert.Equal(t, defaultInputPlaceholder, got.input.Placeholder)
+}
+
+func TestProjectFormsExposeEditorCommandFirst(t *testing.T) {
+	assert.Equal(t, []string{"/editor", "/save", "/cancel"}, commandsByState[ProjectCreateState])
+	assert.Equal(t, []string{"/editor", "/save", "/cancel"}, commandsByState[ProjectUpdateState])
+}
+
+func TestProjectEditorSavesResultWithoutReturningToPrompt(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectCreateState
+	m.input.SetValue("Initial Name")
+
+	updated, cmd := m.Update(editorFinishedMsg{source: ProjectCreateState, content: "Edited\nName\n"})
+	got := updated.(Model)
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, "Initial Name", got.input.Value())
+	assert.Equal(t, "saving", got.status)
+}
+
+func TestProjectEditorIgnoresStaleResultAndReportsErrors(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectUpdateState
+	m.input.SetValue("Current")
+
+	got := applyMsg(m, editorFinishedMsg{source: ProjectCreateState, content: "Stale"})
+	assert.Equal(t, "Current", got.input.Value())
+
+	got = applyMsg(got, editorFinishedMsg{source: ProjectUpdateState, err: errors.New("nano failed")})
+	assert.Equal(t, "Current", got.input.Value())
+	assert.Equal(t, "nano failed", got.err)
+	assert.Equal(t, "editor failed", got.status)
+}
+
+func TestProjectEditorUsesEditorEnvWithNanoFallback(t *testing.T) {
+	t.Setenv("EDITOR", "")
+	fallback := editorCommand("/tmp/project.md")
+	assert.Equal(t, "nano", fallback.Args[0])
+	assert.Equal(t, "/tmp/project.md", fallback.Args[1])
+
+	t.Setenv("EDITOR", "vim -f")
+	fromEnv := editorCommand("/tmp/project.md")
+	assert.Equal(t, "sh", fromEnv.Args[0])
+	assert.Equal(t, []string{"sh", "-c", "$EDITOR \"$1\"", "mch-editor", "/tmp/project.md"}, fromEnv.Args)
+	assert.Contains(t, fromEnv.Env, "EDITOR=vim -f")
+}
+
+func TestPromptEnterSavesProjectFormRawMultilineValue(t *testing.T) {
+	client := &fakeClient{
+		createdProject: dto.Project{ID: "7"},
+		gotProject:     dto.Project{ID: "7", Name: "Line 1\nLine 2"},
+	}
+	m := NewModelWithClient(client)
+	m.state = ProjectCreateState
+	m.input.SetValue("Line 1\nLine 2")
+
+	updated, cmd := sendKey(m, tea.KeyEnter)
+	got := updated
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, ProjectCreateState, got.state)
+	assert.Equal(t, "saving", got.status)
+
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, ProjectDetailsState, got.state)
+	assert.Equal(t, []string{"Line 1\nLine 2"}, client.createNames)
+}
+
+func TestPromptCtrlCClearsBeforeCancelingOrQuitting(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectCreateState
+	m.input.SetValue("draft")
+
+	got, cmd := sendKey(m, tea.KeyCtrlC)
+	assert.Nil(t, cmd)
+	assert.Equal(t, ProjectCreateState, got.state)
+	assert.Empty(t, got.input.Value())
+	assert.Equal(t, "prompt cleared", got.status)
+
+	got, cmd = sendKey(got, tea.KeyCtrlC)
+	assert.NotNil(t, cmd)
+	assert.Equal(t, ProjectsListState, got.state)
+
+	got, cmd = sendKey(NewModelWithClient(&fakeClient{}), tea.KeyCtrlC)
+	assert.NotNil(t, cmd)
+	assert.Equal(t, DoneState, got.state)
+	assert.True(t, got.quitting)
 }
 
 func TestMainCommandsTransition(t *testing.T) {
@@ -220,7 +490,7 @@ func TestProjectsCommandReloadsAndRendersSelectableTable(t *testing.T) {
 	assert.Contains(t, view, "Project Seven")
 	assert.Contains(t, view, "3")
 	assert.Contains(t, view, "2026-06-29")
-	assert.Contains(t, view, "Invalid")
+	assert.Contains(t, view, "not a date")
 
 	got, _ = sendCommand(got, "/return")
 	got, cmd = sendCommand(got, "/projects")
@@ -228,6 +498,34 @@ func TestProjectsCommandReloadsAndRendersSelectableTable(t *testing.T) {
 	got = applyMsg(got, cmd())
 	assert.Equal(t, 2, client.rowListCalls)
 	assert.Equal(t, ProjectsListState, got.state)
+}
+
+func TestProjectsTableUsesDynamicNameWidthAndTrimsVeryLongNames(t *testing.T) {
+	longName := "This is a project with a real name that is long enough to resize the name column"
+	tooLongName := longName + " and has additional words on the right that must be removed"
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectsListState
+	m.projectList.Rows = []dto.Project{
+		{ID: "1", Name: "demo1", ChangeCount: 2, Created: "2026-06-23T04:51:00Z", Modified: "2026-06-23T04:51:00Z"},
+		{ID: "350", Name: longName, ChangeCount: 0, Created: "2026-06-29T15:57:00Z", Modified: "2026-06-29T15:57:00Z"},
+		{ID: "351", Name: tooLongName, ChangeCount: 1, Created: "2026-06-29T15:58:00Z", Modified: "2026-06-29T15:58:00Z"},
+	}
+
+	rendered := stripANSI(projects.TableView(m.projectList, 160))
+	lines := strings.Split(rendered, "\n")
+	require.Len(t, lines, 4)
+
+	createdColumn := strings.Index(lines[0], "Created")
+	require.NotEqual(t, -1, createdColumn)
+	assert.Equal(t, createdColumn, strings.Index(lines[1], "2026-"))
+	assert.Equal(t, createdColumn, strings.Index(lines[2], "2026-"))
+	assert.Equal(t, createdColumn, strings.Index(lines[3], "2026-"))
+	assert.Contains(t, lines[2], longName)
+	assert.NotContains(t, lines[3], "must be removed")
+	trimmedName := projects.ProjectTableName(tooLongName)
+	assert.True(t, strings.HasSuffix(trimmedName, "..."))
+	assert.Less(t, len([]rune(trimmedName)), 78)
+	assert.Contains(t, lines[3], trimmedName)
 }
 
 func TestProjectsTableSelectionIsBounded(t *testing.T) {
@@ -253,7 +551,10 @@ func TestProjectsTableSelectionIsBounded(t *testing.T) {
 
 func TestProjectsEnterOpensDetailsWithoutMutatingCurrentProject(t *testing.T) {
 	current := dto.Option{ID: "99", Label: "Current Project"}
-	m := NewModelWithClient(&fakeClient{})
+	client := &fakeClient{
+		gotProject: dto.Project{ID: "8", Name: "Fresh Project Eight", ChangeCount: 5, Created: "2026-06-30T08:15:00Z", Modified: "2026-06-30T11:45:00Z"},
+	}
+	m := NewModelWithClient(client)
 	m.state = ProjectsListState
 	m.currentProject = current
 	m.projectList.Rows = []dto.Project{
@@ -262,15 +563,107 @@ func TestProjectsEnterOpensDetailsWithoutMutatingCurrentProject(t *testing.T) {
 	}
 	m.projectList.Selected = 1
 
-	got, _ := sendKey(m, tea.KeyEnter)
+	got, cmd := sendKey(m, tea.KeyEnter)
 
 	assert.Equal(t, ProjectDetailsState, got.state)
 	assert.Equal(t, current, got.currentProject)
 	assert.Equal(t, dto.Project{ID: "8", Name: "Project Eight", ChangeCount: 4, Created: "2026-06-30T08:15:00Z", Modified: "2026-06-30T10:45:00Z"}, got.projectList.Detail)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, []int{8}, client.getIDs)
+	assert.Equal(t, client.gotProject, got.projectList.Detail)
 	view := stripANSI(got.View())
 	assert.Contains(t, view, "ProjectDetailsScreen - Title: Project Details")
-	assert.Contains(t, view, "8 Project Eight")
-	assert.Contains(t, view, "Change Count: 4")
+	assert.Contains(t, view, "         #ID: 8")
+	assert.Contains(t, view, "        Name: Fresh Project Eight")
+	assert.Contains(t, view, "Changes: 5")
+}
+
+func TestProjectDetailsRenderRequiredLabelsAndTimestampFallback(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectDetailsState
+	m.width = 32
+	m.projectList.Detail = dto.Project{
+		ID:          "7",
+		Name:        "Project Seven",
+		ChangeCount: 3,
+		Created:     "2026-06-29T13:04:59.999Z",
+		Modified:    "malformed",
+	}
+
+	rawDetails := projects.DetailsView(m.projectList.Detail, 32)
+	view := stripANSI(m.View())
+	whiteValue := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	pinkValue := lipgloss.NewStyle().Foreground(lipgloss.Color("218"))
+	timestampValue := lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
+	createdValue := projects.FormatTimestamp("2026-06-29T13:04:59.999Z")
+
+	assert.Contains(t, view, "         #ID: 7")
+	assert.Contains(t, view, "        Name: Project Seven")
+	assert.Contains(t, view, "     Changes: 3")
+	assert.Contains(t, view, "     Created: "+createdValue)
+	assert.Contains(t, view, "    Modified: not a date")
+	assert.Contains(t, rawDetails, pinkValue.Render("7"))
+	assert.Contains(t, rawDetails, whiteValue.Render("3"))
+	assert.Contains(t, rawDetails, timestampValue.Render(createdValue))
+	assert.Contains(t, rawDetails, timestampValue.Render("not a date"))
+	assert.Contains(t, rawDetails, styles.Default.AccentCyan.Render("Project Seven"))
+	for _, line := range strings.Split(stripANSI(rawDetails), "\n") {
+		assert.LessOrEqual(t, len(line), 32)
+	}
+}
+
+func TestProjectDetailsWrapsNameAtEightyCharactersWithoutBreakingWords(t *testing.T) {
+	name := "This project name is deliberately long and should wrap onto the next line without breaking any words in half"
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectDetailsState
+	m.width = 120
+	m.projectList.Detail = dto.Project{ID: "7", Name: name}
+
+	view := stripANSI(m.View())
+
+	assert.Contains(t, view, "        Name: This project name is deliberately long and should wrap onto the next line")
+	assert.Contains(t, view, "\n              without breaking any words in half")
+	assert.NotContains(t, view, "witho\n")
+}
+
+func TestProjectDetailsPreservesExplicitNameNewlines(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ProjectDetailsState
+	m.width = 120
+	m.projectList.Detail = dto.Project{ID: "7", Name: "First line\nSecond line"}
+
+	view := stripANSI(m.View())
+
+	assert.Contains(t, view, "        Name: First line")
+	assert.Contains(t, view, "\n              Second line")
+}
+
+func TestProjectPagesReloadOnArrival(t *testing.T) {
+	client := &fakeClient{
+		projectRows: []dto.Project{{ID: "7", Name: "Reloaded List Project"}},
+		gotProject:  dto.Project{ID: "7", Name: "Reloaded Detail Project"},
+	}
+
+	m := NewModelWithClient(client)
+	m.state = ProjectDetailsState
+	m.projectList.Detail = dto.Project{ID: "7", Name: "Stale Detail Project"}
+	got, cmd := sendCommand(m, "/return")
+	require.NotNil(t, cmd)
+	assert.Equal(t, ProjectsListState, got.state)
+	assert.True(t, got.projectList.Loading)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, 1, client.rowListCalls)
+	assert.Equal(t, []dto.Project{{ID: "7", Name: "Reloaded List Project"}}, got.projectList.Rows)
+
+	got.state = ProjectUpdateState
+	got.projectList.Detail = dto.Project{ID: "7", Name: "Stale Detail Project"}
+	got, cmd = sendCommand(got, "/cancel")
+	require.NotNil(t, cmd)
+	assert.Equal(t, ProjectDetailsState, got.state)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, []int{7}, client.getIDs)
+	assert.Equal(t, client.gotProject, got.projectList.Detail)
 }
 
 func TestProjectsEnterWithNoSelectableRowErrors(t *testing.T) {
@@ -303,6 +696,187 @@ func TestProjectsLoadFailureAndEmptyListAreDeterministic(t *testing.T) {
 
 	assert.Equal(t, ProjectsListState, got.state)
 	assert.Contains(t, stripANSI(got.View()), "No projects.")
+}
+
+func TestProjectCreateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".config", "config.yaml")
+	require.NoError(t, saveAppConfig(path, appConfig{BackendURL: defaultBackendURL, ProjectID: 99}))
+	client := &fakeClient{
+		createdProject: dto.Project{ID: "7"},
+		gotProject: dto.Project{
+			ID:          "7",
+			Name:        "New Project",
+			ChangeCount: 0,
+			Created:     "2026-06-29T11:04:59Z",
+			Modified:    "2026-06-29T11:04:59Z",
+		},
+	}
+	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, ProjectID: 99}, path)
+	m.state = ProjectCreateState
+	m.input.SetValue("  New\nProject  ")
+
+	updated, cmd := m.executeCommandFrom(ProjectCreateState, "/save")
+	got := updated.(Model)
+	require.NotNil(t, cmd)
+	assert.Equal(t, ProjectCreateState, got.state)
+	assert.Equal(t, "saving", got.status)
+
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, ProjectDetailsState, got.state)
+	assert.Equal(t, []string{"  New\nProject  "}, client.createNames)
+	assert.Equal(t, []int{7}, client.getIDs)
+	assert.Equal(t, client.gotProject, got.projectList.Detail)
+	assert.Equal(t, "99", got.currentProject.ID)
+	loaded, err := loadAppConfig(path)
+	require.NoError(t, err)
+	assert.Equal(t, 99, loaded.ProjectID)
+	view := stripANSI(got.View())
+	assert.Contains(t, view, "Name: New Project")
+	assert.Contains(t, view, "Changes: 0")
+}
+
+func TestProjectCreateValidationDoesNotCallBackend(t *testing.T) {
+	client := &fakeClient{}
+	m := NewModelWithClient(client)
+	m.state = ProjectCreateState
+	m.input.SetValue("   ")
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, ProjectCreateState, got.state)
+	assert.Contains(t, got.err, "project name is required")
+	assert.Zero(t, client.createCalls)
+	assert.Zero(t, client.getCalls)
+}
+
+func TestProjectUpdateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".config", "config.yaml")
+	require.NoError(t, saveAppConfig(path, appConfig{BackendURL: defaultBackendURL, ProjectID: 99}))
+	client := &fakeClient{
+		updatedProject: dto.Project{ID: "7"},
+		gotProject: dto.Project{
+			ID:          "7",
+			Name:        "Renamed Project",
+			ChangeCount: 2,
+			Created:     "2026-06-29T08:15:00Z",
+			Modified:    "2026-06-29T13:04:59Z",
+		},
+	}
+	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, ProjectID: 99}, path)
+	m.state = ProjectDetailsState
+	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project", ChangeCount: 2}
+
+	got, _ := sendCommand(m, "/edit")
+	assert.Equal(t, ProjectUpdateState, got.state)
+	assert.Equal(t, "Old Project", got.input.Value())
+	got.input.SetValue("  Renamed\nProject  ")
+
+	updated, cmd := got.executeCommandFrom(ProjectUpdateState, "/save")
+	got = updated.(Model)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, ProjectDetailsState, got.state)
+	assert.Equal(t, []int{7}, client.updateIDs)
+	assert.Equal(t, []string{"  Renamed\nProject  "}, client.updateNames)
+	assert.Equal(t, []int{7}, client.getIDs)
+	assert.Equal(t, client.gotProject, got.projectList.Detail)
+	assert.Equal(t, "99", got.currentProject.ID)
+	loaded, err := loadAppConfig(path)
+	require.NoError(t, err)
+	assert.Equal(t, 99, loaded.ProjectID)
+}
+
+func TestProjectUpdateValidationDoesNotCallBackend(t *testing.T) {
+	tests := []dto.Project{
+		{},
+		{ID: "0", Name: "Zero"},
+		{ID: "-1", Name: "Negative"},
+		{ID: "not-a-number", Name: "Bad"},
+	}
+
+	for _, project := range tests {
+		t.Run(project.ID, func(t *testing.T) {
+			client := &fakeClient{}
+			m := NewModelWithClient(client)
+			m.state = ProjectUpdateState
+			m.projectList.Detail = project
+			m.input.SetValue("Renamed")
+
+			updated, cmd := m.executeCommandFrom(ProjectUpdateState, "/save")
+			got := updated.(Model)
+
+			assert.Nil(t, cmd)
+			assert.Equal(t, ProjectUpdateState, got.state)
+			assert.Contains(t, got.err, "project ID must be a valid positive number")
+			assert.Zero(t, client.updateCalls)
+			assert.Zero(t, client.getCalls)
+		})
+	}
+}
+
+func TestProjectSaveBackendFailurePreservesRecoverableFormState(t *testing.T) {
+	client := &fakeClient{createErr: errors.New("invalid project payload")}
+	m := NewModelWithClient(client)
+	m.state = ProjectCreateState
+	m.input.SetValue("New Project")
+
+	updated, cmd := m.executeCommandFrom(ProjectCreateState, "/save")
+	got := updated.(Model)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, ProjectCreateState, got.state)
+	assert.Equal(t, "New Project", got.input.Value())
+	assert.Equal(t, "invalid project payload", got.err)
+	assert.Equal(t, 1, client.createCalls)
+	assert.Zero(t, client.getCalls)
+
+	client = &fakeClient{
+		updatedProject: dto.Project{ID: "7"},
+		getErr:         errors.New("project not found"),
+	}
+	m = NewModelWithClient(client)
+	m.state = ProjectUpdateState
+	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project"}
+	m.input.SetValue("Renamed Project")
+
+	updated, cmd = m.executeCommandFrom(ProjectUpdateState, "/save")
+	got = updated.(Model)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, ProjectUpdateState, got.state)
+	assert.Equal(t, "Renamed Project", got.input.Value())
+	assert.Equal(t, "project not found", got.err)
+	assert.Equal(t, 1, client.updateCalls)
+	assert.Equal(t, 1, client.getCalls)
+}
+
+func TestProjectCancelDoesNotCallPersistence(t *testing.T) {
+	client := &fakeClient{}
+	m := NewModelWithClient(client)
+	m.state = ProjectCreateState
+	m.input.SetValue("New Project")
+
+	got, _ := sendCommand(m, "/cancel")
+
+	assert.Equal(t, ProjectsListState, got.state)
+	assert.Zero(t, client.createCalls)
+	assert.Zero(t, client.updateCalls)
+
+	m = NewModelWithClient(client)
+	m.state = ProjectUpdateState
+	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project"}
+	m.input.SetValue("Renamed Project")
+
+	got, _ = sendKey(m, tea.KeyEsc)
+
+	assert.Equal(t, ProjectDetailsState, got.state)
+	assert.Zero(t, client.createCalls)
+	assert.Zero(t, client.updateCalls)
 }
 
 func TestProjectsTableNarrowWidthDoesNotOverflow(t *testing.T) {
@@ -394,7 +968,6 @@ func TestCreateUpdateSaveCancelTransitions(t *testing.T) {
 		{start: EpicCreateState, command: "/save", want: EpicDetailsState},
 		{start: EpicDetailsState, command: "/edit", want: EpicUpdateState},
 		{start: ProjectsListState, command: "/new-project", want: ProjectCreateState},
-		{start: ProjectCreateState, command: "/save", want: ProjectDetailsState},
 		{start: ProjectDetailsState, command: "/edit", want: ProjectUpdateState},
 	}
 
@@ -441,7 +1014,6 @@ func TestSlashCommandTransitionsByState(t *testing.T) {
 		{start: ProjectDetailsState, command: "/find", want: FindInputState, wantPrevious: ProjectDetailsState},
 		{start: ProjectDetailsState, command: "/return", want: ProjectsListState},
 		{start: ProjectCreateState, command: "/cancel", want: ProjectsListState},
-		{start: ProjectUpdateState, command: "/save", want: ProjectDetailsState},
 		{start: ProjectUpdateState, command: "/cancel", want: ProjectDetailsState},
 		{start: MainHelpState, command: "/return", want: MainState},
 		{start: ChangesHelpState, command: "/return", want: ChangesListState},
@@ -885,14 +1457,14 @@ func TestEveryDummyScreenTitleRendersExactly(t *testing.T) {
 
 			view := m.View()
 			assert.Contains(t, view, tt.title)
-			assert.NotContains(t, view, "Make a Change")
+			assert.Contains(t, view, "Make a Change ver. 0.1")
 		})
 	}
 }
 
 func sendCommand(m Model, command string) (Model, tea.Cmd) {
-	m.input.SetValue(command)
-	return sendKey(m, tea.KeyEnter)
+	updated, cmd := m.executeCommand(command)
+	return updated.(Model), cmd
 }
 
 func sendRune(m Model, r rune) (Model, tea.Cmd) {
@@ -901,13 +1473,31 @@ func sendRune(m Model, r rune) (Model, tea.Cmd) {
 }
 
 func sendKey(m Model, key tea.KeyType) (Model, tea.Cmd) {
-	updated, cmd := m.Update(tea.KeyMsg{Type: key})
+	return sendKeyMsg(m, tea.KeyMsg{Type: key})
+}
+
+func sendKeyMsg(m Model, msg tea.KeyMsg) (Model, tea.Cmd) {
+	updated, cmd := m.Update(msg)
 	return updated.(Model), cmd
 }
 
 func applyMsg(m Model, msg tea.Msg) Model {
 	updated, _ := m.Update(msg)
 	return updated.(Model)
+}
+
+func applyCommand(m Model, cmd tea.Cmd) Model {
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, next := range batch {
+			if next == nil {
+				continue
+			}
+			m = applyMsg(m, next())
+		}
+		return m
+	}
+	return applyMsg(m, msg)
 }
 
 func stripANSI(value string) string {

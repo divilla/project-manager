@@ -17,7 +17,9 @@ Projects are managed with POST endpoints:
 - `POST /api/v1/project/update`
 - `POST /api/v1/project/delete`
 
-Project list responses include `change_count` so the UI can explain safe deletion.
+Project list responses include `change_count` so the UI can explain safe deletion. Clients that render interactive project list or detail screens should call the relevant project endpoint each time the user arrives at the screen instead of treating previously rendered rows as a cache.
+
+Project create requests send a JSON object with a `name` string. Project update requests send a JSON object with numeric `id` and `name` fields. Clients may validate project names by trimming whitespace to reject empty values, but the submitted `name` value should be sent exactly as entered when validation passes, including explicit newline characters. Project get requests identify the project by numeric `id`. Project mutation flows that need complete display data should reload the project with `POST /api/v1/project/get` after create or update.
 
 ## Epics
 Epics are managed with POST endpoints:

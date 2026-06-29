@@ -3,12 +3,10 @@ You are helping turn a rough software idea into a clear, testable requirement sp
 The user will provide an initial idea below. Treat it as raw intent, not as a complete requirement.
 
 Initial idea:
-- In ProjectsListState/ProjectsListScreen implement selectable table.
-- The table prints following columns: id, name, change_count, created, modified
-- Column labels are as follows: #id, Name, Change Count, Created, Modified
+- In ProjectCreateState/ProjectCreateScreen form that will POST api/v1/project/create with all the fields necessary.
+- In ProjectUpdateState/ProjectUplateScreen form that will POST api/v1/project/create with all the fields necessary.
+- In ProjectDetailsState/ProjectDetailsScreen some nice design to display all available project fields.
 - Created and modified are displayed in the format 2026-06-29 13:04 formatted to the minute precision and adjusted to current timezone
-- User can use up/down arrows to select project - when user clicks return ProjectDetailsState is opened and project object passed forward
-- While on ProjectsListState/ProjectsListScreen and selecting, if user clicks `/` the bottom menu is opened
 
 Work in phases:
 

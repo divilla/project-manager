@@ -12,6 +12,7 @@ codex-resume.sh
 result.*
 cli-proto/.config/
 make-a-change/internal/**/.config/
+*.png
 
 # Test binary, built with `go test -c`
 *.test

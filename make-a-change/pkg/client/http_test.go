@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -98,6 +99,86 @@ func TestHTTPClientListsProjectRows(t *testing.T) {
 		Created:     "2026-06-29T08:15:00Z",
 		Modified:    "2026-06-29T10:45:00Z",
 	}, projects[0])
+}
+
+func TestHTTPClientProjectCreateUpdateAndGetPayloads(t *testing.T) {
+	var paths []string
+	var payloads []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		paths = append(paths, r.URL.Path)
+
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		payloads = append(payloads, payload)
+
+		switch r.URL.Path {
+		case "/api/v1/project/create":
+			writeJSON(t, w, map[string]any{"project": map[string]any{"id": 7}})
+		case "/api/v1/project/update":
+			writeJSON(t, w, map[string]any{"project": map[string]any{"id": payload["id"], "name": payload["name"]}})
+		case "/api/v1/project/get":
+			writeJSON(t, w, map[string]any{"project": map[string]any{
+				"id":           payload["id"],
+				"name":         fmt.Sprintf("Project %.0f", payload["id"]),
+				"change_count": 2,
+				"created":      "2026-06-29T08:15:00Z",
+				"modified":     "2026-06-29T10:45:00Z",
+			}})
+		default:
+			require.Failf(t, "unexpected path", "path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := NewHTTPClient(server.URL)
+
+	created, err := client.CreateProject("New\nProject")
+	require.NoError(t, err)
+	assert.Equal(t, dto.Project{ID: "7"}, created)
+
+	updated, err := client.UpdateProject(7, "Renamed\nProject")
+	require.NoError(t, err)
+	assert.Equal(t, dto.Project{ID: "7", Name: "Renamed\nProject"}, updated)
+
+	got, err := client.GetProject(7)
+	require.NoError(t, err)
+	assert.Equal(t, dto.Project{
+		ID:          "7",
+		Name:        "Project 7",
+		ChangeCount: 2,
+		Created:     "2026-06-29T08:15:00Z",
+		Modified:    "2026-06-29T10:45:00Z",
+	}, got)
+
+	assert.Equal(t, []string{
+		"/api/v1/project/create",
+		"/api/v1/project/update",
+		"/api/v1/project/get",
+	}, paths)
+	assert.Equal(t, map[string]any{"name": "New\nProject"}, payloads[0])
+	assert.Equal(t, map[string]any{"id": float64(7), "name": "Renamed\nProject"}, payloads[1])
+	assert.Equal(t, map[string]any{"id": float64(7)}, payloads[2])
+}
+
+func TestHTTPClientProjectMutationValidationAndBackendErrors(t *testing.T) {
+	client := NewHTTPClient("http://example.invalid")
+
+	_, err := client.GetProject(0)
+	require.Error(t, err)
+
+	_, err = client.UpdateProject(0, "Name")
+	require.Error(t, err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		writeJSON(t, w, map[string]any{"message": "invalid project payload"})
+	}))
+	defer server.Close()
+
+	_, err = NewHTTPClient(server.URL).CreateProject("Name")
+	require.Error(t, err)
+	assert.Equal(t, "invalid project payload", err.Error())
 }
 
 func TestListEpicsRequiresCurrentProject(t *testing.T) {

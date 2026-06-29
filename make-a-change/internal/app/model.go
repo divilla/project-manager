@@ -1,7 +1,6 @@
 package app
 
 import (
-	"fmt"
 	"strconv"
 
 	"mch/internal/changes"
@@ -11,13 +10,15 @@ import (
 	"mch/internal/styles"
 	httpclient "mch/pkg/client"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/cursor"
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 const defaultBackendURL = "http://localhost:8080"
 const noProjectsToSelectError = "No projects to select from. Please create new project and select it on Main Screen."
+const defaultInputPlaceholder = "Type / for commands"
 
 type dropdownKind string
 
@@ -76,6 +77,30 @@ type projectListLoadedMsg struct {
 	err      error
 }
 
+type projectSavedMsg struct {
+	source  State
+	project dto.Project
+	err     error
+}
+
+type projectLoadedMsg struct {
+	id      int
+	project dto.Project
+	err     error
+}
+
+type currentProjectLoadedMsg struct {
+	id      int
+	project dto.Project
+	err     error
+}
+
+type editorFinishedMsg struct {
+	source  State
+	content string
+	err     error
+}
+
 type startupProjectSelectionMsg struct{}
 
 type appClient interface {
@@ -86,21 +111,24 @@ type appClient interface {
 
 // Model is the root Bubble Tea model for the mch application shell.
 type Model struct {
-	input          textinput.Model
-	state          State
-	previousState  State
-	width          int
-	quitting       bool
-	err            string
-	status         string
-	helpQuery      string
-	changesFilters changesFilters
-	currentProject dto.Option
-	projectList    projects.Model
-	client         appClient
-	appConfig      appConfig
-	configPath     string
-	dropdown       dropdownModel
+	input           textarea.Model
+	state           State
+	previousState   State
+	width           int
+	quitting        bool
+	err             string
+	status          string
+	helpQuery       string
+	promptCursorRow int
+	promptCursorCol int
+	pendingAltO     bool
+	changesFilters  changesFilters
+	currentProject  dto.Option
+	projectList     projects.Model
+	client          appClient
+	appConfig       appConfig
+	configPath      string
+	dropdown        dropdownModel
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.
@@ -120,23 +148,30 @@ func NewModelWithClient(client appClient) Model {
 }
 
 func newModelWithConfig(client appClient, cfg appConfig, configPath string) Model {
-	input := textinput.New()
-	input.Placeholder = "Type / for commands"
+	input := textarea.New()
+	input.Placeholder = defaultInputPlaceholder
 	input.Prompt = "> "
-	input.Focus()
+	input.ShowLineNumbers = false
+	input.EndOfBufferCharacter = ' '
 	input.CharLimit = 240
-	input.Width = 0
-	input.PromptStyle = styles.Default.InputBand.Foreground(lipgloss.Color("183"))
-	input.TextStyle = styles.Default.InputBand.Foreground(lipgloss.Color("15"))
-	input.PlaceholderStyle = styles.Default.InputBand.Foreground(lipgloss.Color("0"))
+	input.SetWidth(0)
+	input.SetHeight(1)
+	input.FocusedStyle.Base = styles.Default.InputBand
+	input.FocusedStyle.Prompt = styles.Default.InputBand.Foreground(lipgloss.Color("183"))
+	input.FocusedStyle.Text = styles.Default.InputBand.Foreground(lipgloss.Color("15"))
+	input.FocusedStyle.CursorLine = styles.Default.InputBand.Foreground(lipgloss.Color("15"))
+	input.FocusedStyle.Placeholder = styles.Default.InputBand.Foreground(lipgloss.Color("0"))
+	input.FocusedStyle.EndOfBuffer = styles.Default.InputBand.Foreground(lipgloss.Color("240"))
+	input.BlurredStyle = input.FocusedStyle
 	input.Cursor.Style = styles.Default.InputBand.Foreground(lipgloss.Color("15"))
-	input.Cursor.TextStyle = input.TextStyle
+	input.Cursor.TextStyle = input.FocusedStyle.Text
+	input.Cursor.SetMode(cursor.CursorStatic)
+	input.Focus()
 
 	currentProject := dto.Option{}
 	if cfg.ProjectID > 0 {
 		currentProject = dto.Option{
-			ID:    strconv.Itoa(cfg.ProjectID),
-			Label: fmt.Sprintf("Project #%d", cfg.ProjectID),
+			ID: strconv.Itoa(cfg.ProjectID),
 		}
 	}
 

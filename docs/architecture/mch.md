@@ -11,7 +11,7 @@ The first executable version is `0.1`. The executable name is `mch`.
 `mch` uses:
 
 - Bubble Tea for the application loop, model updates, messages, and commands
-- Bubbles for reusable terminal controls such as text input, viewport, spinner, and list behavior
+- Bubbles for reusable terminal controls such as textarea-backed prompt input, viewport, spinner, and list behavior
 - Lip Gloss for rendering styles and layout tokens
 - `github.com/ridgelines/go-config` for loading local YAML configuration
 
@@ -101,11 +101,15 @@ Changes navigation includes `ChangesListState`, `ChangeDetailsState`, `Requireme
 
 Epics and Projects use the same state shape: list, detail, create, update, delete confirmation, help, find input, and return. List and detail screens may navigate to new epic or new project, edit, delete, help, find, and return states according to the commands available on each screen.
 
-`ProjectsListState` loads fresh project data from `POST /api/v1/project/list` each time `/projects` opens from `MainState`. `ProjectsListScreen - Title: Projects List` renders projects as a selectable table with columns `id`, `Name`, `Changes`, `Created`, and `Modified`; ID and Changes values are right-aligned, and IDs display without a leading `#`. The created and modified timestamps are displayed in the current local timezone as `YYYY-MM-DD HH:mm`. Up and down arrows move the selected row within bounds, enter opens `ProjectDetailsState` with the selected project data, and this list selection must not update or persist the current project context. Pressing `/` from the list opens the command menu overlay while preserving the project list screen title underneath it.
+`ProjectsListState` loads fresh project data from `POST /api/v1/project/list` every time the user arrives at the screen; project rows are not served from a cache. `ProjectsListScreen - Title: Projects List` renders projects as a selectable table with columns `id`, `Name`, `Changes`, `Created`, and `Modified`; ID and Changes values are right-aligned, and IDs display without a leading `#`. The Name column width is derived from the longest rendered project name. Names longer than 80 characters are normalized to single spaces, trimmed by removing whole words from the right until the rendered name plus `...` is shorter than 78 characters, then rendered with the `...` suffix. The created and modified timestamps are displayed in the current local timezone as `YYYY-MM-DD HH:mm`. Up and down arrows move the selected row within bounds when the prompt is empty, enter opens `ProjectDetailsState` with the selected project data, and this list selection must not update or persist the current project context. Pressing `/` from the list opens the command menu overlay while preserving the project list screen title underneath it.
+
+`/new-project` opens `ProjectCreateState` with a project name form and the placeholder `Write a Name`. `ProjectCreateState` and `ProjectUpdateState` expose `/editor`, `/save`, and `/cancel` in that order. Saving validates that the name is non-empty after trimming, then sends the name exactly as entered, including explicit newline characters. Create sends `POST /api/v1/project/create` with only the required `name` field, then reloads the created project through `POST /api/v1/project/get` before opening `ProjectDetailsState`. `/edit` from `ProjectDetailsState` opens `ProjectUpdateState` with the current project name prefilled. Update requires a valid positive numeric project ID, sends `POST /api/v1/project/update` with numeric `id` and string `name`, then reloads the updated project through `POST /api/v1/project/get` before refreshing `ProjectDetailsState`. Create and update failures leave the user in the form with a recoverable backend or validation error, and cancel actions return without an API call.
+
+`ProjectDetailsState` reloads the selected project through `POST /api/v1/project/get` every time the user arrives at the screen; detail rows are not served from a cache. The detail view displays labels `#ID`, `Name`, `Changes`, `Created`, and `Modified`. Labels are shifted four spaces to the right, right-aligned, and values are left-aligned. Normal values render white, the `#ID` value renders light pink, the name value renders bright cyan, and created/modified values render grey between the label grey and white. The name value wraps at 80 characters without breaking words and preserves explicit newline characters. Created and modified timestamps render in the current local timezone as `YYYY-MM-DD HH:mm`, truncating seconds and sub-second precision. Missing or invalid timestamps render as `not a date`.
 
 `Esc` maps to the state-appropriate safe action: quit from `MainState`, return from returnable states, and cancel from create, update, dropdown, confirmation, loading selector, and input states. `/quit` outside `MainState` and unknown commands leave the current state unchanged and show a recoverable error.
 
-Save, delete, filter, selector, and selection actions in the navigation shell are navigation-only until a later persistence Change. They must not write directly to the database.
+Save, delete, filter, selector, and selection actions in the navigation shell must use backend APIs for persistence when implemented. They must not write directly to the database. Project create and update forms persist only project data and must not update `.config/config.yaml` or change the current project context.
 
 ## Backend And Persistence
 
@@ -133,6 +137,8 @@ Reusable components should cover:
 - project selector
 
 Components should accept width and state as inputs so narrow terminals do not produce overlapping text. When width is too small, content should truncate or stack before it clips important state.
+
+The shared prompt uses a textarea-backed model but renders with app-owned input-band styles so the visible prompt stays stable. Enter submits `/save` on screens that expose `/save`; otherwise it submits slash commands or list selection according to the current state. Shift+Enter inserts a newline, grows the prompt vertically, and preserves the entered text. Current terminal input can deliver Shift+Enter as the leaked `Esc O M` sequence; `mch` treats that sequence as newline and must not insert literal `OM`. Ctrl+E opens `$EDITOR`, falling back to `nano`, with a temporary `.md` file. On editor exit, the content is submitted immediately through the same flow as Enter and the terminal is cleared. Ctrl+C clears non-empty prompt text first; Ctrl+C on an empty prompt runs `/cancel`, `/return`, or `/quit` according to the active screen. Up/down move the prompt cursor within multiline prompt text, except in selectable lists when the prompt is empty.
 
 ## Style Tokens
 

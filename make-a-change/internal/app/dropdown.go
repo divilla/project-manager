@@ -113,10 +113,9 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		}
 		switch selected.ID {
 		case "/yes":
-			m.state = m.dropdown.onSelect
-			m.status = "confirmed"
+			target := m.dropdown.onSelect
 			m.dropdown = dropdownModel{}
-			return m, nil
+			return m.arrive(target, "confirmed")
 		case "/cancel":
 			return m.cancelDropdown()
 		default:

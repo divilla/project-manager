@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strconv"
 	"strings"
 
 	"mch/internal/dto"
@@ -12,12 +13,17 @@ import (
 
 // Init starts any initial asynchronous command required by the model.
 func (m Model) Init() tea.Cmd {
+	clear := tea.ClearScreen
 	if m.needsProjectSelection() {
-		return func() tea.Msg {
+		selectProject := func() tea.Msg {
 			return startupProjectSelectionMsg{}
 		}
+		return tea.Batch(clear, selectProject)
 	}
-	return nil
+	if m.appConfig.ProjectID > 0 {
+		return tea.Batch(clear, currentProjectCommand(m.client, m.appConfig.ProjectID))
+	}
+	return clear
 }
 
 // Update applies Bubble Tea messages to the root model.
@@ -70,6 +76,61 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "no projects"
 		}
 		return m, nil
+	case projectSavedMsg:
+		if m.state != msg.source {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "save failed"
+			return m, nil
+		}
+		m.projectList.Detail = msg.project
+		m.state = ProjectDetailsState
+		m.status = "save"
+		m = m.setPromptValue("")
+		return m, nil
+	case projectLoadedMsg:
+		if m.state != ProjectDetailsState {
+			return m, nil
+		}
+		if currentID, err := projectNumericID(m.projectList.Detail); err == nil && currentID != msg.id {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "load failed"
+			return m, nil
+		}
+		m.projectList.Detail = msg.project
+		m.status = "loaded project"
+		return m, nil
+	case currentProjectLoadedMsg:
+		currentID, err := strconv.Atoi(m.currentProject.ID)
+		if err != nil || currentID != msg.id {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			return m, nil
+		}
+		m.currentProject = dto.Option{ID: m.currentProject.ID, Label: strings.TrimSpace(msg.project.Name)}
+		return m, nil
+	case editorFinishedMsg:
+		if m.state != msg.source {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "editor failed"
+			return m, tea.ClearScreen
+		}
+		next, cmd := m.submitPromptValue(msg.content)
+		m = next.(Model)
+		if cmd == nil {
+			return m, tea.ClearScreen
+		}
+		return m, tea.Sequence(tea.ClearScreen, cmd)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		return m, nil
@@ -93,65 +154,141 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleFindKey(key, msg)
 	}
 
+	if isPromptNewlineKey(msg) {
+		return m.insertPromptNewline(), nil
+	}
+	var handled bool
+	m, handled = m.handlePendingShiftEnter(msg)
+	if handled {
+		return m, nil
+	}
+	if isShiftEnterPrefix(msg) {
+		m.pendingAltO = true
+		return m, nil
+	}
+
 	switch key {
 	case "ctrl+c":
-		m.state = DoneState
-		m.quitting = true
-		return m, tea.Quit
+		return m.handlePromptCancel()
+	case "ctrl+e":
+		return m.openPromptEditor(m.state)
 	case "esc":
 		return m.handleEsc()
 	case "up":
-		if m.state == ProjectsListState {
+		if m.state == ProjectsListState && m.input.Value() == "" {
 			m.projectList = m.projectList.MoveSelection(-1)
 			return m, nil
 		}
 	case "down":
-		if m.state == ProjectsListState {
+		if m.state == ProjectsListState && m.input.Value() == "" {
 			m.projectList = m.projectList.MoveSelection(1)
 			return m, nil
 		}
 	case "/":
-		m.openCommandDropdown()
-		return m, nil
+		if m.input.Value() == "" {
+			m.openCommandDropdown()
+			return m, nil
+		}
 	case "enter":
-		text := strings.TrimSpace(m.input.Value())
-		m.input.SetValue("")
-		if text == "" {
-			return m.handleListSelection()
-		}
-		if strings.HasPrefix(text, "/") {
-			return m.executeCommand(text)
-		}
-		return m, nil
+		return m.submitPrompt()
 	}
 
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	return m, cmd
+	return m.updatePromptInput(msg)
 }
 
 func (m Model) handleFindKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch key {
-	case "esc":
-		m.state = m.previousState
-		m.input.SetValue("")
-		m.status = "cancel"
-		return m, nil
-	case "enter":
-		query := strings.TrimSpace(m.input.Value())
-		m.input.SetValue("")
-		m.state = m.previousState
-		if query == "" {
-			m.err = "find text is required"
-			return m, nil
-		}
-		m.helpQuery = query
-		m.status = "highlight " + query
+	if isPromptNewlineKey(msg) {
+		return m.insertPromptNewline(), nil
+	}
+	var handled bool
+	m, handled = m.handlePendingShiftEnter(msg)
+	if handled {
 		return m, nil
 	}
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	return m, cmd
+	if isShiftEnterPrefix(msg) {
+		m.pendingAltO = true
+		return m, nil
+	}
+	switch key {
+	case "ctrl+c":
+		if m.input.Value() != "" {
+			m = m.setPromptValue("")
+			m.status = "prompt cleared"
+			return m, nil
+		}
+		return m.arrive(m.previousState, "cancel")
+	case "ctrl+e":
+		return m.openPromptEditor(m.state)
+	case "esc":
+		m = m.setPromptValue("")
+		return m.arrive(m.previousState, "cancel")
+	case "enter":
+		return m.submitFindValue(m.input.Value())
+	}
+	return m.updatePromptInput(msg)
+}
+
+func isPromptNewlineKey(msg tea.KeyMsg) bool {
+	key := msg.String()
+	return key == "shift+enter" || (msg.Type == tea.KeyEnter && msg.Alt) || msg.Type == tea.KeyCtrlJ
+}
+
+func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
+	return m.submitPromptValue(m.input.Value())
+}
+
+func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
+	trimmed := strings.TrimSpace(value)
+	if commandAllowed(m.state, "/save") {
+		if m.state == ProjectCreateState {
+			return m.saveProjectCreateValue(value)
+		}
+		if m.state == ProjectUpdateState {
+			return m.saveProjectUpdateValue(value)
+		}
+		return m.executeCommandFrom(m.state, "/save")
+	}
+	if m.state == FindInputState {
+		return m.submitFindValue(value)
+	}
+	m = m.setPromptValue("")
+	if trimmed == "" {
+		return m.handleListSelection()
+	}
+	if strings.HasPrefix(trimmed, "/") {
+		return m.executeCommand(trimmed)
+	}
+	return m, nil
+}
+
+func (m Model) submitFindValue(value string) (tea.Model, tea.Cmd) {
+	query := strings.TrimSpace(value)
+	m = m.setPromptValue("")
+	if query == "" {
+		m.state = m.previousState
+		m.err = "find text is required"
+		return m, nil
+	}
+	m.helpQuery = query
+	return m.arrive(m.previousState, "highlight "+query)
+}
+
+func (m Model) handlePromptCancel() (tea.Model, tea.Cmd) {
+	if m.input.Value() != "" {
+		m = m.setPromptValue("")
+		m.status = "prompt cleared"
+		return m, nil
+	}
+	switch {
+	case commandAllowed(m.state, "/cancel"):
+		return m.executeCommandFrom(m.state, "/cancel")
+	case commandAllowed(m.state, "/return"):
+		return m.executeCommandFrom(m.state, "/return")
+	case commandAllowed(m.state, "/quit"):
+		return m.executeCommandFrom(m.state, "/quit")
+	default:
+		return m.handleEsc()
+	}
 }
 
 func (m Model) handleEsc() (tea.Model, tea.Cmd) {
@@ -162,14 +299,10 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case ChangeCreateState, ChangeUpdateState, RequirementCreateState, RequirementUpdateState,
 		EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
-		m.state = navigation.CancelTarget(m.state)
-		m.status = "cancel"
-		return m, nil
+		return m.arrive(navigation.CancelTarget(m.state), "cancel")
 	default:
 		if target, ok := navigation.ReturnTargets()[m.state]; ok {
-			m.state = target
-			m.status = "return"
-			return m, nil
+			return m.arrive(target, "return")
 		}
 		m.err = "cannot cancel from this state"
 		return m, nil
@@ -193,6 +326,12 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 		}
 		m.state = ProjectDetailsState
 		m.status = "selected " + projects.DisplayName(selected)
+		id, err := projectNumericID(selected)
+		if err != nil {
+			m.err = err.Error()
+			return m, nil
+		}
+		return m, projectGetCommand(m.client, id)
 	default:
 		m.err = "nothing selectable in current state"
 	}
@@ -225,10 +364,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/epics":
 		m.state = EpicsListState
 	case "/projects":
-		m.state = ProjectsListState
-		m.projectList = projects.StartLoading()
-		m.status = string(ProjectsListState)
-		return m, projectListCommand(m.client)
+		return m.arrive(ProjectsListState, string(ProjectsListState))
 	case "/select-project":
 		return m.beginSelector(SelectProjectDropDown)
 	case "/help":
@@ -236,25 +372,41 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/find":
 		m.previousState = source
 		m.state = FindInputState
-		m.input.SetValue("")
+		m = m.setPromptValue("")
 	case "/find-filter":
 		m.status = "find filter"
 	case "/clear-filters":
 		m.changesFilters = changesFilters{}
 		m.status = "filters cleared"
 	case "/return":
-		m.state = navigation.ReturnTargets()[source]
-		m.status = "return"
+		return m.arrive(navigation.ReturnTargets()[source], "return")
 	case "/new-change", "/new-requirement", "/new-epic", "/new-project":
 		m.state = navigation.CreateTarget(source)
+		if m.state == ProjectCreateState {
+			m = m.setPromptValue("")
+			m.input.Placeholder = "Write a Name"
+		} else {
+			m.input.Placeholder = defaultInputPlaceholder
+		}
 	case "/edit":
 		m.state = navigation.UpdateTarget(source)
+		if m.state == ProjectUpdateState {
+			m = m.setPromptValue(m.projectList.Detail.Name)
+		}
+		m.input.Placeholder = defaultInputPlaceholder
 	case "/save":
+		if source == ProjectCreateState {
+			return m.saveProjectCreate()
+		}
+		if source == ProjectUpdateState {
+			return m.saveProjectUpdate()
+		}
 		m.state = navigation.SaveTarget(source)
 		m.status = "save"
+	case "/editor":
+		return m.openPromptEditor(source)
 	case "/cancel":
-		m.state = navigation.CancelTarget(source)
-		m.status = "cancel"
+		return m.arrive(navigation.CancelTarget(source), "cancel")
 	case "/delete":
 		m.openConfirmation(navigation.DeleteConfirmationState(source), source, navigation.DeleteReturnState(source))
 	case "/phase":
@@ -275,6 +427,29 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		m.err = "unknown command: " + command
 	}
 	return m, nil
+}
+
+func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
+	m.state = state
+	m.status = status
+	if state != ProjectCreateState {
+		m.input.Placeholder = defaultInputPlaceholder
+	}
+	switch state {
+	case ProjectsListState:
+		m.projectList = projects.StartLoading()
+		return m, projectListCommand(m.client)
+	case ProjectDetailsState:
+		id, err := projectNumericID(m.projectList.Detail)
+		if err != nil {
+			m.err = err.Error()
+			return m, nil
+		}
+		m.status = "loading project"
+		return m, projectGetCommand(m.client, id)
+	default:
+		return m, nil
+	}
 }
 
 func (m Model) beginSelector(state State) (tea.Model, tea.Cmd) {
