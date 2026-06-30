@@ -4,6 +4,7 @@ package dto
 type Project struct {
 	ID          string
 	Name        string
+	LastRef     int
 	ChangeCount int
 	Created     string
 	Modified    string

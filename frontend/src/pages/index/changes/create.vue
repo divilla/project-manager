@@ -37,16 +37,6 @@
       />
 
       <q-select
-        v-model="changePhase"
-        outlined
-        emit-value
-        map-options
-        label="Phase"
-        :options="phaseOptions"
-        :disable="loading || saving"
-      />
-
-      <q-select
         v-model="epicId"
         outlined
         emit-value
@@ -92,10 +82,8 @@ const { epics } = storeToRefs(changeCache);
 const title = ref('');
 const requirementBody = ref('');
 const changeTypes = ref<string[]>([]);
-const changePhase = ref('');
 const epicId = ref<number | null>(null);
 const typeOptions = ref<SelectOption[]>([]);
-const phaseOptions = ref<SelectOption[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
@@ -120,9 +108,7 @@ async function loadCreateContext() {
       projectSelection.hasLoaded ? Promise.resolve() : projectSelection.loadProjects(),
     ]);
     typeOptions.value = references.types.map((type) => ({ label: type.slug, value: type.slug }));
-    phaseOptions.value = references.phases.map((phase) => ({ label: phase.slug, value: phase.slug }));
     if (!changeTypes.value.length && references.types[0]) changeTypes.value = [references.types[0].slug];
-    if (!changePhase.value) changePhase.value = references.phases[0]?.slug || '';
     if (currentProjectId.value) await changeCache.loadProjectChanges(currentProjectId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to load change creation context.';
@@ -140,7 +126,7 @@ async function createChangeFromPage() {
     error.value = 'Select a project before creating a change.';
     return;
   }
-  if (!changeTitle || !changePhase.value || !changeTypes.value.length) return;
+  if (!changeTitle || !changeTypes.value.length) return;
 
   saving.value = true;
   error.value = '';
@@ -151,7 +137,6 @@ async function createChangeFromPage() {
       epic_id: epicId.value || null,
       title: changeTitle,
       requirement_body: requirementBody.value.trim(),
-      change_phase: changePhase.value,
       change_types: changeTypes.value,
     };
 

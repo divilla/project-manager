@@ -20,7 +20,7 @@
       <q-markup-table flat bordered class="change-detail-table">
         <thead>
           <tr>
-            <th class="text-right">nr</th>
+            <th class="text-right">Ref</th>
             <th class="text-center">Types</th>
             <th class="text-left">Title</th>
             <th class="text-center">Epic</th>
@@ -34,9 +34,12 @@
         </thead>
         <tbody>
           <tr class="bg-primary text-white text-weight-bold">
-            <td class="text-right">#{{ currentChange.id }}</td>
+            <td class="text-right">#{{ currentChange.ref }}</td>
             <td class="text-center">{{ currentChange.change_types.join(', ') }}</td>
-            <td class="text-left">{{ currentChange.title }}</td>
+            <td class="text-left">
+              <div>{{ currentChange.title }}</div>
+              <div class="text-caption text-white">{{ currentChange.slug }}</div>
+            </td>
             <td class="text-center">{{ epicName(currentChange.epic_id) }}</td>
             <td class="text-center">{{ currentChange.change_phase }}</td>
             <td class="text-center">{{ currentChange.closed ? 'Yes' : 'No' }}</td>

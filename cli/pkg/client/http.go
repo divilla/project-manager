@@ -295,6 +295,7 @@ func projectFromMap(values map[string]any) dto.Project {
 	return dto.Project{
 		ID:          firstString(values, "id", "project_id"),
 		Name:        firstString(values, "name", "title"),
+		LastRef:     firstInt(values, "last_ref"),
 		ChangeCount: firstInt(values, "change_count"),
 		Created:     firstString(values, "created", "created_at"),
 		Modified:    firstString(values, "modified", "updated", "updated_at"),

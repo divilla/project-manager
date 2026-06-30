@@ -18,7 +18,7 @@ func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 	_, err = service.GetChange(context.Background(), dto.ChangeIDRequest{})
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{
-		ProjectID: 1, Title: "   ", ChangePhase: "backlog", ChangeTypes: []string{"feature"},
+		ProjectID: 1, Title: "   ", ChangeTypes: []string{"feature"},
 	})
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdateTitle(context.Background(), dto.ChangeUpdateTitleRequest{ID: 2, Title: "   "})
@@ -43,12 +43,11 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 
 	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{
 		ProjectID: 1, Title: " Change Title ", RequirementBody: " Body ",
-		ChangePhase: " backlog ", ChangeTypes: []string{" feature ", "feature", " fix "}, EpicID: &epicID,
+		ChangeTypes: []string{" feature ", "feature", " fix "}, EpicID: &epicID,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Change Title", repo.createReq.Title)
 	assert.Equal(t, "Body", repo.createReq.RequirementBody)
-	assert.Equal(t, "backlog", repo.createReq.ChangePhase)
 	assert.Equal(t, []string{"feature", "fix"}, repo.createReq.ChangeTypes)
 
 	_, err = service.UpdateChangeTypes(context.Background(), dto.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{" fix ", "fix "}})
@@ -63,6 +62,9 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	_, err = service.UpdatePullRequestBody(context.Background(), dto.ChangeUpdatePullRequestBodyRequest{ID: 2, PullRequestBody: " PR Body "})
 	require.NoError(t, err)
 	assert.Equal(t, "PR Body", repo.updatePullRequestBodyReq.PullRequestBody)
+	_, err = service.UpdatePullRequestURL(context.Background(), dto.ChangeUpdatePullRequestURLRequest{ID: 2, PullRequestURL: " https://example.test/pr/1 "})
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.test/pr/1", repo.updatePullRequestURLReq.PullRequestURL)
 
 	_, err = service.UpdateEpic(context.Background(), dto.ChangeUpdateEpicRequest{ID: 2, EpicID: &epicID})
 	require.NoError(t, err)
@@ -132,6 +134,7 @@ type fakeChangeRepository struct {
 	updateTitleReq           dto.ChangeUpdateTitleRequest
 	updateRequirementBodyReq dto.ChangeUpdateRequirementBodyRequest
 	updatePullRequestBodyReq dto.ChangeUpdatePullRequestBodyRequest
+	updatePullRequestURLReq  dto.ChangeUpdatePullRequestURLRequest
 }
 
 func (r *fakeChangeRepository) References(context.Context) (dto.ChangeReferences, error) {
@@ -180,6 +183,11 @@ func (r *fakeChangeRepository) UpdateRequirementBody(_ context.Context, req dto.
 func (r *fakeChangeRepository) UpdatePullRequestBody(_ context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error) {
 	r.updatePullRequestBodyReq = req
 	return dto.Change{ID: req.ID, PullRequestBody: req.PullRequestBody}, nil
+}
+
+func (r *fakeChangeRepository) UpdatePullRequestURL(_ context.Context, req dto.ChangeUpdatePullRequestURLRequest) (dto.Change, error) {
+	r.updatePullRequestURLReq = req
+	return dto.Change{ID: req.ID, PullRequestURL: req.PullRequestURL}, nil
 }
 
 func (r *fakeChangeRepository) UpdateEpic(_ context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {

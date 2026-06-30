@@ -38,11 +38,15 @@ Pinia stores durable client state such as current project selection and project-
 ## Change Board
 The Changes route shows change cards grouped by workflow phase. Search filters by title, type, and phase. Creating a new change opens a dedicated create route. Detail and edit routes must work from pasted URLs.
 
+Change cards may display the backend-provided `ref` and must carry the backend-provided `slug` when present. The frontend must not derive, edit, or submit `ref`, `slug`, or project reference counters.
+
 ## Epic Management
 The Epics route owns epic list, create, edit, and delete workflows. The list uses a Quasar markup table and relies on backend epic response data, including linked change counts, to disable unsafe deletes. Epics do not have a detail route.
 
 ## Detail View
 The change detail view shows the opened change, linked test cases, and sanitized markdown requirement body. Test case create, edit, done toggle, and delete actions update visible completeness from backend responses.
+
+The change detail view may render `ref` and `slug` as read-only identity data. Change create and edit forms must not expose inputs for `ref`, `slug`, or project reference counters.
 
 ## Confirmations
 Destructive operations use persistent confirmation dialogs. Buttons are consistently labeled `Cancel` and `OK`; dangerous `OK` actions use negative styling.

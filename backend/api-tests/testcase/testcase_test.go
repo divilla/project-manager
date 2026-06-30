@@ -243,7 +243,6 @@ func createChange(t *testing.T, client *shared.Client, projectID int, epicID *in
 		"project_id":   projectID,
 		"epic_id":      epicID,
 		"title":        fmt.Sprintf("api-test-test-case-change-%d", time.Now().UnixNano()),
-		"change_phase": "backlog",
 		"change_types": []string{"feature"},
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)

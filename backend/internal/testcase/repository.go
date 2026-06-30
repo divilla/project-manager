@@ -18,6 +18,8 @@ type Repo struct {
 
 const changeColumns = `
 	id,
+	ref,
+	slug,
 	version,
 	project_id,
 	epic_id,
@@ -277,7 +279,7 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	var change dto.Change
 	var epicID pgtype.Int8
 	err := row.Scan(
-		&change.ID, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
+		&change.ID, &change.Ref, &change.Slug, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
 		&change.ChangeTypes, &change.Title, &change.RequirementBody, &change.PullRequestBody,
 		&change.PullRequestURL, &change.Closed, &change.DoneTC,
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,

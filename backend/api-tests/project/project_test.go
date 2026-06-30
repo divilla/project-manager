@@ -14,6 +14,7 @@ import (
 type project struct {
 	ID          int       `json:"id"`
 	Name        string    `json:"name"`
+	LastRef     int32     `json:"last_ref"`
 	Created     time.Time `json:"created"`
 	Modified    time.Time `json:"modified"`
 	ChangeCount int       `json:"change_count"`
@@ -29,6 +30,7 @@ func TestProjectCRUD(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
 	assert.Equal(t, name, created.Name)
+	assert.Equal(t, int32(0), created.LastRef)
 	assert.False(t, created.Created.IsZero())
 	assert.False(t, created.Modified.IsZero())
 	assert.Equal(t, 0, created.ChangeCount)
@@ -36,7 +38,7 @@ func TestProjectCRUD(t *testing.T) {
 	defer shared.CleanupProject(t, client, created.ID)
 
 	var listed []project
-	status = client.Post(t, "/api/v1/project/list", map[string]int{"limit": 200}, &listed)
+	status = client.Post(t, "/api/v1/project/list", map[string]any{"last_ref": 999}, &listed)
 	require.Equal(t, http.StatusOK, status)
 	assert.Contains(t, listed, created)
 
@@ -71,7 +73,6 @@ func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id":   created.ID,
 		"title":        fmt.Sprintf("api-test-project-delete-change-%d", time.Now().UnixNano()),
-		"change_phase": "backlog",
 		"change_types": []string{"feature"},
 	}, &createdChange)
 	require.Equal(t, http.StatusCreated, status)

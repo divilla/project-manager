@@ -112,7 +112,6 @@ func TestEpicDeleteRejectsEpicsWithChanges(t *testing.T) {
 		"project_id":   projectID,
 		"epic_id":      epicID,
 		"title":        fmt.Sprintf("api-test-epic-conflict-change-%d", time.Now().UnixNano()),
-		"change_phase": "backlog",
 		"change_types": []string{"feature"},
 	}, &createdChange)
 	require.Equal(t, http.StatusCreated, status)

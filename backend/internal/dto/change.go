@@ -13,6 +13,8 @@ type (
 	Change struct {
 		ID              int       `json:"id"`
 		Version         int16     `json:"version"`
+		Ref             int32     `json:"ref"`
+		Slug            string    `json:"slug"`
 		ProjectID       int       `json:"project_id"`
 		EpicID          *int      `json:"epic_id"`
 		ChangePhase     string    `json:"change_phase"`
@@ -67,19 +69,28 @@ type (
 	// ChangeCreateRequest defines ChangeCreateRequest values.
 	ChangeCreateRequest struct {
 		ProjectID       int      `json:"project_id"`
-		ChangePhase     string   `json:"change_phase"`
 		ChangeTypes     []string `json:"change_types"`
 		EpicID          *int     `json:"epic_id"`
 		Title           string   `json:"title"`
 		RequirementBody string   `json:"requirement_body"`
-		PullRequestBody string   `json:"pull_request_body"`
-		PullRequestURL  string   `json:"pull_request_url"`
+	}
+
+	// ChangeUpdatePhaseRequest defines ChangeUpdatePhaseRequest values.
+	ChangeUpdatePhaseRequest struct {
+		ID          int    `json:"id"`
+		ChangePhase string `json:"change_phase"`
 	}
 
 	// ChangeUpdateChangeTypesRequest defines ChangeUpdateChangeTypesRequest values.
 	ChangeUpdateChangeTypesRequest struct {
 		ID          int      `json:"id"`
 		ChangeTypes []string `json:"change_types"`
+	}
+
+	// ChangeUpdateEpicRequest defines ChangeUpdateEpicRequest values.
+	ChangeUpdateEpicRequest struct {
+		ID     int  `json:"id"`
+		EpicID *int `json:"epic_id"`
 	}
 
 	// ChangeUpdateTitleRequest defines ChangeUpdateTitleRequest values.
@@ -94,22 +105,16 @@ type (
 		RequirementBody string `json:"requirement_body"`
 	}
 
-	// ChangeUpdatePhaseRequest defines ChangeUpdatePhaseRequest values.
-	ChangeUpdatePhaseRequest struct {
-		ID          int    `json:"id"`
-		ChangePhase string `json:"change_phase"`
-	}
-
-	// ChangeUpdateEpicRequest defines ChangeUpdateEpicRequest values.
-	ChangeUpdateEpicRequest struct {
-		ID     int  `json:"id"`
-		EpicID *int `json:"epic_id"`
-	}
-
 	// ChangeUpdatePullRequestBodyRequest defines ChangeUpdatePullRequestBodyRequest values.
 	ChangeUpdatePullRequestBodyRequest struct {
 		ID              int    `json:"id"`
 		PullRequestBody string `json:"pull_request_body"`
+	}
+
+	// ChangeUpdatePullRequestURLRequest defines ChangeUpdatePullRequestURLRequest values.
+	ChangeUpdatePullRequestURLRequest struct {
+		ID             int    `json:"id"`
+		PullRequestURL string `json:"pull_request_url"`
 	}
 
 	// ChangeUpdateClosedRequest defines ChangeUpdateClosedRequest values.

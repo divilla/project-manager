@@ -185,6 +185,8 @@ describe('ChangeDetailPage', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain('Current change');
+    expect(wrapper.text()).toContain('#1');
+    expect(wrapper.text()).toContain('000001-change');
     expect(wrapper.text()).toContain('Project Epic');
     expect(wrapper.findAll('[data-icon="more_vert"]')).toHaveLength(1);
     expect(wrapper.findAll('[data-action="edit-change"]')).toHaveLength(1);

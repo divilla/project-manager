@@ -47,6 +47,10 @@ export function updateChangePullRequestBody(id: number, pullRequestBody: string)
   return post<Change>('/api/v1/change/update-pull-request-body', { id, pull_request_body: pullRequestBody });
 }
 
+export function updateChangePullRequestURL(id: number, pullRequestURL: string): Promise<Change> {
+  return post<Change>('/api/v1/change/update-pull-request-url', { id, pull_request_url: pullRequestURL });
+}
+
 export function updateChangePhase(id: number, changePhase: string): Promise<Change> {
   return post<Change>('/api/v1/change/update-phase', { id, change_phase: changePhase });
 }

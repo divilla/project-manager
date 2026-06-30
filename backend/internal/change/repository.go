@@ -29,6 +29,7 @@ type (
 		UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error)
 		UpdateRequirementBody(ctx context.Context, req dto.ChangeUpdateRequirementBodyRequest) (dto.Change, error)
 		UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error)
+		UpdatePullRequestURL(ctx context.Context, req dto.ChangeUpdatePullRequestURLRequest) (dto.Change, error)
 		UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error)
 		UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error)
 		UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedRequest) (dto.Change, error)
@@ -38,6 +39,8 @@ type (
 
 const changeColumns = `
 	id,
+	ref,
+	slug,
 	version,
 	project_id,
 	epic_id,
@@ -138,9 +141,6 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	if err := r.ensureProject(ctx, req.ProjectID); err != nil {
 		return dto.Change{}, err
 	}
-	if err := r.ensureReference(ctx, "change_phase", req.ChangePhase); err != nil {
-		return dto.Change{}, err
-	}
 	if err := r.ensureReferences(ctx, "change_type", req.ChangeTypes); err != nil {
 		return dto.Change{}, err
 	}
@@ -158,12 +158,8 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 
 	var id int
 	err = tx.QueryRow(ctx, `
-		insert into public.change (
-			project_id, epic_id, change_phase, change_types, title, requirement_body, pull_request_body, pull_request_url
-		)
-		values ($1, $2, $3, $4, $5, nullif($6, ''), nullif($7, ''), nullif($8, ''))
-		returning id
-	`, req.ProjectID, req.EpicID, req.ChangePhase, req.ChangeTypes, req.Title, req.RequirementBody, req.PullRequestBody, req.PullRequestURL).Scan(&id)
+		select public.fn_change_insert($1, $2, $3, $4, nullif($5, ''))
+	`, req.ProjectID, req.ChangeTypes, req.EpicID, req.Title, req.RequirementBody).Scan(&id)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -224,6 +220,19 @@ func (r *Repo) UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdatePu
 			modified = now()
 		where id = $1
 	`, req.PullRequestBody)
+}
+
+// UpdatePullRequestURL executes UpdatePullRequestURL behavior.
+func (r *Repo) UpdatePullRequestURL(ctx context.Context, req dto.ChangeUpdatePullRequestURLRequest) (dto.Change, error) {
+	return r.updateField(ctx, req.ID, func(current state) bool {
+		return current.PullRequestURL == req.PullRequestURL
+	}, `
+		update public.change
+		set pull_request_url = nullif($2, ''),
+			version = version + 1,
+			modified = now()
+		where id = $1
+	`, req.PullRequestURL)
 }
 
 // UpdateEpic executes UpdateEpic behavior.
@@ -478,7 +487,7 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	var change dto.Change
 	var epicID pgtype.Int8
 	err := row.Scan(
-		&change.ID, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
+		&change.ID, &change.Ref, &change.Slug, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
 		&change.ChangeTypes, &change.Title, &change.RequirementBody, &change.PullRequestBody,
 		&change.PullRequestURL, &change.Closed, &change.DoneTC,
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,

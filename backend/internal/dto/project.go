@@ -7,15 +7,10 @@ type (
 	Project struct {
 		ID          int       `json:"id"`
 		Name        string    `json:"name"`
+		LastRef     int32     `json:"last_ref"`
 		Created     time.Time `json:"created"`
 		Modified    time.Time `json:"modified"`
 		ChangeCount int       `json:"change_count"`
-	}
-
-	// ProjectListRequest defines ProjectListRequest values.
-	ProjectListRequest struct {
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
 	}
 
 	// ProjectIDRequest defines ProjectIDRequest values.
