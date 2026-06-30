@@ -3,8 +3,8 @@ export interface Epic {
   version: number;
   project_id: number;
   name: string;
-  done_req: number;
-  total_req: number;
+  done_tc: number;
+  total_tc: number;
   completed: number;
   change_count: number;
   created: string;

@@ -11,7 +11,7 @@
       <q-card-section class="help-content">
         <h2>Completeness Over Estimation</h2>
         <p>
-          Changes are measured by binary, verifiable requirements rather than time estimates or story
+          Changes are measured by binary, verifiable test cases rather than time estimates or story
           points.
         </p>
 

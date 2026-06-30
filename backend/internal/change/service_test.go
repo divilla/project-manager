@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"testing"
 
-	"aipm/internal/changeview"
 	"aipm/internal/dto"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +21,7 @@ func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 		ProjectID: 1, Title: "   ", ChangePhase: "backlog", ChangeTypes: []string{"feature"},
 	})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.UpdateChange(context.Background(), dto.ChangeUpdateRequest{ID: 2, Title: "   ", ChangeTypes: []string{"feature"}})
+	_, err = service.UpdateTitle(context.Background(), dto.ChangeUpdateTitleRequest{ID: 2, Title: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdatePhase(context.Background(), dto.ChangeUpdatePhaseRequest{ID: 2, ChangePhase: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
@@ -32,7 +31,7 @@ func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 
 func TestServiceNormalizesChangeRequests(t *testing.T) {
 	repo := &fakeChangeRepository{}
-	service := NewService(repo, changeview.NewChangeRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
+	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 	epicID := 4
 
 	_, err := service.ListChanges(context.Background(), dto.ChangeListRequest{ProjectID: 1})
@@ -43,22 +42,27 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	assert.Equal(t, 2, repo.id)
 
 	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{
-		ProjectID: 1, Title: " Change Title ", Body: " Body ",
+		ProjectID: 1, Title: " Change Title ", RequirementBody: " Body ",
 		ChangePhase: " backlog ", ChangeTypes: []string{" feature ", "feature", " fix "}, EpicID: &epicID,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Change Title", repo.createReq.Title)
-	assert.Equal(t, "Body", repo.createReq.Body)
+	assert.Equal(t, "Body", repo.createReq.RequirementBody)
 	assert.Equal(t, "backlog", repo.createReq.ChangePhase)
 	assert.Equal(t, []string{"feature", "fix"}, repo.createReq.ChangeTypes)
 
-	_, err = service.UpdateChange(context.Background(), dto.ChangeUpdateRequest{
-		ID: 2, Title: " Updated Change ", Body: " Updated Body ", ChangeTypes: []string{" docs "},
-	})
+	_, err = service.UpdateChangeTypes(context.Background(), dto.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{" fix ", "fix "}})
 	require.NoError(t, err)
-	assert.Equal(t, "Updated Change", repo.updateReq.Title)
-	assert.Equal(t, "Updated Body", repo.updateReq.Body)
-	assert.Equal(t, []string{"docs"}, repo.updateReq.ChangeTypes)
+	assert.Equal(t, []string{"fix"}, repo.updateTypesReq.ChangeTypes)
+	_, err = service.UpdateTitle(context.Background(), dto.ChangeUpdateTitleRequest{ID: 2, Title: " Focused Title "})
+	require.NoError(t, err)
+	assert.Equal(t, "Focused Title", repo.updateTitleReq.Title)
+	_, err = service.UpdateRequirementBody(context.Background(), dto.ChangeUpdateRequirementBodyRequest{ID: 2, RequirementBody: " Focused Body "})
+	require.NoError(t, err)
+	assert.Equal(t, "Focused Body", repo.updateRequirementBodyReq.RequirementBody)
+	_, err = service.UpdatePullRequestBody(context.Background(), dto.ChangeUpdatePullRequestBodyRequest{ID: 2, PullRequestBody: " PR Body "})
+	require.NoError(t, err)
+	assert.Equal(t, "PR Body", repo.updatePullRequestBodyReq.PullRequestBody)
 
 	_, err = service.UpdateEpic(context.Background(), dto.ChangeUpdateEpicRequest{ID: 2, EpicID: &epicID})
 	require.NoError(t, err)
@@ -76,16 +80,16 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 
 func TestServiceRendersChangeBodyHTML(t *testing.T) {
 	repo := &fakeChangeRepository{}
-	service := NewService(repo, changeview.NewChangeRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
+	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
 	detail, err := service.GetChange(context.Background(), dto.ChangeIDRequest{ID: 2})
 	require.NoError(t, err)
-	assert.Equal(t, "clean(parsed(**Change**))", detail.Change.BodyHTML)
+	assert.Equal(t, "clean(parsed(**Change**))", detail.Change.RequirementHTML)
 }
 
 func TestServiceRendersBatchChangeBodies(t *testing.T) {
 	repo := &fakeChangeRepository{}
-	service := NewService(repo, changeview.NewChangeRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
+	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
 	response, err := service.RenderedBodies(context.Background(), dto.ChangeRenderedBodiesRequest{
 		IDs: []int{3, 2, 3},
@@ -94,9 +98,9 @@ func TestServiceRendersBatchChangeBodies(t *testing.T) {
 	assert.Equal(t, []int{3, 2}, repo.bodyIDs)
 	require.Equal(t, 2, len(response.Bodies))
 	assert.Equal(t, 3, response.Bodies[0].ID)
-	assert.Equal(t, "clean(parsed(**Change 3**))", response.Bodies[0].BodyHTML)
+	assert.Equal(t, "clean(parsed(**Change 3**))", response.Bodies[0].RequirementHTML)
 	assert.Equal(t, 2, response.Bodies[1].ID)
-	assert.Equal(t, "clean(parsed(**Change 2**))", response.Bodies[1].BodyHTML)
+	assert.Equal(t, "clean(parsed(**Change 2**))", response.Bodies[1].RequirementHTML)
 }
 
 func TestServiceRejectsInvalidRenderedBodyIDs(t *testing.T) {
@@ -118,13 +122,16 @@ func (fakeMarkdownSanitizer) Parse(source string) string {
 }
 
 type fakeChangeRepository struct {
-	projectID int
-	id        int
-	phase     string
-	closed    bool
-	bodyIDs   []int
-	createReq dto.ChangeCreateRequest
-	updateReq dto.ChangeUpdateRequest
+	projectID                int
+	id                       int
+	phase                    string
+	closed                   bool
+	bodyIDs                  []int
+	createReq                dto.ChangeCreateRequest
+	updateTypesReq           dto.ChangeUpdateChangeTypesRequest
+	updateTitleReq           dto.ChangeUpdateTitleRequest
+	updateRequirementBodyReq dto.ChangeUpdateRequirementBodyRequest
+	updatePullRequestBodyReq dto.ChangeUpdatePullRequestBodyRequest
 }
 
 func (r *fakeChangeRepository) References(context.Context) (dto.ChangeReferences, error) {
@@ -138,26 +145,41 @@ func (r *fakeChangeRepository) List(_ context.Context, projectID int) ([]dto.Cha
 
 func (r *fakeChangeRepository) Get(_ context.Context, id int) (dto.ChangeDetail, error) {
 	r.id = id
-	return dto.ChangeDetail{Change: dto.Change{ID: id, Body: "**Change**"}}, nil
+	return dto.ChangeDetail{Change: dto.Change{ID: id, RequirementBody: "**Change**"}}, nil
 }
 
 func (r *fakeChangeRepository) Bodies(_ context.Context, ids []int) ([]dto.Change, error) {
 	r.bodyIDs = ids
 	changes := make([]dto.Change, 0, len(ids))
 	for _, id := range ids {
-		changes = append(changes, dto.Change{ID: id, Body: "**Change " + strconv.Itoa(id) + "**"})
+		changes = append(changes, dto.Change{ID: id, RequirementBody: "**Change " + strconv.Itoa(id) + "**"})
 	}
 	return changes, nil
 }
 
 func (r *fakeChangeRepository) Create(_ context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	r.createReq = req
-	return dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, Body: req.Body}, nil
+	return dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, RequirementBody: req.RequirementBody}, nil
 }
 
-func (r *fakeChangeRepository) Update(_ context.Context, req dto.ChangeUpdateRequest) (dto.Change, error) {
-	r.updateReq = req
-	return dto.Change{ID: req.ID, Title: req.Title, Body: req.Body}, nil
+func (r *fakeChangeRepository) UpdateChangeTypes(_ context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {
+	r.updateTypesReq = req
+	return dto.Change{ID: req.ID, ChangeTypes: req.ChangeTypes}, nil
+}
+
+func (r *fakeChangeRepository) UpdateTitle(_ context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error) {
+	r.updateTitleReq = req
+	return dto.Change{ID: req.ID, Title: req.Title}, nil
+}
+
+func (r *fakeChangeRepository) UpdateRequirementBody(_ context.Context, req dto.ChangeUpdateRequirementBodyRequest) (dto.Change, error) {
+	r.updateRequirementBodyReq = req
+	return dto.Change{ID: req.ID, RequirementBody: req.RequirementBody}, nil
+}
+
+func (r *fakeChangeRepository) UpdatePullRequestBody(_ context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error) {
+	r.updatePullRequestBodyReq = req
+	return dto.Change{ID: req.ID, PullRequestBody: req.PullRequestBody}, nil
 }
 
 func (r *fakeChangeRepository) UpdateEpic(_ context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {

@@ -1,8 +1,8 @@
 PKG := "aipm"
 PKG_LIST := $(shell go list ${PKG}/... | grep -v '/api-tests')
-override API_TEST_DB_URL := postgres://postgres:postgres@localhost:5432/changes_test
-override API_TEST_PORT := 18080
-override API_TEST_BASE_URL := http://localhost:$(API_TEST_PORT)
+API_TEST_DB_URL ?= postgres://postgres:postgres@localhost:5432/changes_test
+API_TEST_PORT ?= 19080
+API_TEST_BASE_URL ?= http://localhost:$(API_TEST_PORT)
 
 .DEFAULT_GOAL := check
 check: lint vet race ## Check project
@@ -23,7 +23,12 @@ test: ## Run tests
 	@go test -short ${PKG_LIST}
 
 api-test: ## Rebuild changes_test and run HTTP integration tests
-	@test "$(API_TEST_DB_URL)" = "postgres://postgres:postgres@localhost:5432/changes_test"
+	@pkill -9 -x aipm-server >/dev/null 2>&1 || true
+	@go clean -testcache
+	@case "$(API_TEST_DB_URL)" in \
+		*/changes_test|*/changes_test\?*) ;; \
+		*) echo "API_TEST_DB_URL must target changes_test"; exit 1 ;; \
+	esac
 	@psql $(API_TEST_DB_URL) -v ON_ERROR_STOP=1 -f ../db/init.sql >/tmp/aipm-api-test-db.log 2>&1
 	@psql $(API_TEST_DB_URL) -v ON_ERROR_STOP=1 -f ../db/seed.sql >>/tmp/aipm-api-test-db.log 2>&1
 	@go build -o aipm-server cmd/server/*.go
@@ -31,7 +36,7 @@ api-test: ## Rebuild changes_test and run HTTP integration tests
 		trap 'kill $$pid >/dev/null 2>&1 || true; rm -f aipm-server' EXIT; \
 		for _ in $$(seq 1 50); do \
 			if curl -fsS $(API_TEST_BASE_URL)/api/v1/health >/dev/null 2>&1; then \
-				go test -count=1 ./api-tests/...; \
+				API_TEST_BASE_URL=$(API_TEST_BASE_URL) go test -count=1 ./api-tests/...; \
 				exit $$?; \
 			fi; \
 			sleep 0.1; \

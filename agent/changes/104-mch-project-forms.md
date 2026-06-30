@@ -67,7 +67,7 @@ Make the `mch` project create, update, list, and details screens persist project
 - Long project table names are trimmed by words with `...`, and the Name column width is derived from the longest rendered name.
 - Created and modified timestamps render in local time to minute precision, and invalid or missing timestamps render as `not a date`.
 - Create and update flows leave `.config/config.yaml` and the saved current project ID unchanged.
-- `cd make-a-change && make lint`, `cd make-a-change && go test ./...`, and `cd make-a-change && go build -o /tmp/mch ./cmd/mch` pass.
+- `cd cli && make lint`, `cd cli && go test ./...`, and `cd cli && go build -o /tmp/mch ./cmd/mch` pass.
 
 ## Non-Goals
 
@@ -95,9 +95,9 @@ Make the `mch` project create, update, list, and details screens persist project
 
 ## Verification
 
-- From the repository root: `cd make-a-change && make lint`
-- From the repository root: `cd make-a-change && go test ./...`
-- From the repository root: `cd make-a-change && go build -o /tmp/mch ./cmd/mch`
+- From the repository root: `cd cli && make lint`
+- From the repository root: `cd cli && go test ./...`
+- From the repository root: `cd cli && go build -o /tmp/mch ./cmd/mch`
 
 ## Review Focus
 
@@ -111,4 +111,4 @@ Make the `mch` project create, update, list, and details screens persist project
 
 ## Follow-Ups
 
-- Fixed PR comment `IC_kwDOTA2Xls8AAAABIDWidw`: `/save` now preserves raw project prompt values after trim-based validation, and the tracked default `make-a-change/.config/config.yaml` contract is restored.
+- Fixed PR comment `IC_kwDOTA2Xls8AAAABIDWidw`: `/save` now preserves raw project prompt values after trim-based validation, and the tracked default `cli/.config/config.yaml` contract is restored.

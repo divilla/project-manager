@@ -6,7 +6,7 @@ Build the first complete state-based navigation shell for `mch` so users can mov
 
 ## Scope
 
-- Add the local `make-a-change/.config/config.yaml` file with the default backend URL and current project ID used by `mch`.
+- Add the local `cli/.config/config.yaml` file with the default backend URL and current project ID used by `mch`.
 - Replace the Hello World app state with a navigation model rooted at `MainState`.
 - Add screen states and dummy screen titles for Main, Changes, Requirements, Epics, Projects, selectors, confirmations, help, and find input.
 - Add shared dropdown behavior for slash commands, list selection, backend selectors, and confirmations.
@@ -28,9 +28,9 @@ Build the first complete state-based navigation shell for `mch` so users can mov
 - `ChangeDetailsState /types` opens `SelectTypesDropDown`, loads type slugs from the `types` group returned by `POST /api/v1/change/reference`, and returns to `ChangeDetailsState` after selection or cancel.
 - `/epics` opens `EpicsListState`, renders `EpicsListScreen - Title: Epics List`, and supports list, detail, `/new-epic`, `/edit`, delete, help, find, and return transitions.
 - `/projects` opens `ProjectsListState`, renders `ProjectsListScreen - Title: Projects List`, and supports list, detail, `/new-project`, `/edit`, delete, help, find, and return transitions.
-- Startup loads `backend_url` and `project_id` from `make-a-change/.config/config.yaml`; when `project_id` is greater than zero, `mch` uses it as the current project context for project-scoped selectors.
+- Startup loads `backend_url` and `project_id` from `cli/.config/config.yaml`; when `project_id` is greater than zero, `mch` uses it as the current project context for project-scoped selectors.
 - When startup has no positive `project_id`, `mch` triggers the same project selector behavior as `/select-project` from `MainState`; if the backend returns no projects, `mch` stays on `MainState` and shows `No projects to select from. Please create new project and select it on Main Screen.`
-- `/select-project` opens `SelectProjectDropDown`, loads projects from `POST /api/v1/project/list`, stores the selected current project in TUI state, saves its numeric `project_id` to `make-a-change/.config/config.yaml`, and returns to `MainState`.
+- `/select-project` opens `SelectProjectDropDown`, loads projects from `POST /api/v1/project/list`, stores the selected current project in TUI state, saves its numeric `project_id` to `cli/.config/config.yaml`, and returns to `MainState`.
 - `/help` from `MainState` opens `MainHelpState`; `/find` highlights matching help text; `/return` returns to `MainState`.
 - Slash command dropdowns and list selection dropdowns allow filtering, up/down highlighted selection, and confirmation of the highlighted option.
 - Slash command dropdowns opened with `/` are overlays and must preserve the active state and rendered screen title while showing the command list below the page content.
@@ -44,12 +44,12 @@ Build the first complete state-based navigation shell for `mch` so users can mov
 
 ## Acceptance Criteria
 
-- `make-a-change/.config/config.yaml` exists and contains `backend_url: http://localhost:8080` and `project_id: 0`.
+- `cli/.config/config.yaml` exists and contains `backend_url: http://localhost:8080` and `project_id: 0`.
 - Starting `mch` initializes `MainState` and renders `MainScreen - Title: Main`.
 - Main, Changes, Requirements, Epics, Projects, selector, confirmation, help, find, cancel, return, and quit transitions follow the navigation-shell rules in `docs/architecture/mch.md`.
 - Backend selectors request options through the documented API endpoints and expose recoverable loading failures without losing the previous state.
 - Selecting a current project stores it in TUI state, saves its numeric project ID to local config, and returns to `MainState`.
-- A fresh checkout must keep `make-a-change/.config/config.yaml` at `project_id: 0`; non-zero project IDs are user-local state written only after project selection.
+- A fresh checkout must keep `cli/.config/config.yaml` at `project_id: 0`; non-zero project IDs are user-local state written only after project selection.
 - Epic selectors and `/epic-filter` send numeric `project_id` values to `POST /api/v1/epic/list`; they must not send JSON strings for project IDs.
 - `/quit` exits only from `MainState`; outside `MainState` it reports a recoverable error without changing state.
 - Every state transition has a focused model test.
@@ -86,9 +86,9 @@ Build the first complete state-based navigation shell for `mch` so users can mov
 
 ## Verification
 
-- From the repository root: `cd make-a-change && go test ./...`
-- From the repository root: `cd make-a-change && go build -o ./bin/mch ./cmd/mch`
-- From the repository root: `cd make-a-change && ./bin/mch --version`
+- From the repository root: `cd cli && go test ./...`
+- From the repository root: `cd cli && go build -o ./bin/mch ./cmd/mch`
+- From the repository root: `cd cli && ./bin/mch --version`
 - From the repository root: `find docs -type f -name '*.md' -not -path 'docs/research/*' -exec wc -l {} +`
 
 ## Review Focus

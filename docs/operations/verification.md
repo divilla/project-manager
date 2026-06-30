@@ -15,20 +15,20 @@ After every backend code change, agents must run `make lint` from `backend` and 
 
 `make api-test` runs API integration tests from `backend/api-tests`. These tests exercise backend endpoints over HTTP and should be organized by API endpoint group.
 
-`make api-test` recreates the disposable `changes_test` database from `db/init.sql` and `db/seed.sql`, then starts a temporary backend on port `18080` with `-db postgres://postgres:postgres@localhost:5432/changes_test` and `-port 18080`.
+`make api-test` recreates the disposable `changes_test` database from `db/init.sql` and `db/seed.sql`, then starts a temporary backend on port `19080` with `-db postgres://postgres:postgres@localhost:5432/changes_test` and `-port 19080`. If that port is already in use, run `API_TEST_PORT=19081 make api-test` to use a different local port.
 
-API integration tests must interact with the backend only through HTTP requests and responses. They must not choose targets from environment variables, open database connections, run SQL, or inspect tables directly.
+API integration tests must interact with the backend only through HTTP requests and responses. They may read the runner-provided HTTP base URL, but must not open database connections, run SQL, or inspect tables directly.
 
 ## `mch`
-From `make-a-change`:
+From `cli`:
 
 ```sh
 make lint
 go test ./...
-go build -o ./bin/mch ./cmd/mch
+go build -o /tmp/mch ./cmd/mch
 ```
 
-After every `mch` code change, agents must run `make lint` from `make-a-change` and fix all findings before handoff. `make lint` may rewrite imports or formatting; review and include those intentional changes with the `mch` code change.
+After every `mch` code change, agents must run `make lint` from `cli` and fix all findings before handoff. `make lint` may rewrite imports or formatting; review and include those intentional changes with the `mch` code change.
 
 ## Frontend
 From the repository root:

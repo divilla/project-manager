@@ -9,11 +9,14 @@ export function changeFixture(overrides: Partial<Change> = {}): Change {
     change_phase: 'backlog',
     change_types: ['feature'],
     title: 'Change',
-    body: '',
-    body_html: '',
+    requirement_body: '',
+    requirement_html: '',
+    pull_request_body: '',
+    pull_request_html: '',
+    pull_request_url: '',
     closed: false,
-    done_req: 0,
-    total_req: 0,
+    done_tc: 0,
+    total_tc: 0,
     completed: 0,
     created: '2026-01-01T00:00:00Z',
     modified: '2026-01-01T00:00:00Z',
@@ -24,7 +27,7 @@ export function changeFixture(overrides: Partial<Change> = {}): Change {
 export function changeDetailFixture(overrides: Partial<ChangeDetail> = {}): ChangeDetail {
   return {
     change: changeFixture(),
-    requirements: [],
+    test_cases: [],
     ...overrides,
   };
 }
@@ -35,8 +38,8 @@ export function epicFixture(overrides: Partial<Epic> = {}): Epic {
     version: 0,
     project_id: 1,
     name: 'Epic',
-    done_req: 0,
-    total_req: 0,
+    done_tc: 0,
+    total_tc: 0,
     completed: 0,
     change_count: 0,
     created: '2026-01-01T00:00:00Z',

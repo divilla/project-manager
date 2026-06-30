@@ -25,7 +25,10 @@ type (
 		Get(ctx context.Context, id int) (dto.ChangeDetail, error)
 		Bodies(ctx context.Context, ids []int) ([]dto.Change, error)
 		Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error)
-		Update(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Change, error)
+		UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error)
+		UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error)
+		UpdateRequirementBody(ctx context.Context, req dto.ChangeUpdateRequirementBodyRequest) (dto.Change, error)
+		UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error)
 		UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error)
 		UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error)
 		UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedRequest) (dto.Change, error)
@@ -41,10 +44,12 @@ const changeColumns = `
 	change_phase,
 	change_types,
 	title,
-	coalesce(body, ''),
+	coalesce(requirement_body, ''),
+	coalesce(pull_request_body, ''),
+	coalesce(pull_request_url, ''),
 	closed,
-	done_req,
-	total_req,
+	done_tc,
+	total_tc,
 	completed,
 	created,
 	modified`
@@ -97,17 +102,17 @@ func (r *Repo) Get(ctx context.Context, id int) (dto.ChangeDetail, error) {
 	if err != nil {
 		return dto.ChangeDetail{}, err
 	}
-	requirements, err := listRequirements(ctx, r.pool, id)
+	testCases, err := listTestCases(ctx, r.pool, id)
 	if err != nil {
 		return dto.ChangeDetail{}, err
 	}
-	return dto.ChangeDetail{Change: change, Requirements: requirements}, nil
+	return dto.ChangeDetail{Change: change, TestCases: testCases}, nil
 }
 
 // Bodies executes Bodies behavior.
 func (r *Repo) Bodies(ctx context.Context, ids []int) ([]dto.Change, error) {
 	rows, err := r.pool.Query(ctx, `
-		select requested.id::integer, coalesce(c.body, '')
+		select requested.id::integer, coalesce(c.requirement_body, ''), coalesce(c.pull_request_body, '')
 		from unnest($1::bigint[]) with ordinality as requested(id, ord)
 		join public.change c on c.id = requested.id
 		order by requested.ord
@@ -120,7 +125,7 @@ func (r *Repo) Bodies(ctx context.Context, ids []int) ([]dto.Change, error) {
 	changes := make([]dto.Change, 0, len(ids))
 	for rows.Next() {
 		var change dto.Change
-		if err := rows.Scan(&change.ID, &change.Body); err != nil {
+		if err := rows.Scan(&change.ID, &change.RequirementBody, &change.PullRequestBody); err != nil {
 			return nil, err
 		}
 		changes = append(changes, change)
@@ -154,11 +159,11 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	var id int
 	err = tx.QueryRow(ctx, `
 		insert into public.change (
-			project_id, epic_id, change_phase, change_types, title, body
+			project_id, epic_id, change_phase, change_types, title, requirement_body, pull_request_body, pull_request_url
 		)
-		values ($1, $2, $3, $4, $5, nullif($6, ''))
+		values ($1, $2, $3, $4, $5, nullif($6, ''), nullif($7, ''), nullif($8, ''))
 		returning id
-	`, req.ProjectID, req.EpicID, req.ChangePhase, req.ChangeTypes, req.Title, req.Body).Scan(&id)
+	`, req.ProjectID, req.EpicID, req.ChangePhase, req.ChangeTypes, req.Title, req.RequirementBody, req.PullRequestBody, req.PullRequestURL).Scan(&id)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -166,43 +171,59 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	return finishMutation(ctx, tx, id)
 }
 
-// Update executes Update behavior.
-func (r *Repo) Update(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Change, error) {
+// UpdateChangeTypes executes UpdateChangeTypes behavior.
+func (r *Repo) UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {
 	if err := r.ensureReferences(ctx, "change_type", req.ChangeTypes); err != nil {
 		return dto.Change{}, err
 	}
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return dto.Change{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	current, err := getState(ctx, tx, req.ID)
-	if err != nil {
-		return dto.Change{}, err
-	}
-	if slices.Equal(current.ChangeTypes, req.ChangeTypes) && current.Title == req.Title && current.Body == req.Body {
-		return finishMutation(ctx, tx, req.ID)
-	}
-	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, false)", req.ID); err != nil {
-		return dto.Change{}, err
-	}
-	tag, err := tx.Exec(ctx, `
+	return r.updateField(ctx, req.ID, func(current state) bool {
+		return slices.Equal(current.ChangeTypes, req.ChangeTypes)
+	}, `
 		update public.change
-		set title = $2,
-			body = nullif($3, ''),
-			change_types = $4,
+		set change_types = $2,
 			version = version + 1,
 			modified = now()
 		where id = $1
-	`, req.ID, req.Title, req.Body, req.ChangeTypes)
-	if err != nil {
-		return dto.Change{}, err
-	}
-	if tag.RowsAffected() == 0 {
-		return dto.Change{}, ErrNotFound
-	}
-	return finishMutation(ctx, tx, req.ID)
+	`, req.ChangeTypes)
+}
+
+// UpdateTitle executes UpdateTitle behavior.
+func (r *Repo) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error) {
+	return r.updateField(ctx, req.ID, func(current state) bool {
+		return current.Title == req.Title
+	}, `
+		update public.change
+		set title = $2,
+			version = version + 1,
+			modified = now()
+		where id = $1
+	`, req.Title)
+}
+
+// UpdateRequirementBody executes UpdateRequirementBody behavior.
+func (r *Repo) UpdateRequirementBody(ctx context.Context, req dto.ChangeUpdateRequirementBodyRequest) (dto.Change, error) {
+	return r.updateField(ctx, req.ID, func(current state) bool {
+		return current.RequirementBody == req.RequirementBody
+	}, `
+		update public.change
+		set requirement_body = nullif($2, ''),
+			version = version + 1,
+			modified = now()
+		where id = $1
+	`, req.RequirementBody)
+}
+
+// UpdatePullRequestBody executes UpdatePullRequestBody behavior.
+func (r *Repo) UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error) {
+	return r.updateField(ctx, req.ID, func(current state) bool {
+		return current.PullRequestBody == req.PullRequestBody
+	}, `
+		update public.change
+		set pull_request_body = nullif($2, ''),
+			version = version + 1,
+			modified = now()
+		where id = $1
+	`, req.PullRequestBody)
 }
 
 // UpdateEpic executes UpdateEpic behavior.
@@ -330,19 +351,19 @@ func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 	if err != nil {
 		return err
 	}
-	requirements, err := requirementsForChange(ctx, tx, req.ID)
+	testCases, err := testCasesForChange(ctx, tx, req.ID)
 	if err != nil {
 		return err
 	}
-	for _, requirement := range requirements {
-		if _, err := tx.Exec(ctx, "call public.sp_requirement_to_history($1, true)", requirement.ID); err != nil {
+	for _, testCase := range testCases {
+		if _, err := tx.Exec(ctx, "call public.sp_test_case_to_history($1, true)", testCase.ID); err != nil {
 			return err
 		}
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, true)", req.ID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, "delete from public.requirement where change_id = $1", req.ID); err != nil {
+	if _, err := tx.Exec(ctx, "delete from public.test_case where change_id = $1", req.ID); err != nil {
 		return err
 	}
 	tag, err := tx.Exec(ctx, "delete from public.change where id = $1", req.ID)
@@ -352,21 +373,21 @@ func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	if _, err := tx.Exec(ctx, "call public.sp_epic_requirement_recalculate($1)", current.EpicID); err != nil {
+	if _, err := tx.Exec(ctx, "call public.sp_epic_test_case_recalculate($1)", current.EpicID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-func (r *Repo) referenceOptions(ctx context.Context, table string) ([]dto.ReferenceOption, error) {
+func (r *Repo) referenceOptions(ctx context.Context, table string) ([]dto.ChangePhase, error) {
 	rows, err := r.pool.Query(ctx, "select slug, priority from public."+table+" order by priority, slug")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	options := make([]dto.ReferenceOption, 0)
+	options := make([]dto.ChangePhase, 0)
 	for rows.Next() {
-		var option dto.ReferenceOption
+		var option dto.ChangePhase
 		if err := rows.Scan(&option.Slug, &option.Priority); err != nil {
 			return nil, err
 		}
@@ -431,26 +452,26 @@ func getChange(ctx context.Context, q queryer, id int) (dto.Change, error) {
 	return change, err
 }
 
-func listRequirements(ctx context.Context, q queryer, changeID int) ([]dto.Requirement, error) {
+func listTestCases(ctx context.Context, q queryer, changeID int) ([]dto.TestCase, error) {
 	rows, err := q.Query(ctx, `
-		select id, version, definition, done, change_id, created, modified
-		from public.requirement
+		select id, version, scenario, done, change_id, created, modified
+		from public.test_case
 		where change_id = $1
-		order by created, definition
+		order by created, scenario
 	`, changeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	requirements := make([]dto.Requirement, 0)
+	testCases := make([]dto.TestCase, 0)
 	for rows.Next() {
-		var item dto.Requirement
-		if err := rows.Scan(&item.ID, &item.Version, &item.Definition, &item.Done, &item.ChangeID, &item.Created, &item.Modified); err != nil {
+		var item dto.TestCase
+		if err := rows.Scan(&item.ID, &item.Version, &item.Scenario, &item.Done, &item.ChangeID, &item.Created, &item.Modified); err != nil {
 			return nil, err
 		}
-		requirements = append(requirements, item)
+		testCases = append(testCases, item)
 	}
-	return requirements, rows.Err()
+	return testCases, rows.Err()
 }
 
 func scanChange(row pgx.Row) (dto.Change, error) {
@@ -458,8 +479,9 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	var epicID pgtype.Int8
 	err := row.Scan(
 		&change.ID, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
-		&change.ChangeTypes, &change.Title, &change.Body, &change.Closed, &change.DoneReq,
-		&change.TotalReq, &change.Completed, &change.Created, &change.Modified,
+		&change.ChangeTypes, &change.Title, &change.RequirementBody, &change.PullRequestBody,
+		&change.PullRequestURL, &change.Closed, &change.DoneTC,
+		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
 		return dto.Change{}, err
@@ -472,23 +494,25 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 }
 
 type state struct {
-	ProjectID   int
-	EpicID      *int
-	ChangePhase string
-	ChangeTypes []string
-	Title       string
-	Body        string
-	Closed      bool
+	ProjectID       int
+	EpicID          *int
+	ChangePhase     string
+	ChangeTypes     []string
+	Title           string
+	RequirementBody string
+	PullRequestBody string
+	PullRequestURL  string
+	Closed          bool
 }
 
 func getState(ctx context.Context, tx pgx.Tx, id int) (state, error) {
 	var item state
 	var epicID pgtype.Int8
 	err := tx.QueryRow(ctx, `
-		select project_id, epic_id, change_phase, change_types, title, coalesce(body, ''), closed
+		select project_id, epic_id, change_phase, change_types, title, coalesce(requirement_body, ''), coalesce(pull_request_body, ''), coalesce(pull_request_url, ''), closed
 		from public.change
 		where id = $1
-	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Body, &item.Closed)
+	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.RequirementBody, &item.PullRequestBody, &item.PullRequestURL, &item.Closed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return state{}, ErrNotFound
 	}
@@ -513,19 +537,47 @@ func finishMutation(ctx context.Context, tx pgx.Tx, id int) (dto.Change, error) 
 	return change, nil
 }
 
-type requirementRef struct {
+func (r *Repo) updateField(ctx context.Context, id int, unchanged func(state) bool, query string, args ...any) (dto.Change, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	current, err := getState(ctx, tx, id)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	if unchanged(current) {
+		return finishMutation(ctx, tx, id)
+	}
+	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, false)", id); err != nil {
+		return dto.Change{}, err
+	}
+	queryArgs := append([]any{id}, args...)
+	tag, err := tx.Exec(ctx, query, queryArgs...)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return dto.Change{}, ErrNotFound
+	}
+	return finishMutation(ctx, tx, id)
+}
+
+type testCaseRef struct {
 	ID int
 }
 
-func requirementsForChange(ctx context.Context, tx pgx.Tx, changeID int) ([]requirementRef, error) {
-	rows, err := tx.Query(ctx, "select id from public.requirement where change_id = $1", changeID)
+func testCasesForChange(ctx context.Context, tx pgx.Tx, changeID int) ([]testCaseRef, error) {
+	rows, err := tx.Query(ctx, "select id from public.test_case where change_id = $1", changeID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := make([]requirementRef, 0)
+	items := make([]testCaseRef, 0)
 	for rows.Next() {
-		var item requirementRef
+		var item testCaseRef
 		if err := rows.Scan(&item.ID); err != nil {
 			return nil, err
 		}
@@ -544,7 +596,7 @@ func recalculateEpics(ctx context.Context, tx pgx.Tx, values ...*int) error {
 			continue
 		}
 		seen[*value] = struct{}{}
-		if _, err := tx.Exec(ctx, "call public.sp_epic_requirement_recalculate($1)", *value); err != nil {
+		if _, err := tx.Exec(ctx, "call public.sp_epic_test_case_recalculate($1)", *value); err != nil {
 			return err
 		}
 	}

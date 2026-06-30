@@ -20,7 +20,7 @@
       <tr v-for="epic in epics" :key="epic.id">
         <td class="text-right">#{{ epic.id }}</td>
         <td class="text-left">{{ epic.name }}</td>
-        <td class="text-center">{{ epic.done_req }}/{{ epic.total_req }} - {{ epic.completed }}%</td>
+        <td class="text-center">{{ epic.done_tc }}/{{ epic.total_tc }} - {{ epic.completed }}%</td>
         <td class="text-center">{{ epic.change_count }}</td>
         <td class="text-center">{{ epic.version }}</td>
         <td class="text-left">{{ formatEpicDate(epic.created) }}</td>

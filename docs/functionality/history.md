@@ -12,7 +12,9 @@ History-bearing change data includes:
 - epic ID
 - change types
 - title
-- body
+- requirement body
+- pull request body
+- pull request URL
 - modified time
 - delete marker
 
@@ -21,10 +23,10 @@ Before updating or deleting an epic, the backend records the current epic row in
 
 Epic history supports review of planning container changes and preserves previous aggregate context.
 
-## Requirement History
-Before updating or deleting a requirement definition, the backend records the current requirement row in `requirement_history`.
+## Test Case History
+Before updating or deleting a test case scenario, the backend records the current test case row in `test_case_history`.
 
-Done toggles may update active state without changing the requirement definition version, depending on backend contract.
+Done toggles may update active state without changing the test case scenario version, depending on backend contract. Test case history rows store the associated `change_id` so historical scenario changes remain tied to the change they helped define.
 
 ## Transaction Rule
 History insert and active-row mutation must happen in one transaction. If history capture fails, the active row must not change.

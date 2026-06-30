@@ -1,4 +1,4 @@
-import type { Requirement } from '@/features/requirements/model/requirement.types';
+import type { TestCase } from '@/features/test-cases/model/testCase.types';
 
 export type { Epic } from '@/features/epics/model/epic.types';
 
@@ -15,11 +15,14 @@ export interface Change {
   change_phase: string;
   change_types: string[];
   title: string;
-  body: string;
-  body_html: string;
+  requirement_body: string;
+  requirement_html: string;
+  pull_request_body: string;
+  pull_request_html: string;
+  pull_request_url: string;
   closed: boolean;
-  done_req: number;
-  total_req: number;
+  done_tc: number;
+  total_tc: number;
   completed: number;
   created: string;
   modified: string;
@@ -27,7 +30,7 @@ export interface Change {
 
 export interface ChangeDetail {
   change: Change;
-  requirements: Requirement[];
+  test_cases: TestCase[];
 }
 
 export interface ChangeReferences {
@@ -37,7 +40,8 @@ export interface ChangeReferences {
 
 export interface ChangeRenderedBody {
   id: number;
-  body_html: string;
+  requirement_html: string;
+  pull_request_html: string;
 }
 
 export interface ChangeRenderedBodiesResponse {
@@ -48,15 +52,10 @@ export interface ChangeCreateInput {
   project_id: number;
   epic_id?: number | null;
   title: string;
-  body?: string;
+  requirement_body?: string;
+  pull_request_body?: string;
+  pull_request_url?: string;
   change_phase: string;
-  change_types: string[];
-}
-
-export interface ChangeUpdateInput {
-  id: number;
-  title: string;
-  body?: string;
   change_types: string[];
 }
 

@@ -11,7 +11,7 @@ Replace the placeholder `ProjectsListState` flow in `mch` with a freshly loaded,
 - Support up/down row navigation, bounded selection behavior, enter-to-details transition, and slash command menu opening while the projects table is active.
 - Preserve existing project commands and navigation shell behavior around `/new-project`, `/help`, `/find`, `/return`, and command overlays.
 - Refactor the `mch` code layout so DTOs live in `internal/dto`, HTTP backend access lives in `pkg/client`, section behavior lives under `internal/projects`, `internal/changes`, `internal/epics`, `internal/requirements`, `internal/planning`, and `internal/help`, and shared routing/UI helpers live under `internal/navigation` and `internal/ui`.
-- Prevent package tests or nested execution from creating `.config` folders under `make-a-change/internal`.
+- Prevent package tests or nested execution from creating `.config` folders under `cli/internal`.
 - Add tests for project reload, table rendering, timestamp formatting, selection, details transition, current project non-mutation, and command menu behavior.
 
 ## Requirements
@@ -35,7 +35,7 @@ Replace the placeholder `ProjectsListState` flow in `mch` with a freshly loaded,
 - Loading failures, empty project lists, malformed timestamps, invalid project IDs, no-selectable-row enter presses, and narrow terminal widths must produce deterministic, non-panicking UI behavior.
 - Shared DTOs must live under `internal/dto`; the reusable HTTP backend client must live under `pkg/client`; feature packages must expose section-local `api.go` interfaces.
 - `internal/app/model.go` must remain focused on root model state and construction, with update, dropdown, selector, command, and view responsibilities split into separate files.
-- No `.config` directory may be created or tracked under `make-a-change/internal`.
+- No `.config` directory may be created or tracked under `cli/internal`.
 
 ## Acceptance Criteria
 
@@ -48,7 +48,7 @@ Replace the placeholder `ProjectsListState` flow in `mch` with a freshly loaded,
 - Pressing `/` opens the command menu and keeps the project list screen title visible under the overlay.
 - Existing project commands remain in the project list command set and continue to transition according to the navigation shell.
 - The codebase contains the documented package layout from `docs/architecture/mch.md`, including `pkg/client`, `internal/dto`, feature packages, `internal/navigation`, and `internal/ui`.
-- Running tests from nested packages resolves local config to the `make-a-change` module root rather than creating nested internal `.config` folders.
+- Running tests from nested packages resolves local config to the `cli` module root rather than creating nested internal `.config` folders.
 - Tests cover reload, rendering, timestamp formatting, row selection, arrow navigation, enter transition, current project non-mutation, and command menu opening.
 
 ## Non-Goals
@@ -78,9 +78,9 @@ Replace the placeholder `ProjectsListState` flow in `mch` with a freshly loaded,
 
 ## Verification
 
-- From the repository root: `cd make-a-change && make lint`
-- From the repository root: `cd make-a-change && go test ./...`
-- From the repository root: `cd make-a-change && go build -o ./bin/mch ./cmd/mch`
+- From the repository root: `cd cli && make lint`
+- From the repository root: `cd cli && go test ./...`
+- From the repository root: `cd cli && go build -o ./bin/mch ./cmd/mch`
 
 ## Review Focus
 

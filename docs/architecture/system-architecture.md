@@ -31,14 +31,14 @@ The frontend is a Vue 3 and Quasar single-page app. It owns:
 - Current project selection.
 - Project CRUD.
 - Change board and detail views.
-- Requirement editing flows.
+- Test case editing flows.
 - Planning and help screens.
 - Client-side loading, empty, error, and confirmation states.
 
 Feature folders own domain API wrappers, types, stores, composables, and components.
 
 ## Database
-PostgreSQL stores projects, epics, changes, requirements, reference options, and history rows. Application code must use the database contract as supplied. Backend and frontend implementation changes must not invent new schema behavior.
+PostgreSQL stores projects, epics, changes, test cases, reference options, and history rows. Application code must use the database contract as supplied. Backend and frontend implementation changes must not invent new schema behavior.
 
 ## AI Integration
 The backend mediates LLM calls. Prompts receive project context and database-provided reference options. Model output is parsed, validated, and shown to the user before persistence.

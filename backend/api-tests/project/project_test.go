@@ -80,7 +80,7 @@ func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
 		shared.CleanupProject(t, client, created.ID)
 	})
 
-	createdRequirement := createRequirement(t, client, createdChange.ID)
+	createdTestCase := createTestCase(t, client, createdChange.ID)
 
 	status = client.Post(t, "/api/v1/project/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusConflict, status)
@@ -95,11 +95,11 @@ func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, createdChange.ID, fetchedChange.Change.ID)
 
-	var requirements []requirement
-	status = client.Post(t, "/api/v1/requirement/list", map[string]any{"change_id": createdChange.ID}, &requirements)
+	var testCases []testCase
+	status = client.Post(t, "/api/v1/test-case/list", map[string]any{"change_id": createdChange.ID}, &testCases)
 	require.Equal(t, http.StatusOK, status)
-	require.Len(t, requirements, 1)
-	assert.Equal(t, createdRequirement.ID, requirements[0].ID)
+	require.Len(t, testCases, 1)
+	assert.Equal(t, createdTestCase.ID, testCases[0].ID)
 }
 
 func TestProjectRejectsInvalidInputAndMissingRows(t *testing.T) {
@@ -138,27 +138,27 @@ type changeDetail struct {
 	Change change `json:"change"`
 }
 
-type requirement struct {
-	ID         int    `json:"id"`
-	ChangeID   int    `json:"change_id"`
-	Definition string `json:"definition"`
+type testCase struct {
+	ID       int    `json:"id"`
+	ChangeID int    `json:"change_id"`
+	Scenario string `json:"scenario"`
 }
 
-type requirementMutation struct {
-	Requirement *requirement `json:"requirement"`
+type testCaseMutation struct {
+	TestCase *testCase `json:"test_case"`
 }
 
-func createRequirement(t *testing.T, client *shared.Client, changeID int) requirement {
+func createTestCase(t *testing.T, client *shared.Client, changeID int) testCase {
 	t.Helper()
 
-	var created requirementMutation
-	status := client.Post(t, "/api/v1/requirement/create", map[string]any{
-		"change_id":  changeID,
-		"definition": "Project delete keeps this requirement.",
+	var created testCaseMutation
+	status := client.Post(t, "/api/v1/test-case/create", map[string]any{
+		"change_id": changeID,
+		"scenario":  "Project delete keeps this test case.",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
-	require.NotNil(t, created.Requirement)
-	require.NotEmpty(t, created.Requirement.ID)
-	assert.Equal(t, changeID, created.Requirement.ChangeID)
-	return *created.Requirement
+	require.NotNil(t, created.TestCase)
+	require.NotEmpty(t, created.TestCase.ID)
+	assert.Equal(t, changeID, created.TestCase.ChangeID)
+	return *created.TestCase
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 
-	"aipm/internal/changeview"
 	"aipm/internal/dto"
 )
 
@@ -21,11 +20,11 @@ var (
 // Service defines Service values.
 type Service struct {
 	repo     Repository
-	renderer changeview.ChangeRenderer
+	renderer Renderer
 }
 
 // NewService initializes or executes NewService behavior.
-func NewService(changeRepository Repository, renderer changeview.ChangeRenderer) *Service {
+func NewService(changeRepository Repository, renderer Renderer) *Service {
 	return &Service{repo: changeRepository, renderer: renderer}
 }
 
@@ -71,7 +70,11 @@ func (s *Service) RenderedBodies(ctx context.Context, req dto.ChangeRenderedBodi
 	bodies := make([]dto.ChangeRenderedBody, 0, len(changes))
 	for _, item := range changes {
 		item = s.renderer.RenderChange(item)
-		bodies = append(bodies, dto.ChangeRenderedBody{ID: item.ID, BodyHTML: item.BodyHTML})
+		bodies = append(bodies, dto.ChangeRenderedBody{
+			ID:              item.ID,
+			RequirementHTML: item.RequirementHTML,
+			PullRequestHTML: item.PullRequestHTML,
+		})
 	}
 	return dto.ChangeRenderedBodiesResponse{Bodies: bodies}, nil
 }
@@ -79,7 +82,9 @@ func (s *Service) RenderedBodies(ctx context.Context, req dto.ChangeRenderedBodi
 // CreateChange executes CreateChange behavior.
 func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
-	req.Body = strings.TrimSpace(req.Body)
+	req.RequirementBody = strings.TrimSpace(req.RequirementBody)
+	req.PullRequestBody = strings.TrimSpace(req.PullRequestBody)
+	req.PullRequestURL = strings.TrimSpace(req.PullRequestURL)
 	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
 	if req.ProjectID <= 0 || req.Title == "" || req.ChangePhase == "" || len(req.ChangeTypes) == 0 || invalidOptionalID(req.EpicID) {
@@ -92,15 +97,52 @@ func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest)
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdateChange executes UpdateChange behavior.
-func (s *Service) UpdateChange(ctx context.Context, req dto.ChangeUpdateRequest) (dto.Change, error) {
-	req.Title = strings.TrimSpace(req.Title)
-	req.Body = strings.TrimSpace(req.Body)
+// UpdateChangeTypes executes UpdateChangeTypes behavior.
+func (s *Service) UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
-	if req.ID <= 0 || req.Title == "" || len(req.ChangeTypes) == 0 {
+	if req.ID <= 0 || len(req.ChangeTypes) == 0 {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.Update(ctx, req)
+	change, err := s.repo.UpdateChangeTypes(ctx, req)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	return s.renderer.RenderChange(change), nil
+}
+
+// UpdateTitle executes UpdateTitle behavior.
+func (s *Service) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error) {
+	req.Title = strings.TrimSpace(req.Title)
+	if req.ID <= 0 || req.Title == "" {
+		return dto.Change{}, ErrInvalidInput
+	}
+	change, err := s.repo.UpdateTitle(ctx, req)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	return s.renderer.RenderChange(change), nil
+}
+
+// UpdateRequirementBody executes UpdateRequirementBody behavior.
+func (s *Service) UpdateRequirementBody(ctx context.Context, req dto.ChangeUpdateRequirementBodyRequest) (dto.Change, error) {
+	req.RequirementBody = strings.TrimSpace(req.RequirementBody)
+	if req.ID <= 0 {
+		return dto.Change{}, ErrInvalidInput
+	}
+	change, err := s.repo.UpdateRequirementBody(ctx, req)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	return s.renderer.RenderChange(change), nil
+}
+
+// UpdatePullRequestBody executes UpdatePullRequestBody behavior.
+func (s *Service) UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error) {
+	req.PullRequestBody = strings.TrimSpace(req.PullRequestBody)
+	if req.ID <= 0 {
+		return dto.Change{}, ErrInvalidInput
+	}
+	change, err := s.repo.UpdatePullRequestBody(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}

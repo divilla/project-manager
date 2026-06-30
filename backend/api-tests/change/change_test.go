@@ -17,8 +17,8 @@ type project struct {
 
 type epic struct {
 	ID        int   `json:"id"`
-	DoneReq   int16 `json:"done_req"`
-	TotalReq  int16 `json:"total_req"`
+	DoneTC    int16 `json:"done_tc"`
+	TotalTC   int16 `json:"total_tc"`
 	Completed int16 `json:"completed"`
 }
 
@@ -32,37 +32,41 @@ type referenceOption struct {
 }
 
 type change struct {
-	ID          int      `json:"id"`
-	Version     int16    `json:"version"`
-	ProjectID   int      `json:"project_id"`
-	EpicID      *int     `json:"epic_id"`
-	ChangePhase string   `json:"change_phase"`
-	ChangeTypes []string `json:"change_types"`
-	Title       string   `json:"title"`
-	Body        string   `json:"body"`
-	BodyHTML    string   `json:"body_html"`
-	Closed      bool     `json:"closed"`
-	DoneReq     int16    `json:"done_req"`
-	TotalReq    int16    `json:"total_req"`
-	Completed   int16    `json:"completed"`
+	ID              int      `json:"id"`
+	Version         int16    `json:"version"`
+	ProjectID       int      `json:"project_id"`
+	EpicID          *int     `json:"epic_id"`
+	ChangePhase     string   `json:"change_phase"`
+	ChangeTypes     []string `json:"change_types"`
+	Title           string   `json:"title"`
+	RequirementBody string   `json:"requirement_body"`
+	RequirementHTML string   `json:"requirement_html"`
+	PullRequestBody string   `json:"pull_request_body"`
+	PullRequestHTML string   `json:"pull_request_html"`
+	PullRequestURL  string   `json:"pull_request_url"`
+	Closed          bool     `json:"closed"`
+	DoneTC          int16    `json:"done_tc"`
+	TotalTC         int16    `json:"total_tc"`
+	Completed       int16    `json:"completed"`
 }
 
 type detail struct {
 	Change change `json:"change"`
 }
 
-type requirement struct {
+type testCase struct {
 	ID int `json:"id"`
 }
 
-type requirementMutation struct {
-	Requirement *requirement `json:"requirement"`
+type testCaseMutation struct {
+	TestCase *testCase `json:"test_case"`
 }
 
 type renderedBodies struct {
 	Bodies []struct {
-		ID       int    `json:"id"`
-		BodyHTML string `json:"body_html"`
+		ID              int    `json:"id"`
+		RequirementHTML string `json:"requirement_html"`
+		PullRequestHTML string `json:"pull_request_html"`
 	} `json:"bodies"`
 }
 
@@ -82,12 +86,12 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	title := fmt.Sprintf("api-test-change-%d", time.Now().UnixNano())
 	var created change
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
-		"project_id":   projectID,
-		"epic_id":      epicID,
-		"title":        title,
-		"body":         "Created by change API integration test.",
-		"change_phase": "backlog",
-		"change_types": []string{"feature"},
+		"project_id":       projectID,
+		"epic_id":          epicID,
+		"title":            title,
+		"requirement_body": "Created by change API integration test.",
+		"change_phase":     "backlog",
+		"change_types":     []string{"feature"},
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
@@ -108,25 +112,39 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, created.ID, fetched.Change.ID)
-	assert.Contains(t, fetched.Change.BodyHTML, "<p>Created by change API integration test.</p>")
+	assert.Contains(t, fetched.Change.RequirementHTML, "<p>Created by change API integration test.</p>")
 
 	var rendered renderedBodies
 	status = client.Post(t, "/api/v1/change/rendered-bodies", map[string]any{"ids": []int{created.ID}}, &rendered)
 	require.Equal(t, http.StatusOK, status)
 	require.Len(t, rendered.Bodies, 1)
-	assert.Contains(t, rendered.Bodies[0].BodyHTML, "<p>Created by change API integration test.</p>")
+	assert.Contains(t, rendered.Bodies[0].RequirementHTML, "<p>Created by change API integration test.</p>")
 
 	var updated change
-	status = client.Post(t, "/api/v1/change/update", map[string]any{
-		"id":           created.ID,
-		"title":        title + "-updated",
-		"body":         "Updated by change API integration test.",
-		"change_types": []string{"fix"},
+	status = client.Post(t, "/api/v1/change/update-title", map[string]any{"id": created.ID, "title": title + "-title"}, &updated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, title+"-title", updated.Title)
+
+	status = client.Post(t, "/api/v1/change/update-requirement-body", map[string]any{
+		"id":               created.ID,
+		"requirement_body": "Focused requirement body update.",
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, title+"-updated", updated.Title)
-	assert.Equal(t, []string{"fix"}, updated.ChangeTypes)
-	assert.Equal(t, created.Version+1, updated.Version)
+	assert.Equal(t, "Focused requirement body update.", updated.RequirementBody)
+
+	status = client.Post(t, "/api/v1/change/update-pull-request-body", map[string]any{
+		"id":                created.ID,
+		"pull_request_body": "Focused pull request body update.",
+	}, &updated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "Focused pull request body update.", updated.PullRequestBody)
+
+	status = client.Post(t, "/api/v1/change/update-change-types", map[string]any{
+		"id":           created.ID,
+		"change_types": []string{"docs"},
+	}, &updated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, []string{"docs"}, updated.ChangeTypes)
 
 	status = client.Post(t, "/api/v1/change/update-phase", map[string]any{"id": created.ID, "change_phase": "review"}, &updated)
 	require.Equal(t, http.StatusOK, status)
@@ -140,7 +158,7 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	assert.Nil(t, updated.EpicID)
 
-	requirementID := createRequirement(t, client, created.ID)
+	testCaseID := createTestCase(t, client, created.ID)
 
 	status = client.Post(t, "/api/v1/change/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusNoContent, status)
@@ -148,7 +166,7 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
-	status = client.Post(t, "/api/v1/requirement/delete", map[string]any{"id": requirementID}, nil)
+	status = client.Post(t, "/api/v1/test-case/delete", map[string]any{"id": testCaseID}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 }
 
@@ -188,16 +206,14 @@ func TestChangeRejectsInvalidInputAndMissingRows(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/rendered-bodies", map[string]any{"ids": []int{0}}, nil)
 	assert.Equal(t, http.StatusBadRequest, status)
 
-	status = client.Post(t, "/api/v1/change/update", map[string]any{
-		"id":           999999999,
-		"title":        "missing change",
-		"change_types": []string{"feature"},
+	status = client.Post(t, "/api/v1/change/update-title", map[string]any{
+		"id":    999999999,
+		"title": "missing change",
 	}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
-	status = client.Post(t, "/api/v1/change/update", map[string]any{
+	status = client.Post(t, "/api/v1/change/update-change-types", map[string]any{
 		"id":           999999999,
-		"title":        "missing change",
 		"change_types": []string{"missing-type"},
 	}, nil)
 	assert.Equal(t, http.StatusBadRequest, status)
@@ -244,16 +260,16 @@ func createEpic(t *testing.T, client *shared.Client, projectID int) int {
 	return created.ID
 }
 
-func createRequirement(t *testing.T, client *shared.Client, changeID int) int {
+func createTestCase(t *testing.T, client *shared.Client, changeID int) int {
 	t.Helper()
 
-	var created requirementMutation
-	status := client.Post(t, "/api/v1/requirement/create", map[string]any{
-		"change_id":  changeID,
-		"definition": "Change delete removes this requirement.",
+	var created testCaseMutation
+	status := client.Post(t, "/api/v1/test-case/create", map[string]any{
+		"change_id": changeID,
+		"scenario":  "Change delete removes this test case.",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
-	require.NotNil(t, created.Requirement)
-	require.NotEmpty(t, created.Requirement.ID)
-	return created.Requirement.ID
+	require.NotNil(t, created.TestCase)
+	require.NotEmpty(t, created.TestCase.ID)
+	return created.TestCase.ID
 }

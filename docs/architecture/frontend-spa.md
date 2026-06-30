@@ -23,7 +23,7 @@ frontend/src/
     projects/
     epics/
     changes/
-    requirements/
+    test-cases/
   shared/
     api/
     ui/
@@ -42,7 +42,7 @@ The Changes route shows change cards grouped by workflow phase. Search filters b
 The Epics route owns epic list, create, edit, and delete workflows. The list uses a Quasar markup table and relies on backend epic response data, including linked change counts, to disable unsafe deletes. Epics do not have a detail route.
 
 ## Detail View
-The change detail view shows the opened change, linked requirements, and sanitized markdown body. Requirement create, edit, done toggle, and delete actions update visible completeness from backend responses.
+The change detail view shows the opened change, linked test cases, and sanitized markdown requirement body. Test case create, edit, done toggle, and delete actions update visible completeness from backend responses.
 
 ## Confirmations
 Destructive operations use persistent confirmation dialogs. Buttons are consistently labeled `Cancel` and `OK`; dangerous `OK` actions use negative styling.

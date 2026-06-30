@@ -6,7 +6,7 @@ Types: feature|test
 
 `mch` needs a complete state-based terminal navigation shell so users can move through Main, Changes, Requirements, Epics, Projects, selectors, confirmations, help, and quit behavior. Every supplied state and transition must exist, be testable, and render a deterministic dummy screen title. Save and delete actions are navigation-only in this requirement; they do not persist domain data.
 
-The implementation must also create the local `make-a-change/.config/config.yaml` file with a valid YAML key-value pair so the `make-a-change` app has an initial config file in place.
+The implementation must also create the local `cli/.config/config.yaml` file with a valid YAML key-value pair so the `cli` app has an initial config file in place.
 
 ## Primary Workflows
 
@@ -21,7 +21,7 @@ The implementation must also create the local `make-a-change/.config/config.yaml
 
 ## Acceptance Criteria
 
-1. Implementation creates `make-a-change/.config/config.yaml`.
+1. Implementation creates `cli/.config/config.yaml`.
 2. `config.yaml` contains:
    ```yaml
    backend_url: http://localhost:8080
@@ -55,7 +55,7 @@ The implementation must also create the local `make-a-change/.config/config.yaml
 
 ## Edge Cases
 
-1. `make-a-change/.config/` does not exist before implementation.
+1. `cli/.config/` does not exist before implementation.
 2. `config.yaml` exists but is malformed YAML.
 3. `backend_url` is missing or empty.
 4. Backend reference data cannot be loaded for phase, type, epic, or project selectors.
@@ -81,13 +81,13 @@ The implementation must also create the local `make-a-change/.config/config.yaml
 
 ## Dependencies And Risks
 
-1. Depends on the existing `make-a-change/` Bubble Tea, Bubbles, and Lip Gloss architecture.
+1. Depends on the existing `cli/` Bubble Tea, Bubbles, and Lip Gloss architecture.
 2. Depends on `POST /api/v1/change/reference` for phase and type selector options.
 3. Depends on `POST /api/v1/project/list` for project selection.
 4. Depends on `POST /api/v1/epic/list` with current `project_id` for epic selection.
 5. Selector loading failures must be visible and recoverable without losing the previous state.
 6. Reusing one dropdown model for commands, list selection, selectors, and confirmations requires clear caller context so confirmation and cancel routes remain correct.
-7. The config file introduces a local filesystem dependency under `make-a-change/.config/`.
+7. The config file introduces a local filesystem dependency under `cli/.config/`.
 
 ## Open Questions
 

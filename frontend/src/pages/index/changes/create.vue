@@ -58,10 +58,10 @@
       />
 
       <q-input
-        v-model="body"
+        v-model="requirementBody"
         outlined
         type="textarea"
-        label="Body"
+        label="Requirement body"
         input-style="min-height: 240px"
         :disable="loading || saving"
       />
@@ -90,7 +90,7 @@ const { currentProjectId } = storeToRefs(projectSelection);
 const { epics } = storeToRefs(changeCache);
 
 const title = ref('');
-const body = ref('');
+const requirementBody = ref('');
 const changeTypes = ref<string[]>([]);
 const changePhase = ref('');
 const epicId = ref<number | null>(null);
@@ -150,7 +150,7 @@ async function createChangeFromPage() {
       project_id: projectId,
       epic_id: epicId.value || null,
       title: changeTitle,
-      body: body.value.trim(),
+      requirement_body: requirementBody.value.trim(),
       change_phase: changePhase.value,
       change_types: changeTypes.value,
     };

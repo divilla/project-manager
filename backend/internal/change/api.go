@@ -29,10 +29,13 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	a.g.POST("/get", a.getChange)
 	a.g.POST("/rendered-bodies", a.renderedBodies)
 	a.g.POST("/create", a.createChange)
-	a.g.POST("/update", a.updateChange)
 	a.g.POST("/update-epic", a.updateEpic)
 	a.g.POST("/update-phase", a.updatePhase)
 	a.g.POST("/update-closed", a.updateClosed)
+	a.g.POST("/update-change-types", a.updateChangeTypes)
+	a.g.POST("/update-title", a.updateTitle)
+	a.g.POST("/update-requirement-body", a.updateRequirementBody)
+	a.g.POST("/update-pull-request-body", a.updatePullRequestBody)
 	a.g.POST("/delete", a.deleteChange)
 
 	return a
@@ -94,24 +97,60 @@ func (a *API) createChange(c *echo.Context) error {
 	return c.JSON(http.StatusCreated, &res)
 }
 
-func (a *API) updateChange(c *echo.Context) error {
-	var req dto.ChangeUpdateRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change update payload")
-	}
-	res, err := a.s.UpdateChange(c.Request().Context(), req)
-	if err != nil {
-		return changeError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
 func (a *API) updateEpic(c *echo.Context) error {
 	var req dto.ChangeUpdateEpicRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change epic payload")
 	}
 	res, err := a.s.UpdateEpic(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updateChangeTypes(c *echo.Context) error {
+	var req dto.ChangeUpdateChangeTypesRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change types payload")
+	}
+	res, err := a.s.UpdateChangeTypes(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updateTitle(c *echo.Context) error {
+	var req dto.ChangeUpdateTitleRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change title payload")
+	}
+	res, err := a.s.UpdateTitle(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updateRequirementBody(c *echo.Context) error {
+	var req dto.ChangeUpdateRequirementBodyRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change requirement body payload")
+	}
+	res, err := a.s.UpdateRequirementBody(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updatePullRequestBody(c *echo.Context) error {
+	var req dto.ChangeUpdatePullRequestBodyRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pull request body payload")
+	}
+	res, err := a.s.UpdatePullRequestBody(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}

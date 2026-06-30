@@ -5,7 +5,6 @@ import type {
   ChangeDetail,
   ChangeReferences,
   ChangeRenderedBodiesResponse,
-  ChangeUpdateInput,
 } from '../model/change.types';
 
 export function getChangeReferences(): Promise<ChangeReferences> {
@@ -28,12 +27,24 @@ export function createChange(input: ChangeCreateInput): Promise<Change> {
   return post<Change>('/api/v1/change/create', input);
 }
 
-export function updateChange(input: ChangeUpdateInput): Promise<Change> {
-  return post<Change>('/api/v1/change/update', input);
-}
-
 export function updateChangeEpic(id: number, epicId: number | null): Promise<Change> {
   return post<Change>('/api/v1/change/update-epic', { id, epic_id: epicId });
+}
+
+export function updateChangeTitle(id: number, title: string): Promise<Change> {
+  return post<Change>('/api/v1/change/update-title', { id, title });
+}
+
+export function updateChangeRequirementBody(id: number, requirementBody: string): Promise<Change> {
+  return post<Change>('/api/v1/change/update-requirement-body', { id, requirement_body: requirementBody });
+}
+
+export function updateChangeTypes(id: number, changeTypes: string[]): Promise<Change> {
+  return post<Change>('/api/v1/change/update-change-types', { id, change_types: changeTypes });
+}
+
+export function updateChangePullRequestBody(id: number, pullRequestBody: string): Promise<Change> {
+  return post<Change>('/api/v1/change/update-pull-request-body', { id, pull_request_body: pullRequestBody });
 }
 
 export function updateChangePhase(id: number, changePhase: string): Promise<Change> {

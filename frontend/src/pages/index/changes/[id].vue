@@ -78,45 +78,45 @@
           <tr class="text-weight-bold">
             <td class="text-right">nr</td>
             <td class="text-center">&nbsp;</td>
-            <td class="text-left" colspan="4">Requirement</td>
+            <td class="text-left" colspan="4">Test Case</td>
             <td class="text-center">Complete</td>
             <td class="text-center">Modified</td>
             <td class="text-center">Version</td>
             <td class="change-actions-cell"></td>
           </tr>
-          <tr v-for="requirement in requirements" :key="requirement.id">
-            <td class="text-right">#{{ requirement.id }}</td>
+          <tr v-for="testCase in testCases" :key="testCase.id">
+            <td class="text-right">#{{ testCase.id }}</td>
             <td class="text-center">&nbsp;</td>
             <td class="text-left" colspan="4">
-              {{ requirement.definition }}
+              {{ testCase.scenario }}
             </td>
             <td class="text-center">
               <q-checkbox
-                :model-value="requirement.done"
+                :model-value="testCase.done"
                 dense
                 color="secondary"
-                :disable="isRequirementUpdating(requirement.id)"
-                @update:model-value="toggleRequirement(requirement, Boolean($event))"
+                :disable="isTestCaseUpdating(testCase.id)"
+                @update:model-value="toggleTestCase(testCase, Boolean($event))"
               />
             </td>
-            <td class="text-center">{{ formatModified(requirement.modified) }}</td>
-            <td class="text-center">{{ requirement.version }}</td>
+            <td class="text-center">{{ formatModified(testCase.modified) }}</td>
+            <td class="text-center">{{ testCase.version }}</td>
             <td class="change-actions-cell">
               <q-btn-dropdown
                 flat
                 round
                 color="secondary"
                 dropdown-icon="more_vert"
-                aria-label="Requirement actions"
+                aria-label="Test case actions"
                 @click.stop
               >
                 <q-list>
                   <q-item
                     clickable
                     v-close-popup
-                    data-action="edit-requirement"
-                    :disable="isRequirementUpdating(requirement.id)"
-                    @click.stop="openRequirementEdit(requirement)"
+                    data-action="edit-test-case"
+                    :disable="isTestCaseUpdating(testCase.id)"
+                    @click.stop="openTestCaseEdit(testCase)"
                   >
                     <q-item-section>
                       <q-item-label>Edit</q-item-label>
@@ -126,9 +126,9 @@
                   <q-item
                     clickable
                     v-close-popup
-                    data-action="delete-requirement"
-                    :disable="isRequirementUpdating(requirement.id)"
-                    @click.stop="confirmDeleteRequirement(requirement)"
+                    data-action="delete-test-case"
+                    :disable="isTestCaseUpdating(testCase.id)"
+                    @click.stop="confirmDeleteTestCase(testCase)"
                   >
                     <q-item-section>
                       <q-item-label>Delete</q-item-label>
@@ -146,8 +146,8 @@
                 rounded
                 color="secondary"
                 icon="library_add_check"
-                label="Add Requirement"
-                @click="openRequirementCreate"
+                label="Add Test Case"
+                @click="openTestCaseCreate"
               />
             </td>
           </tr>
@@ -157,33 +157,33 @@
       <q-markup-table flat bordered class="change-detail-table">
         <tbody>
           <tr>
-            <td class="change-detail-body-cell" style="padding-top: 32px; padding-bottom: 32px;">
-              <div class="apply-markdown" v-html="currentChange.body_html" />
+            <td class="change-detail-requirement-body-cell" style="padding-top: 32px; padding-bottom: 32px;">
+              <div class="apply-markdown" v-html="currentChange.requirement_html" />
             </td>
           </tr>
         </tbody>
       </q-markup-table>
     </template>
 
-    <q-dialog v-model="requirementEditOpen">
-      <q-card class="requirement-edit-dialog">
+    <q-dialog v-model="testCaseEditOpen">
+      <q-card class="test-case-edit-dialog">
         <q-card-section>
-          <div class="text-h6">Edit Requirement</div>
+          <div class="text-h6">Edit Test Case</div>
         </q-card-section>
 
-        <q-form @submit.prevent="saveRequirementEdit">
-          <q-card-section class="requirement-edit-fields">
+        <q-form @submit.prevent="saveTestCaseEdit">
+          <q-card-section class="test-case-edit-fields">
             <q-input
-              v-model="editingRequirementDefinition"
+              v-model="editingTestCaseScenario"
               autofocus
               filled
               autogrow
               type="textarea"
               input-style="min-height: 72px"
-              label="Requirement"
+              label="Test Case"
             />
             <q-select
-              v-model="editingRequirementChangeId"
+              v-model="editingTestCaseChangeId"
               filled
               emit-value
               map-options
@@ -193,36 +193,36 @@
           </q-card-section>
 
           <q-card-actions align="right">
-            <q-btn flat icon="close" label="Cancel" :disable="savingRequirement" @click="closeRequirementEdit" />
+            <q-btn flat icon="close" label="Cancel" :disable="savingTestCase" @click="closeTestCaseEdit" />
             <q-btn
               color="secondary"
               icon="save"
               label="Save"
               type="submit"
-              :loading="savingRequirement"
-              :disable="!editingRequirementDefinition.trim()"
+              :loading="savingTestCase"
+              :disable="!editingTestCaseScenario.trim()"
             />
           </q-card-actions>
         </q-form>
       </q-card>
     </q-dialog>
 
-    <q-dialog v-model="requirementCreateOpen">
-      <q-card class="requirement-edit-dialog">
+    <q-dialog v-model="testCaseCreateOpen">
+      <q-card class="test-case-edit-dialog">
         <q-card-section>
-          <div class="text-h6">Add Requirement</div>
+          <div class="text-h6">Add Test Case</div>
         </q-card-section>
 
-        <q-form @submit.prevent="saveRequirementCreate">
+        <q-form @submit.prevent="saveTestCaseCreate">
           <q-card-section>
             <q-input
-              v-model="newRequirementDefinition"
+              v-model="newTestCaseScenario"
               autofocus
               filled
               autogrow
               type="textarea"
               input-style="min-height: 72px"
-              label="Requirement"
+              label="Test Case"
             />
           </q-card-section>
 
@@ -231,16 +231,16 @@
               flat
               icon="close"
               label="Cancel"
-              :disable="creatingRequirement"
-              @click="closeRequirementCreate"
+              :disable="creatingTestCase"
+              @click="closeTestCaseCreate"
             />
             <q-btn
               color="secondary"
               icon="save"
               label="Add"
               type="submit"
-              :loading="creatingRequirement"
-              :disable="!newRequirementDefinition.trim()"
+              :loading="creatingTestCase"
+              :disable="!newTestCaseScenario.trim()"
             />
           </q-card-actions>
         </q-form>
@@ -278,13 +278,13 @@ import { useChangeCacheStore } from '@/features/changes/model/changeCache.store'
 import type { Change } from '@/features/changes/model/change.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 import {
-  createRequirement,
-  deleteRequirement,
-  updateRequirement,
-  updateRequirementChange,
-  updateRequirementDone,
-} from '@/features/requirements/api/requirementApi';
-import type { Requirement } from '@/features/requirements/model/requirement.types';
+  createTestCase,
+  deleteTestCase,
+  updateTestCase,
+  updateTestCaseChange,
+  updateTestCaseDone,
+} from '@/features/test-cases/api/testCaseApi';
+import type { TestCase } from '@/features/test-cases/model/testCase.types';
 import DeleteConfirmationDialog from '@/shared/ui/DeleteConfirmationDialog.vue';
 
 interface ProjectMismatch {
@@ -300,25 +300,25 @@ const projectSelection = useProjectSelectionStore();
 const changeCache = useChangeCacheStore();
 const { changes, epics } = storeToRefs(changeCache);
 
-const requirements = ref<Requirement[]>([]);
+const testCases = ref<TestCase[]>([]);
 const detailChange = ref<Change | null>(null);
 const detailLoading = ref(false);
 const deletingChangeIds = ref<number[]>([]);
-const updatingRequirementIds = ref<number[]>([]);
-const requirementCreateOpen = ref(false);
-const newRequirementDefinition = ref('');
-const creatingRequirement = ref(false);
-const requirementEditOpen = ref(false);
-const editingRequirement = ref<Requirement | null>(null);
-const editingRequirementDefinition = ref('');
-const editingRequirementChangeId = ref<number | null>(null);
-const savingRequirement = ref(false);
+const updatingTestCaseIds = ref<number[]>([]);
+const testCaseCreateOpen = ref(false);
+const newTestCaseScenario = ref('');
+const creatingTestCase = ref(false);
+const testCaseEditOpen = ref(false);
+const editingTestCase = ref<TestCase | null>(null);
+const editingTestCaseScenario = ref('');
+const editingTestCaseChangeId = ref<number | null>(null);
+const savingTestCase = ref(false);
 const deleteConfirmationOpen = ref(false);
 const pendingDeleteAction = ref<(() => Promise<void>) | null>(null);
 const projectMismatchOpen = ref(false);
 const projectMismatch = ref<ProjectMismatch | null>(null);
-const requirementError = ref('');
-const error = computed(() => projectSelection.error || requirementError.value);
+const testCaseError = ref('');
+const error = computed(() => projectSelection.error || testCaseError.value);
 const loading = computed(() => detailLoading.value || changeCache.loading);
 const changeId = computed(() => Number(route.params.id));
 const changeMap = computed(() => new Map(changes.value.map((change) => [change.id, change])));
@@ -339,19 +339,19 @@ async function loadChangeDetail() {
   if (!changeId.value) return;
 
   detailLoading.value = true;
-  requirementError.value = '';
+  testCaseError.value = '';
   try {
     const detail = await getChange(changeId.value);
     detailChange.value = detail.change;
-    requirements.value = detail.requirements;
+    testCases.value = detail.test_cases;
     await ensureProjectsLoaded();
     detectProjectMismatch(detail.change);
     await changeCache.loadProjectChanges(detail.change.project_id);
     changeCache.upsertChange(detail.change);
   } catch (err) {
     detailChange.value = null;
-    requirements.value = [];
-    requirementError.value = err instanceof Error ? err.message : 'Unable to load change.';
+    testCases.value = [];
+    testCaseError.value = err instanceof Error ? err.message : 'Unable to load change.';
   } finally {
     detailLoading.value = false;
   }
@@ -400,16 +400,16 @@ function stayOnCurrentProject() {
   void router.replace('/changes');
 }
 
-function applyRequirementMutation(requirementList: Requirement[], change: Change) {
+function applyTestCaseMutation(testCaseList: TestCase[], change: Change) {
   if (change.id === changeId.value) {
-    requirements.value = requirementList;
+    testCases.value = testCaseList;
     detailChange.value = change;
   }
   changeCache.upsertChange(change);
 }
 
-function isRequirementUpdating(id: number) {
-  return updatingRequirementIds.value.includes(id);
+function isTestCaseUpdating(id: number) {
+  return updatingTestCaseIds.value.includes(id);
 }
 
 function isChangeDeleting(id: number) {
@@ -435,7 +435,7 @@ async function deleteChangeConfirmed(change: Change) {
   if (!change || isChangeDeleting(change.id)) return;
 
   deletingChangeIds.value = [...deletingChangeIds.value, change.id];
-  requirementError.value = '';
+  testCaseError.value = '';
 
   try {
     await deleteChange(change.id);
@@ -446,131 +446,131 @@ async function deleteChangeConfirmed(change: Change) {
       void router.push('/changes');
     }
   } catch (err) {
-    requirementError.value = err instanceof Error ? err.message : 'Unable to delete change.';
+    testCaseError.value = err instanceof Error ? err.message : 'Unable to delete change.';
   } finally {
     deletingChangeIds.value = deletingChangeIds.value.filter((id) => id !== change.id);
   }
 }
 
-function confirmDeleteRequirement(requirement: Requirement) {
-  if (isRequirementUpdating(requirement.id)) return;
-  pendingDeleteAction.value = () => deleteRequirementConfirmed(requirement);
+function confirmDeleteTestCase(testCase: TestCase) {
+  if (isTestCaseUpdating(testCase.id)) return;
+  pendingDeleteAction.value = () => deleteTestCaseConfirmed(testCase);
   deleteConfirmationOpen.value = true;
 }
 
-async function deleteRequirementConfirmed(requirement: Requirement) {
-  if (isRequirementUpdating(requirement.id)) return;
+async function deleteTestCaseConfirmed(testCase: TestCase) {
+  if (isTestCaseUpdating(testCase.id)) return;
 
-  updatingRequirementIds.value = [...updatingRequirementIds.value, requirement.id];
-  requirementError.value = '';
+  updatingTestCaseIds.value = [...updatingTestCaseIds.value, testCase.id];
+  testCaseError.value = '';
 
   try {
-    const mutation = await deleteRequirement(requirement.id);
-    applyRequirementMutation(mutation.requirements, mutation.change);
+    const mutation = await deleteTestCase(testCase.id);
+    applyTestCaseMutation(mutation.test_cases, mutation.change);
     await changeCache.loadProjectChanges(mutation.change.project_id);
-    if (editingRequirement.value?.id === requirement.id) closeRequirementEdit();
+    if (editingTestCase.value?.id === testCase.id) closeTestCaseEdit();
   } catch (err) {
-    requirementError.value = err instanceof Error ? err.message : 'Unable to delete requirement.';
+    testCaseError.value = err instanceof Error ? err.message : 'Unable to delete test case.';
   } finally {
-    updatingRequirementIds.value = updatingRequirementIds.value.filter((id) => id !== requirement.id);
+    updatingTestCaseIds.value = updatingTestCaseIds.value.filter((id) => id !== testCase.id);
   }
 }
 
-async function toggleRequirement(requirement: Requirement, done: boolean) {
-  if (isRequirementUpdating(requirement.id)) return;
+async function toggleTestCase(testCase: TestCase, done: boolean) {
+  if (isTestCaseUpdating(testCase.id)) return;
 
-  updatingRequirementIds.value = [...updatingRequirementIds.value, requirement.id];
-  requirementError.value = '';
+  updatingTestCaseIds.value = [...updatingTestCaseIds.value, testCase.id];
+  testCaseError.value = '';
 
   try {
-    const mutation = await updateRequirementDone(requirement.id, done);
-    applyRequirementMutation(mutation.requirements, mutation.change);
+    const mutation = await updateTestCaseDone(testCase.id, done);
+    applyTestCaseMutation(mutation.test_cases, mutation.change);
     await changeCache.loadProjectChanges(mutation.change.project_id);
   } catch (err) {
-    requirementError.value = err instanceof Error ? err.message : 'Unable to update requirement.';
+    testCaseError.value = err instanceof Error ? err.message : 'Unable to update test case.';
   } finally {
-    updatingRequirementIds.value = updatingRequirementIds.value.filter((id) => id !== requirement.id);
+    updatingTestCaseIds.value = updatingTestCaseIds.value.filter((id) => id !== testCase.id);
   }
 }
 
-function openRequirementEdit(requirement: Requirement) {
-  editingRequirement.value = requirement;
-  editingRequirementDefinition.value = requirement.definition;
-  editingRequirementChangeId.value = requirement.change_id;
-  requirementEditOpen.value = true;
+function openTestCaseEdit(testCase: TestCase) {
+  editingTestCase.value = testCase;
+  editingTestCaseScenario.value = testCase.scenario;
+  editingTestCaseChangeId.value = testCase.change_id;
+  testCaseEditOpen.value = true;
 }
 
-function closeRequirementEdit() {
-  if (savingRequirement.value) return;
+function closeTestCaseEdit() {
+  if (savingTestCase.value) return;
 
-  requirementEditOpen.value = false;
-  editingRequirement.value = null;
-  editingRequirementDefinition.value = '';
-  editingRequirementChangeId.value = null;
+  testCaseEditOpen.value = false;
+  editingTestCase.value = null;
+  editingTestCaseScenario.value = '';
+  editingTestCaseChangeId.value = null;
 }
 
-function openRequirementCreate() {
-  newRequirementDefinition.value = '';
-  requirementCreateOpen.value = true;
+function openTestCaseCreate() {
+  newTestCaseScenario.value = '';
+  testCaseCreateOpen.value = true;
 }
 
-function closeRequirementCreate() {
-  if (creatingRequirement.value) return;
+function closeTestCaseCreate() {
+  if (creatingTestCase.value) return;
 
-  requirementCreateOpen.value = false;
-  newRequirementDefinition.value = '';
+  testCaseCreateOpen.value = false;
+  newTestCaseScenario.value = '';
 }
 
-async function saveRequirementCreate() {
+async function saveTestCaseCreate() {
   if (!currentChange.value) return;
 
-  const definition = newRequirementDefinition.value.trim();
-  if (!definition) return;
+  const scenario = newTestCaseScenario.value.trim();
+  if (!scenario) return;
 
-  creatingRequirement.value = true;
-  requirementError.value = '';
+  creatingTestCase.value = true;
+  testCaseError.value = '';
 
   try {
-    const mutation = await createRequirement(currentChange.value.id, definition);
-    applyRequirementMutation(mutation.requirements, mutation.change);
-    requirementCreateOpen.value = false;
-    newRequirementDefinition.value = '';
+    const mutation = await createTestCase(currentChange.value.id, scenario);
+    applyTestCaseMutation(mutation.test_cases, mutation.change);
+    testCaseCreateOpen.value = false;
+    newTestCaseScenario.value = '';
     await changeCache.loadProjectChanges(mutation.change.project_id);
   } catch (err) {
-    requirementError.value = err instanceof Error ? err.message : 'Unable to create requirement.';
+    testCaseError.value = err instanceof Error ? err.message : 'Unable to create test case.';
   } finally {
-    creatingRequirement.value = false;
+    creatingTestCase.value = false;
   }
 }
 
-async function saveRequirementEdit() {
-  if (!editingRequirement.value) return;
+async function saveTestCaseEdit() {
+  if (!editingTestCase.value) return;
 
-  const definition = editingRequirementDefinition.value.trim();
-  if (!definition) return;
+  const scenario = editingTestCaseScenario.value.trim();
+  if (!scenario) return;
 
-  savingRequirement.value = true;
-  requirementError.value = '';
+  savingTestCase.value = true;
+  testCaseError.value = '';
 
   try {
-    let mutation = await updateRequirement({
-      id: editingRequirement.value.id,
-      definition,
+    let mutation = await updateTestCase({
+      id: editingTestCase.value.id,
+      scenario,
     });
-    if (editingRequirementChangeId.value && editingRequirementChangeId.value !== editingRequirement.value.change_id) {
-      mutation = await updateRequirementChange(editingRequirement.value.id, editingRequirementChangeId.value);
+    if (editingTestCaseChangeId.value && editingTestCaseChangeId.value !== editingTestCase.value.change_id) {
+      mutation = await updateTestCaseChange(editingTestCase.value.id, editingTestCaseChangeId.value);
     }
-    applyRequirementMutation(mutation.requirements, mutation.change);
-    requirementEditOpen.value = false;
-    editingRequirement.value = null;
-    editingRequirementDefinition.value = '';
-    editingRequirementChangeId.value = null;
+    applyTestCaseMutation(mutation.test_cases, mutation.change);
+    testCaseEditOpen.value = false;
+    editingTestCase.value = null;
+    editingTestCaseScenario.value = '';
+    editingTestCaseChangeId.value = null;
     await changeCache.loadProjectChanges(mutation.change.project_id);
     if (mutation.change.id !== changeId.value) await loadChangeDetail();
   } catch (err) {
-    requirementError.value = err instanceof Error ? err.message : 'Unable to update requirement.';
+    testCaseError.value = err instanceof Error ? err.message : 'Unable to update test case.';
   } finally {
-    savingRequirement.value = false;
+    savingTestCase.value = false;
   }
 }
 
@@ -592,7 +592,7 @@ function formatModified(value: string) {
 }
 
 function completionLabel(change: Change) {
-  return `${change.done_req}/${change.total_req} - ${change.completed}%`;
+  return `${change.done_tc}/${change.total_tc} - ${change.completed}%`;
 }
 
 function epicName(id: number | null | undefined) {
@@ -606,8 +606,8 @@ onMounted(() => {
 });
 
 watch(changeId, () => {
-  closeRequirementEdit();
-  closeRequirementCreate();
+  closeTestCaseEdit();
+  closeTestCaseCreate();
   projectMismatchOpen.value = false;
   projectMismatch.value = null;
   void ensureProjectsLoaded();
@@ -616,11 +616,11 @@ watch(changeId, () => {
 </script>
 
 <style scoped lang="scss">
-.requirement-edit-dialog {
+.test-case-edit-dialog {
   width: min(720px, calc(100vw - 32px));
 }
 
-.requirement-edit-fields {
+.test-case-edit-fields {
   display: grid;
   gap: 16px;
 }
@@ -633,7 +633,7 @@ watch(changeId, () => {
   width: 64px;
 }
 
-.change-detail-body-cell {
+.change-detail-requirement-body-cell {
   min-height: 160px;
 }
 </style>

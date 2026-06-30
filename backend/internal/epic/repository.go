@@ -15,7 +15,7 @@ type Repo struct {
 	pool *pgxpool.Pool
 }
 
-const epicColumns = "id, version, project_id, name, done_req, total_req, completed, change_count, created, modified"
+const epicColumns = "id, version, project_id, name, done_tc, total_tc, completed, change_count, created, modified"
 
 // NewRepo initializes or executes NewRepo behavior.
 func NewRepo(pool *pgxpool.Pool) *Repo {
@@ -167,8 +167,8 @@ func getEpic(ctx context.Context, q queryer, id int) (dto.Epic, error) {
 func scanEpic(row pgx.Row) (dto.Epic, error) {
 	var epic dto.Epic
 	err := row.Scan(
-		&epic.ID, &epic.Version, &epic.ProjectID, &epic.Name, &epic.DoneReq,
-		&epic.TotalReq, &epic.Completed, &epic.ChangeCount, &epic.Created, &epic.Modified,
+		&epic.ID, &epic.Version, &epic.ProjectID, &epic.Name, &epic.DoneTC,
+		&epic.TotalTC, &epic.Completed, &epic.ChangeCount, &epic.Created, &epic.Modified,
 	)
 	return epic, err
 }

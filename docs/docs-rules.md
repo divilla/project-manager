@@ -34,8 +34,8 @@ docs/
 ## Rules
 - Keep each Markdown file at or below 300 lines.
 - Write current product documentation, not migration notes.
-- Use `change`, `epic`, `requirement`, and `history` as the core product vocabulary.
-- Use `title` and `body` for change text fields.
+- Use `change`, `epic`, `test case`, and `history` as the core product vocabulary.
+- Use `title`, `requirement_body`, `pull_request_body`, and `pull_request_url` for change text and PR fields.
 - Do not describe obsolete hierarchy or obsolete terminology as active product behavior.
 - Functionality docs define product behavior.
 - Architecture docs define technical structure.

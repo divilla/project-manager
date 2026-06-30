@@ -10,7 +10,7 @@ features -> may import shared
 pages -> may import features and shared
 ```
 
-`src/shared` contains reusable app infrastructure such as HTTP helpers and generic UI/utilities. It must not know about project, change, epic, or requirement domains.
+`src/shared` contains reusable app infrastructure such as HTTP helpers and generic UI/utilities. It must not know about project, change, epic, or test case domains.
 
 Feature folders own their API modules, model types, composables, and domain components. Components should not call `fetch` directly.
 
@@ -18,7 +18,7 @@ Route pages should stay thin. They compose feature components and route-level co
 
 ## Projects Area
 
-The Projects route uses `features/projects/composables/useProjectsPage.ts` as the page-level coordinator across projects, epics, changes, and requirements.
+The Projects route uses `features/projects/composables/useProjectsPage.ts` as the page-level coordinator across projects, epics, changes, and test cases.
 
 Backend mutations that recalculate change or epic completeness refresh the selected project's change and epic lists after applying the immediate mutation response, so the board stays current while the open dialog remains responsive.
 
@@ -39,16 +39,16 @@ Direct route entry is handled separately from explicit selector changes. If a us
 
 Do not implement this as a loose global boolean. Keep the intended route in Pinia so the app shell can consume and clear it after the project refresh flow.
 
-## Change Bodies
+## Change Requirement Bodies
 
-Change bodies are stored and edited as raw markdown. Backend change detail and mutation responses include sanitized `body_html` rendered through `backend/pkg/markdown`.
+Change requirement bodies are stored and edited as raw markdown. Backend change detail and mutation responses include sanitized `requirement_html` rendered through `backend/pkg/markdown`.
 
-When a frontend screen needs rendered bodies for known change IDs but does not need full change detail records, use `POST /api/v1/change/rendered-bodies` with `{"ids":[...]}`. The response is scoped to rendered body fragments:
+When a frontend screen needs rendered requirement bodies for known change IDs but does not need full change detail records, use `POST /api/v1/change/rendered-bodies` with `{"ids":[...]}`. The response is scoped to rendered requirement-body fragments:
 
 ```json
 {
   "bodies": [
-    { "id": 1, "body_html": "<p>...</p>" }
+    { "id": 1, "requirement_html": "<p>...</p>" }
   ]
 }
 ```
@@ -84,7 +84,7 @@ Use factories for complete valid test data:
 
 ```text
 src/features/changes/model/change.fixtures.ts
-src/features/requirements/model/requirement.fixtures.ts
+src/features/test-cases/model/testCase.fixtures.ts
 ```
 
 Browser E2E tests should be added only when a controlled backend/database or deterministic network mock is available. They should live under `e2e/` and cover critical Projects route workflows rather than duplicating unit or component coverage.

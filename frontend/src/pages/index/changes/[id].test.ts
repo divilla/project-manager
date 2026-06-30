@@ -4,13 +4,13 @@ import { listProjects } from '@/features/projects/api/projectApi';
 import type { Project } from '@/features/projects/model/project.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 import {
-  deleteRequirement,
-  updateRequirementChange,
-} from '@/features/requirements/api/requirementApi';
+  deleteTestCase,
+  updateTestCaseChange,
+} from '@/features/test-cases/api/testCaseApi';
 import {
-  requirementFixture,
-  requirementMutationFixture,
-} from '@/features/requirements/model/requirement.fixtures';
+  testCaseFixture,
+  testCaseMutationFixture,
+} from '@/features/test-cases/model/testCase.fixtures';
 import {
   deleteChange,
   getChange,
@@ -55,12 +55,12 @@ vi.mock('@/features/epics/api/epicApi', () => ({
   listEpics: vi.fn(),
 }));
 
-vi.mock('@/features/requirements/api/requirementApi', () => ({
-  createRequirement: vi.fn(),
-  deleteRequirement: vi.fn(),
-  updateRequirement: vi.fn(),
-  updateRequirementChange: vi.fn(),
-  updateRequirementDone: vi.fn(),
+vi.mock('@/features/test-cases/api/testCaseApi', () => ({
+  createTestCase: vi.fn(),
+  deleteTestCase: vi.fn(),
+  updateTestCase: vi.fn(),
+  updateTestCaseChange: vi.fn(),
+  updateTestCaseDone: vi.fn(),
 }));
 
 function projectFixture(project: Pick<Project, 'id' | 'name' | 'change_count'>): Project {
@@ -151,7 +151,7 @@ describe('ChangeDetailPage', () => {
     vi.mocked(getChange).mockResolvedValue(
       changeDetailFixture({
         change: changeFixture({ id: 2, title: 'Current change', project_id: 1, epic_id: 1 }),
-        requirements: [],
+        test_cases: [],
       }),
     );
     vi.mocked(listChanges).mockResolvedValue([
@@ -160,8 +160,8 @@ describe('ChangeDetailPage', () => {
     ]);
     vi.mocked(listEpics).mockResolvedValue([epicFixture({ id: 1, name: 'Project Epic' })]);
     vi.mocked(deleteChange).mockResolvedValue(undefined);
-    vi.mocked(deleteRequirement).mockResolvedValue(requirementMutationFixture());
-    vi.mocked(updateRequirementChange).mockResolvedValue(requirementMutationFixture());
+    vi.mocked(deleteTestCase).mockResolvedValue(testCaseMutationFixture());
+    vi.mocked(updateTestCaseChange).mockResolvedValue(testCaseMutationFixture());
   });
 
   afterEach(() => {
@@ -199,7 +199,7 @@ describe('ChangeDetailPage', () => {
     vi.mocked(getChange).mockResolvedValue(
       changeDetailFixture({
         change: changeFixture({ id: 2, title: 'Current change', project_id: 2 }),
-        requirements: [],
+        test_cases: [],
       }),
     );
     vi.mocked(listChanges).mockResolvedValue([
@@ -247,53 +247,53 @@ describe('ChangeDetailPage', () => {
     expect(listChanges).toHaveBeenCalledWith(1);
   });
 
-  it('renders requirement actions and opens the edit dialog', async () => {
+  it('renders test case actions and opens the edit dialog', async () => {
     vi.mocked(getChange).mockResolvedValue(
       changeDetailFixture({
         change: changeFixture({ id: 2, title: 'Current change', project_id: 1 }),
-        requirements: [requirementFixture({ id: 9, change_id: 2, definition: 'Existing req' })],
+        test_cases: [testCaseFixture({ id: 9, change_id: 2, scenario: 'Existing test case' })],
       }),
     );
     const wrapper = mountPage();
     await flushPromises();
 
-    expect(wrapper.findAll('[data-action="edit-requirement"]')).toHaveLength(1);
-    expect(wrapper.findAll('[data-action="delete-requirement"]')).toHaveLength(1);
+    expect(wrapper.findAll('[data-action="edit-test-case"]')).toHaveLength(1);
+    expect(wrapper.findAll('[data-action="delete-test-case"]')).toHaveLength(1);
 
-    await wrapper.find('[data-action="edit-requirement"]').trigger('click');
+    await wrapper.find('[data-action="edit-test-case"]').trigger('click');
 
-    expect(wrapper.text()).toContain('Edit Requirement');
+    expect(wrapper.text()).toContain('Edit Test Case');
   });
 
-  it('confirms requirement deletion with the shared delete dialog', async () => {
-    const requirement = requirementFixture({ id: 9, change_id: 2, definition: 'Delete me' });
+  it('confirms test case deletion with the shared delete dialog', async () => {
+    const testCase = testCaseFixture({ id: 9, change_id: 2, scenario: 'Delete me' });
     vi.mocked(getChange).mockResolvedValue(
       changeDetailFixture({
         change: changeFixture({ id: 2, title: 'Current change', project_id: 1 }),
-        requirements: [requirement],
+        test_cases: [testCase],
       }),
     );
-    vi.mocked(deleteRequirement).mockResolvedValue(
-      requirementMutationFixture({
+    vi.mocked(deleteTestCase).mockResolvedValue(
+      testCaseMutationFixture({
         change: changeFixture({ id: 2, project_id: 1 }),
-        requirements: [],
+        test_cases: [],
       }),
     );
     const wrapper = mountPage();
     await flushPromises();
 
-    await wrapper.find('[data-action="delete-requirement"]').trigger('click');
+    await wrapper.find('[data-action="delete-test-case"]').trigger('click');
     await flushPromises();
 
     expect(wrapper.text()).toContain('Are you sure?');
-    expect(deleteRequirement).not.toHaveBeenCalled();
+    expect(deleteTestCase).not.toHaveBeenCalled();
 
     const okButton = wrapper.findAll('button').find((button) => button.text() === 'OK');
     expect(okButton?.attributes('data-color')).toBe('negative');
     await okButton?.trigger('click');
     await flushPromises();
 
-    expect(deleteRequirement).toHaveBeenCalledWith(9);
+    expect(deleteTestCase).toHaveBeenCalledWith(9);
     expect(listChanges).toHaveBeenCalledWith(1);
   });
 });

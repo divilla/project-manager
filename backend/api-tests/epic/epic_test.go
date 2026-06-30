@@ -20,8 +20,8 @@ type epic struct {
 	Version     int16     `json:"version"`
 	ProjectID   int       `json:"project_id"`
 	Name        string    `json:"name"`
-	DoneReq     int16     `json:"done_req"`
-	TotalReq    int16     `json:"total_req"`
+	DoneTC      int16     `json:"done_tc"`
+	TotalTC     int16     `json:"total_tc"`
 	Completed   int16     `json:"completed"`
 	ChangeCount int       `json:"change_count"`
 	Created     time.Time `json:"created"`
@@ -51,8 +51,8 @@ func TestEpicCRUDAndProjectScopedList(t *testing.T) {
 	assert.Equal(t, projectID, created.ProjectID)
 	assert.Equal(t, name, created.Name)
 	assert.Equal(t, int16(0), created.Version)
-	assert.Equal(t, int16(0), created.DoneReq)
-	assert.Equal(t, int16(0), created.TotalReq)
+	assert.Equal(t, int16(0), created.DoneTC)
+	assert.Equal(t, int16(0), created.TotalTC)
 	assert.Equal(t, int16(0), created.Completed)
 	assert.Equal(t, 0, created.ChangeCount)
 	assert.False(t, created.Created.IsZero())

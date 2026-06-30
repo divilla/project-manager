@@ -61,11 +61,11 @@
       <q-toggle v-model="closed" label="Closed" :disable="loading || saving" />
 
       <q-input
-        v-model="body"
+        v-model="requirementBody"
         outlined
         type="textarea"
-        label="Body"
-        class="change-body-input"
+        label="Requirement body"
+        class="change-requirement-body-input"
         input-style="min-height: 600px"
         :disable="loading || saving"
       />
@@ -85,10 +85,12 @@ import { storeToRefs } from 'pinia';
 import {
   getChange,
   getChangeReferences,
-  updateChange,
   updateChangeClosed,
   updateChangeEpic,
   updateChangePhase,
+  updateChangeRequirementBody,
+  updateChangeTitle,
+  updateChangeTypes,
 } from '@/features/changes/api/changeApi';
 import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
 import type { Change, SelectOption } from '@/features/changes/model/change.types';
@@ -100,7 +102,7 @@ const { epics } = storeToRefs(changeCache);
 
 const loadedChange = ref<Change | null>(null);
 const title = ref('');
-const body = ref('');
+const requirementBody = ref('');
 const changeTypes = ref<string[]>([]);
 const changePhase = ref('');
 const epicId = ref<number | null>(null);
@@ -141,7 +143,7 @@ async function loadEditContext() {
     phaseOptions.value = references.phases.map((phase) => ({ label: phase.slug, value: phase.slug }));
     loadedChange.value = detail.change;
     title.value = detail.change.title;
-    body.value = detail.change.body;
+    requirementBody.value = detail.change.requirement_body;
     changeTypes.value = [...detail.change.change_types];
     changePhase.value = detail.change.change_phase;
     epicId.value = detail.change.epic_id || null;
@@ -166,12 +168,16 @@ async function saveChangeFromPage() {
   error.value = '';
 
   try {
-    let change = await updateChange({
-      id: loadedChange.value.id,
-      title: changeTitle,
-      body: body.value.trim(),
-      change_types: changeTypes.value,
-    });
+    let change = loadedChange.value;
+    if (changeTitle !== change.title) {
+      change = await updateChangeTitle(change.id, changeTitle);
+    }
+    if (requirementBody.value.trim() !== change.requirement_body) {
+      change = await updateChangeRequirementBody(change.id, requirementBody.value.trim());
+    }
+    if (!sameStringList(changeTypes.value, change.change_types)) {
+      change = await updateChangeTypes(change.id, changeTypes.value);
+    }
     if (changePhase.value && changePhase.value !== change.change_phase) {
       change = await updateChangePhase(change.id, changePhase.value);
     }
@@ -199,6 +205,10 @@ function goBack() {
   }
 
   void router.push('/changes');
+}
+
+function sameStringList(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 onMounted(() => {

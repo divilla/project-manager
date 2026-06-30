@@ -1,5 +1,8 @@
 begin;
 
+truncate table public.change_phase;
+truncate table public.change_type;
+
 insert into public.change_phase (slug, priority)
 values
     ('backlog', 0),

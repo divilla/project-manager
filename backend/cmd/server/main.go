@@ -8,11 +8,10 @@ import (
 	"os"
 
 	"aipm/internal/change"
-	"aipm/internal/changeview"
 	"aipm/internal/epic"
 	"aipm/internal/health"
 	"aipm/internal/project"
-	"aipm/internal/requirement"
+	"aipm/internal/testcase"
 	"aipm/pkg/config"
 	"aipm/pkg/db"
 	"aipm/pkg/markdown"
@@ -70,7 +69,7 @@ func main() {
 
 	markdownParser := markdown.NewGoldmarkParser()
 	htmlSanitizer := markdown.NewBluemondaySanitizer()
-	changeRenderer := changeview.NewChangeRenderer(markdownParser, htmlSanitizer)
+	changeRenderer := change.NewRenderer(markdownParser, htmlSanitizer)
 
 	healthRepository := health.NewRepo(pool)
 	healthService := health.NewService(healthRepository)
@@ -88,9 +87,9 @@ func main() {
 	changeService := change.NewService(changeRepository, changeRenderer)
 	change.NewAPI(e, changeService)
 
-	requirementRepository := requirement.NewRepo(pool)
-	requirementService := requirement.NewService(requirementRepository, changeRenderer)
-	requirement.NewAPI(e, requirementService)
+	testCaseRepository := testcase.NewRepo(pool)
+	testCaseService := testcase.NewService(testCaseRepository, changeRenderer)
+	testcase.NewAPI(e, testCaseService)
 
 	if err := e.Start(cfg.Addr()); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error().Err(err).Msg("server stopped")

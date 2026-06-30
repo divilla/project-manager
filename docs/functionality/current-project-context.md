@@ -1,7 +1,7 @@
 # Current Project Context
 
 ## Purpose
-The current project is the active workspace for dashboards, planning, changes, and requirements. It prevents each page from inventing its own project selection behavior.
+The current project is the active workspace for dashboards, planning, changes, and test cases. It prevents each page from inventing its own project selection behavior.
 
 ## Selector Rules
 The app shows a compact project selector in the top bar.

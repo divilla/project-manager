@@ -10,7 +10,7 @@
 - Project CRUD with safe deletion.
 - Epic CRUD and epic history.
 - Change board, create, detail, edit, close, and delete flows.
-- Requirement create, edit, done toggle, and delete flows.
+- Test case create, edit, done toggle, and delete flows.
 - Completeness calculation for changes and epics.
 
 ## Phase 3: Documentation And PR Builder
@@ -20,7 +20,7 @@
 - Review focus and verification capture.
 
 ## Phase 4: Agent Assistance
-- Planning prompts that generate draft changes and requirements.
+- Planning prompts that generate draft changes and test cases.
 - Agent interaction through supported workflow commands.
 - History-backed review and revert support for user and AI changes.
 - CLI support for stable automation paths.

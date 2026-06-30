@@ -3,7 +3,7 @@
     <section class="page-heading">
       <div>
         <h1>Planning</h1>
-        <p>AI-assisted planning workspace for decomposing features into changes and requirements.</p>
+        <p>AI-assisted planning workspace for decomposing features into changes and test cases.</p>
       </div>
     </section>
 

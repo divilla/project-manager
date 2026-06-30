@@ -305,23 +305,23 @@ body.body--dark {
   width: min(620px, calc(100vw - 32px));
 }
 
-.requirements-list {
+.test-cases-list {
   display: grid;
   gap: 10px;
 }
 
-.requirements-heading,
-.requirement-create-row {
+.test-cases-heading,
+.test-case-create-row {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.requirements-heading {
+.test-cases-heading {
   justify-content: space-between;
 }
 
-.requirement-item {
+.test-case-item {
   align-items: center;
 }
 
@@ -377,7 +377,7 @@ body.body--dark {
     flex-direction: column;
   }
 
-  .requirement-create-row {
+  .test-case-create-row {
     align-items: stretch;
   }
 

@@ -42,25 +42,28 @@ Changes are managed with POST endpoints:
 - `POST /api/v1/change/get`
 - `POST /api/v1/change/rendered-bodies`
 - `POST /api/v1/change/create`
-- `POST /api/v1/change/update`
 - `POST /api/v1/change/update-epic`
 - `POST /api/v1/change/update-phase`
 - `POST /api/v1/change/update-closed`
+- `POST /api/v1/change/update-change-types`
+- `POST /api/v1/change/update-title`
+- `POST /api/v1/change/update-requirement-body`
+- `POST /api/v1/change/update-pull-request-body`
 - `POST /api/v1/change/delete`
 
-Create and update payloads use `title` and `body`.
+Create payloads use `title`, `requirement_body`, optional `pull_request_body`, and optional `pull_request_url`. Change responses include rendered requirement HTML for display. Focused update endpoints mutate only the named field and return the refreshed change.
 
-## Requirements
-Requirements are managed with POST endpoints:
+## Test Cases
+Test cases are managed with POST endpoints:
 
-- `POST /api/v1/requirement/list`
-- `POST /api/v1/requirement/create`
-- `POST /api/v1/requirement/update`
-- `POST /api/v1/requirement/update-done`
-- `POST /api/v1/requirement/update-change`
-- `POST /api/v1/requirement/delete`
+- `POST /api/v1/test-case/list`
+- `POST /api/v1/test-case/create`
+- `POST /api/v1/test-case/update`
+- `POST /api/v1/test-case/update-done`
+- `POST /api/v1/test-case/update-change`
+- `POST /api/v1/test-case/delete`
 
-Requirement mutation responses include the recalculated change and current requirement list when useful.
+Test case payloads use `scenario` for the verifiable condition. Mutation responses include the recalculated change and current test case list when useful.
 
 ## Planning
 Planning endpoints are backend-mediated LLM workflows:
@@ -69,7 +72,7 @@ Planning endpoints are backend-mediated LLM workflows:
 - `POST /api/v1/planning/chat`
 - `POST /api/v1/planning/commit`
 
-Generated changes and requirements must be validated against database-provided reference options before being saved.
+Generated changes and test cases must be validated against database-provided reference options before being saved.
 
 ## Error Handling
 The API maps domain errors to JSON responses with a `message` field. Validation errors use client status codes. Unexpected failures are logged server-side and returned as sanitized server errors.

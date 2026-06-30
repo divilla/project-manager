@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const apiTestBaseURL = "http://localhost:18080"
+const apiTestBaseURL = "http://localhost:19080"
 
 type Client struct {
 	baseURL string
@@ -28,7 +29,7 @@ func NewClient(t *testing.T) *Client {
 	t.Helper()
 
 	client := &Client{
-		baseURL: apiTestBaseURL,
+		baseURL: apiTestBaseURLFromEnv(),
 		http: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -42,6 +43,14 @@ func NewClient(t *testing.T) *Client {
 	defer res.Body.Close()
 
 	return client
+}
+
+func apiTestBaseURLFromEnv() string {
+	if value := os.Getenv("API_TEST_BASE_URL"); value != "" {
+		return value
+	}
+
+	return apiTestBaseURL
 }
 
 func CleanupProject(t *testing.T, client *Client, projectID int) {
