@@ -10,6 +10,8 @@ export interface ReferenceOption {
 export interface Change {
   id: number;
   version: number;
+  ref: number;
+  slug: string;
   project_id: number;
   epic_id?: number | null;
   change_phase: string;
@@ -53,9 +55,6 @@ export interface ChangeCreateInput {
   epic_id?: number | null;
   title: string;
   requirement_body?: string;
-  pull_request_body?: string;
-  pull_request_url?: string;
-  change_phase: string;
   change_types: string[];
 }
 

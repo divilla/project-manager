@@ -18,7 +18,7 @@ type (
 
 	// Repository defines Repository values.
 	Repository interface {
-		List(ctx context.Context, limit, offset int) ([]dto.Project, error)
+		List(ctx context.Context) ([]dto.Project, error)
 		Get(ctx context.Context, id int) (dto.Project, error)
 		Create(ctx context.Context, name string) (dto.Project, error)
 		Update(ctx context.Context, id int, name string) (dto.Project, error)
@@ -31,15 +31,14 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
-const projectColumns = "id, name, created, modified, change_count"
+const projectColumns = "id, name, last_ref, created, modified, change_count"
 
 // List executes List behavior.
-func (r *Repo) List(ctx context.Context, limit, offset int) ([]dto.Project, error) {
+func (r *Repo) List(ctx context.Context) ([]dto.Project, error) {
 	rows, err := r.pool.Query(ctx, `
 		select `+projectColumns+`
 		from public.vw_project
-		limit nullif($1, 0) offset $2
-	`, limit, offset)
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +128,6 @@ func (r *Repo) Delete(ctx context.Context, id int) error {
 
 func scanProject(row pgx.Row) (dto.Project, error) {
 	var project dto.Project
-	err := row.Scan(&project.ID, &project.Name, &project.Created, &project.Modified, &project.ChangeCount)
+	err := row.Scan(&project.ID, &project.Name, &project.LastRef, &project.Created, &project.Modified, &project.ChangeCount)
 	return project, err
 }

@@ -2,7 +2,7 @@
   <q-card flat bordered class="change-card" @click="$emit('open', change)">
     <q-card-section>
       <div class="change-card-title">{{ change.title }}</div>
-      <div class="change-card-meta">{{ change.change_types.join(', ') }} · {{ change.completed }}%</div>
+      <div class="change-card-meta">#{{ change.ref }} · {{ change.change_types.join(', ') }} · {{ change.completed }}%</div>
       <q-linear-progress :value="change.completed / 100" rounded class="q-mt-sm" />
     </q-card-section>
     <q-card-actions align="between">

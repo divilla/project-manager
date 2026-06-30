@@ -4,6 +4,8 @@ export function changeFixture(overrides: Partial<Change> = {}): Change {
   const change: Change = {
     id: 1,
     version: 0,
+    ref: 1,
+    slug: '000001-change',
     project_id: 1,
     epic_id: null,
     change_phase: 'backlog',

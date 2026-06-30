@@ -21,14 +21,17 @@ Add stable per-project Change references and slugs, route all Change creation th
 - Clients must not be able to supply or mutate `change.ref`, `change.slug`, or `project.last_ref` through backend APIs, frontend forms, or `cli` flows.
 - Active Change inserts must call `fn_change_insert` and must not insert directly into the `change` table.
 - `fn_change_insert` must return the newly created Change ID.
-- Change create behavior must preserve existing validation for project ID, title, requirement body, pull request body, pull request URL, phase, types, and optional epic ID.
+- Change create behavior must preserve validation for project ID, title, requirement body, types, and optional epic ID.
+- Change create requests must not accept `change_phase`, `pull_request_body`, or `pull_request_url`; those fields can only be changed through focused update endpoints after creation.
+- Backend must expose a focused `POST /api/v1/change/update-pull-request-url` endpoint for updating `pull_request_url`.
 - Change list, get, create, and focused update responses must include the new `ref` and `slug` fields where Change DTOs are returned.
 - Frontend and `cli` Change views must render or carry the new identity fields without requiring users to edit them.
 - `ProjectListRequest` must be removed from active backend, frontend, and `cli` usage when the existing project list contract does not require it.
 - Demo seed data must create 100 Change rows for project `demo1` from 200 scraped closed Echo pull requests.
-- Demo seed data must set project `demo1` `last_ref` to `200` after importing generated Change rows.
-- Demo seed data must insert generated Changes by calling `fn_change_insert`, then update `pull_request_body` from scraped PR body content.
-- The repository backup artifact must represent the updated schema and demo data state without becoming an automated restore step.
+- Demo seed data must set project `demo1` `last_ref` to `200` before importing generated Change rows.
+- Demo seed data must insert 100 generated Changes by calling `fn_change_insert` with the first PR from each Echo PR pair, producing refs `201..300`.
+- Demo seed data must update each generated Change with `pull_request_body` from the second PR in its Echo PR pair and `pull_request_url` from the first PR.
+- The repository backup artifact `db/backup/changes_106_db_changes_ref_slug_insert_seed.sql.gz` must represent the updated schema and demo data state without becoming an automated restore step.
 
 ## Acceptance Criteria
 
@@ -38,13 +41,14 @@ Add stable per-project Change references and slugs, route all Change creation th
 - Creating multiple Changes in the same project increments `ref` from that project's `last_ref` and updates `last_ref` atomically with the insert.
 - Creating Changes in different projects allocates references independently per project.
 - Change list, get, create, and focused update responses include `ref` and `slug`.
+- `POST /api/v1/change/update-pull-request-url` updates only `pull_request_url` and returns the refreshed Change.
 - Frontend Change list/detail/create flows continue to work and do not expose editable inputs for `ref`, `slug`, or `last_ref`.
 - `cli` Change list/detail/create flows continue to work and do not expose editable inputs for `ref`, `slug`, or `last_ref`.
 - Active code no longer references `ProjectListRequest`.
-- Running the demo seed against a disposable initialized database creates project `demo1` with `last_ref = 200`.
-- The demo seed creates 100 generated Change rows for project `demo1` using source data scraped from 200 closed Echo pull requests.
-- At least one seeded Change demonstrates `fn_change_insert` arguments populated from an Echo pull request and has `pull_request_body` updated after insertion.
-- The database backup artifact is present in the repository and matches the updated schema and demo seed intent.
+- Running the demo seed against a disposable initialized database advances project `demo1` `last_ref` to `200` before generated Change import and to `300` after generated Change import.
+- The demo seed creates 100 generated Change rows for project `demo1` using paired source data from 200 closed Echo pull requests.
+- At least one seeded Change demonstrates `fn_change_insert` arguments populated from the first Echo pull request in a pair and has `pull_request_body` updated from the second Echo pull request after insertion.
+- The database backup artifact `db/backup/changes_106_db_changes_ref_slug_insert_seed.sql.gz` is present in the repository and matches the updated schema and demo seed intent.
 
 ## Non-Goals
 
@@ -61,8 +65,9 @@ Add stable per-project Change references and slugs, route all Change creation th
 - `docs/functionality/change-lifecycle.md` defines the existing Change create contract that must continue to be enforced after `fn_change_insert` becomes the insert path.
 - `docs/architecture/backend-api.md` defines Change API endpoints and response expectations for backend clients.
 - `docs/concepts.md` defines a Change as the primary delivery unit; `ref` and `slug` should support that identity without changing lifecycle semantics.
-- The initial idea assumes `slug` is generated by backend/database-owned logic from the allocated project-scoped reference and title.
-- The initial idea assumes the implementation can choose the backup artifact path and filename, but the artifact must be reviewable and must not require agents to restore or mutate a live database.
+- `slug` is generated only by `fn_change_insert`; application code must not create or update slug values.
+- `fn_change_insert` is defined by `db/init.sql` and must be used exactly as provided by that file.
+- The backup artifact is a gzipped SQL rebuild bundle at `db/backup/changes_106_db_changes_ref_slug_insert_seed.sql.gz`; it must be reviewable and must not require agents to restore or mutate a live database.
 - Echo pull request data is external public demo content; generated seed data should be deterministic once captured in the repository.
 - Compare current database and DTO behavior against `db/init.sql` and `backend/internal/dto` during implementation, but keep implementation scoped to the active Change.
 
@@ -102,10 +107,10 @@ Add stable per-project Change references and slugs, route all Change creation th
 - List and get Changes through the backend API and verify `ref` and `slug` are present on returned Change objects.
 - Use the frontend Change create/list/detail workflows and verify users can see or carry the new identity fields without editing them.
 - Use the `cli` Change create/list/detail workflows and verify users can see or carry the new identity fields without editing them.
-- Run the demo seed against a disposable initialized database and verify project `demo1` has `last_ref = 200`.
-- Inspect seeded demo Changes and verify 100 rows were generated from captured Echo pull request data.
-- Inspect a seeded Change and verify `pull_request_body` was updated after `fn_change_insert` created the Change.
-- Confirm the repository backup artifact is present and corresponds to the updated schema and demo seed state.
+- Run the demo seed against a disposable initialized database and verify project `demo1` has `last_ref = 300` after 100 generated Change inserts.
+- Inspect seeded demo Changes and verify 100 rows were generated from 200 captured Echo pull requests paired two-at-a-time.
+- Inspect a seeded Change and verify `pull_request_body` and `pull_request_url` were updated after `fn_change_insert` created the Change.
+- Confirm `db/backup/changes_106_db_changes_ref_slug_insert_seed.sql.gz` is present and corresponds to the updated schema and demo seed state.
 
 ## Review Focus
 

@@ -35,12 +35,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 
 func (a *API) listProjects(c *echo.Context) error {
 	ctx := c.Request().Context()
-	var req dto.ProjectListRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid project list payload")
-	}
-
-	res, err := a.s.ListProjects(ctx, req)
+	res, err := a.s.ListProjects(ctx)
 	if err != nil {
 		return err
 	}

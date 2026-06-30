@@ -111,6 +111,12 @@ type (
 		PullRequestBody string `json:"pull_request_body"`
 	}
 
+	// ChangeUpdatePullRequestURLRequest defines ChangeUpdatePullRequestURLRequest values.
+	ChangeUpdatePullRequestURLRequest struct {
+		ID             int    `json:"id"`
+		PullRequestURL string `json:"pull_request_url"`
+	}
+
 	// ChangeUpdateClosedRequest defines ChangeUpdateClosedRequest values.
 	ChangeUpdateClosedRequest struct {
 		ID     int  `json:"id"`

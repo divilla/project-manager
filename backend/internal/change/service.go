@@ -83,11 +83,8 @@ func (s *Service) RenderedBodies(ctx context.Context, req dto.ChangeRenderedBodi
 func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
 	req.RequirementBody = strings.TrimSpace(req.RequirementBody)
-	req.PullRequestBody = strings.TrimSpace(req.PullRequestBody)
-	req.PullRequestURL = strings.TrimSpace(req.PullRequestURL)
-	req.ChangePhase = strings.TrimSpace(req.ChangePhase)
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
-	if req.ProjectID <= 0 || req.Title == "" || req.ChangePhase == "" || len(req.ChangeTypes) == 0 || invalidOptionalID(req.EpicID) {
+	if req.ProjectID <= 0 || req.Title == "" || len(req.ChangeTypes) == 0 || invalidOptionalID(req.EpicID) {
 		return dto.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.Create(ctx, req)
@@ -143,6 +140,19 @@ func (s *Service) UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdat
 		return dto.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdatePullRequestBody(ctx, req)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	return s.renderer.RenderChange(change), nil
+}
+
+// UpdatePullRequestURL executes UpdatePullRequestURL behavior.
+func (s *Service) UpdatePullRequestURL(ctx context.Context, req dto.ChangeUpdatePullRequestURLRequest) (dto.Change, error) {
+	req.PullRequestURL = strings.TrimSpace(req.PullRequestURL)
+	if req.ID <= 0 {
+		return dto.Change{}, ErrInvalidInput
+	}
+	change, err := s.repo.UpdatePullRequestURL(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}

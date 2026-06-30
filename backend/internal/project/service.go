@@ -28,16 +28,8 @@ func NewService(projectRepository Repository) *Service {
 }
 
 // ListProjects executes ListProjects behavior.
-func (s *Service) ListProjects(ctx context.Context, req dto.ProjectListRequest) ([]dto.Project, error) {
-	limit := req.Limit
-	if limit < 0 {
-		limit = 0
-	}
-	offset := req.Offset
-	if offset < 0 {
-		offset = 0
-	}
-	return s.repo.List(ctx, limit, offset)
+func (s *Service) ListProjects(ctx context.Context) ([]dto.Project, error) {
+	return s.repo.List(ctx)
 }
 
 // GetProject executes GetProject behavior.

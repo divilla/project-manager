@@ -25,16 +25,9 @@ func TestServiceRejectsInvalidProjectInput(t *testing.T) {
 func TestServiceNormalizesProjectRequests(t *testing.T) {
 	repo := &fakeProjectRepository{}
 	service := NewService(repo)
-	_, err := service.ListProjects(context.Background(), dto.ProjectListRequest{Limit: 999, Offset: -5})
+	_, err := service.ListProjects(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, 999, repo.limit)
-	assert.Equal(t, 0, repo.offset)
-	_, err = service.ListProjects(context.Background(), dto.ProjectListRequest{Limit: -1})
-	require.NoError(t, err)
-	assert.Equal(t, 0, repo.limit)
-	_, err = service.ListProjects(context.Background(), dto.ProjectListRequest{})
-	require.NoError(t, err)
-	assert.Equal(t, 0, repo.limit)
+	assert.True(t, repo.listed)
 	_, err = service.GetProject(context.Background(), dto.ProjectIDRequest{ID: 1})
 	require.NoError(t, err)
 	_, err = service.CreateProject(context.Background(), dto.ProjectCreateRequest{Name: " Project Name "})
@@ -48,12 +41,13 @@ func TestServiceNormalizesProjectRequests(t *testing.T) {
 }
 
 type fakeProjectRepository struct {
-	limit, offset, id int
-	name              string
+	id     int
+	name   string
+	listed bool
 }
 
-func (r *fakeProjectRepository) List(_ context.Context, limit, offset int) ([]dto.Project, error) {
-	r.limit, r.offset = limit, offset
+func (r *fakeProjectRepository) List(_ context.Context) ([]dto.Project, error) {
+	r.listed = true
 	return []dto.Project{}, nil
 }
 func (r *fakeProjectRepository) Get(_ context.Context, id int) (dto.Project, error) {

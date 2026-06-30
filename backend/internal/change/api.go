@@ -36,6 +36,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	a.g.POST("/update-title", a.updateTitle)
 	a.g.POST("/update-requirement-body", a.updateRequirementBody)
 	a.g.POST("/update-pull-request-body", a.updatePullRequestBody)
+	a.g.POST("/update-pull-request-url", a.updatePullRequestURL)
 	a.g.POST("/delete", a.deleteChange)
 
 	return a
@@ -151,6 +152,18 @@ func (a *API) updatePullRequestBody(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pull request body payload")
 	}
 	res, err := a.s.UpdatePullRequestBody(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updatePullRequestURL(c *echo.Context) error {
+	var req dto.ChangeUpdatePullRequestURLRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pull request url payload")
+	}
+	res, err := a.s.UpdatePullRequestURL(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}

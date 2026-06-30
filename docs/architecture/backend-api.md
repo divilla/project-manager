@@ -53,9 +53,10 @@ Changes are managed with POST endpoints:
 - `POST /api/v1/change/update-title`
 - `POST /api/v1/change/update-requirement-body`
 - `POST /api/v1/change/update-pull-request-body`
+- `POST /api/v1/change/update-pull-request-url`
 - `POST /api/v1/change/delete`
 
-Create payloads use `title`, `requirement_body`, optional `pull_request_body`, and optional `pull_request_url`. Clients must not send `ref` or `slug` in create or update payloads.
+Create payloads use `project_id`, `title`, `requirement_body`, `change_types`, and optional `epic_id`. Clients must not send `ref`, `slug`, `change_phase`, `pull_request_body`, or `pull_request_url` in create payloads.
 
 Change responses include `id`, project-scoped `ref`, stable `slug`, and rendered requirement HTML for display. Change list, get, create, and focused update responses all return `ref` and `slug` when returning a change object.
 

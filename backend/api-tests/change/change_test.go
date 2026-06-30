@@ -12,7 +12,8 @@ import (
 )
 
 type project struct {
-	ID int `json:"id"`
+	ID      int   `json:"id"`
+	LastRef int16 `json:"last_ref"`
 }
 
 type epic struct {
@@ -34,6 +35,8 @@ type referenceOption struct {
 type change struct {
 	ID              int      `json:"id"`
 	Version         int16    `json:"version"`
+	Ref             int16    `json:"ref"`
+	Slug            string   `json:"slug"`
 	ProjectID       int      `json:"project_id"`
 	EpicID          *int     `json:"epic_id"`
 	ChangePhase     string   `json:"change_phase"`
@@ -86,16 +89,23 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	title := fmt.Sprintf("api-test-change-%d", time.Now().UnixNano())
 	var created change
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
-		"project_id":       projectID,
-		"epic_id":          epicID,
-		"title":            title,
-		"requirement_body": "Created by change API integration test.",
-		"change_phase":     "backlog",
-		"change_types":     []string{"feature"},
+		"project_id":        projectID,
+		"epic_id":           epicID,
+		"title":             title,
+		"requirement_body":  "Created by change API integration test.",
+		"change_types":      []string{"feature"},
+		"change_phase":      "review",
+		"pull_request_body": "must not be accepted on create",
+		"pull_request_url":  "https://example.test/ignored",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
+	require.NotZero(t, created.Ref)
+	require.NotEmpty(t, created.Slug)
 	assert.Equal(t, title, created.Title)
+	assert.Equal(t, "backlog", created.ChangePhase)
+	assert.Empty(t, created.PullRequestBody)
+	assert.Empty(t, created.PullRequestURL)
 	assert.Equal(t, []string{"feature"}, created.ChangeTypes)
 	require.NotNil(t, created.EpicID)
 	assert.Equal(t, epicID, *created.EpicID)
@@ -105,6 +115,8 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	require.Len(t, listed, 1)
 	assert.Equal(t, created.ID, listed[0].ID)
+	assert.Equal(t, created.Ref, listed[0].Ref)
+	assert.Equal(t, created.Slug, listed[0].Slug)
 	assert.Equal(t, created.Title, listed[0].Title)
 	assert.Equal(t, created.EpicID, listed[0].EpicID)
 
@@ -112,6 +124,8 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, created.ID, fetched.Change.ID)
+	assert.Equal(t, created.Ref, fetched.Change.Ref)
+	assert.Equal(t, created.Slug, fetched.Change.Slug)
 	assert.Contains(t, fetched.Change.RequirementHTML, "<p>Created by change API integration test.</p>")
 
 	var rendered renderedBodies
@@ -124,6 +138,8 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/update-title", map[string]any{"id": created.ID, "title": title + "-title"}, &updated)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, title+"-title", updated.Title)
+	assert.Equal(t, created.Ref, updated.Ref)
+	assert.Equal(t, created.Slug, updated.Slug)
 
 	status = client.Post(t, "/api/v1/change/update-requirement-body", map[string]any{
 		"id":               created.ID,
@@ -138,6 +154,13 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, "Focused pull request body update.", updated.PullRequestBody)
+
+	status = client.Post(t, "/api/v1/change/update-pull-request-url", map[string]any{
+		"id":               created.ID,
+		"pull_request_url": "https://example.test/project-manager/pull/1",
+	}, &updated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "https://example.test/project-manager/pull/1", updated.PullRequestURL)
 
 	status = client.Post(t, "/api/v1/change/update-change-types", map[string]any{
 		"id":           created.ID,
@@ -176,7 +199,6 @@ func TestChangeCreateRejectsInvalidReferences(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id":   999999999,
 		"title":        "orphan change",
-		"change_phase": "backlog",
 		"change_types": []string{"feature"},
 	}, nil)
 	assert.Equal(t, http.StatusBadRequest, status)
@@ -188,7 +210,6 @@ func TestChangeCreateRejectsInvalidReferences(t *testing.T) {
 		"project_id":   projectID,
 		"epic_id":      999999999,
 		"title":        "missing epic change",
-		"change_phase": "backlog",
 		"change_types": []string{"feature"},
 	}, nil)
 	assert.Equal(t, http.StatusBadRequest, status)
@@ -228,6 +249,9 @@ func TestChangeRejectsInvalidInputAndMissingRows(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status)
 
 	status = client.Post(t, "/api/v1/change/update-closed", map[string]any{"id": 999999999, "closed": true}, nil)
+	assert.Equal(t, http.StatusNotFound, status)
+
+	status = client.Post(t, "/api/v1/change/update-pull-request-url", map[string]any{"id": 999999999, "pull_request_url": "https://example.test"}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
 	status = client.Post(t, "/api/v1/change/delete", map[string]any{}, nil)

@@ -28,8 +28,8 @@ const quasarStubs = {
 
 describe('ChangeBoard', () => {
   it('renders changes by phase and emits change actions', async () => {
-    const backlogChange = changeFixture({ id: 1, title: 'Backlog change', change_phase: 'backlog' });
-    const reviewChange = changeFixture({ id: 2, title: 'Review change', change_phase: 'review' });
+    const backlogChange = changeFixture({ id: 1, ref: 201, title: 'Backlog change', change_phase: 'backlog' });
+    const reviewChange = changeFixture({ id: 2, ref: 202, title: 'Review change', change_phase: 'review' });
     const wrapper = mount(ChangeBoard, {
       props: {
         hasSelectedProject: true,
@@ -52,6 +52,7 @@ describe('ChangeBoard', () => {
     });
 
     expect(wrapper.text()).toContain('Backlog change');
+    expect(wrapper.text()).toContain('#201');
     expect(wrapper.text()).toContain('Review change');
 
     await wrapper.find('.change-card-stub').trigger('click');
