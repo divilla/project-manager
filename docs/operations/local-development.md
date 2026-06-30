@@ -40,5 +40,9 @@ Agents must not run PostgreSQL commands that alter database structure, including
 
 Backup helpers live under `db/backup`. Restore commands can replace database contents, so use the correct target database.
 
+Demo seed data is intended for disposable local databases. The demo dataset may include generated changes based on captured public pull request data, but running seed or restore commands must target an explicitly chosen disposable database.
+
+Repository backup artifacts document a known local demo database state. They are not an automatic restore mechanism and must not be applied to a live or production database.
+
 ## Failure States
 If the backend or database is unavailable, the frontend should show a clear non-blocking error state instead of an empty page.

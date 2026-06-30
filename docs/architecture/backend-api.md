@@ -19,7 +19,11 @@ Projects are managed with POST endpoints:
 
 Project list responses include `change_count` so the UI can explain safe deletion. Clients that render interactive project list or detail screens should call the relevant project endpoint each time the user arrives at the screen instead of treating previously rendered rows as a cache.
 
+Project list requests do not require request fields.
+
 Project create requests send a JSON object with a `name` string. Project update requests send a JSON object with numeric `id` and `name` fields. Clients may validate project names by trimming whitespace to reject empty values, but the submitted `name` value should be sent exactly as entered when validation passes, including explicit newline characters. Project get requests identify the project by numeric `id`. Project mutation flows that need complete display data should reload the project with `POST /api/v1/project/get` after create or update.
+
+Project reference counters are backend-owned. Project create and update requests must not accept client-supplied `last_ref`, and clients must not render `last_ref` as an editable field.
 
 ## Epics
 Epics are managed with POST endpoints:
@@ -51,7 +55,11 @@ Changes are managed with POST endpoints:
 - `POST /api/v1/change/update-pull-request-body`
 - `POST /api/v1/change/delete`
 
-Create payloads use `title`, `requirement_body`, optional `pull_request_body`, and optional `pull_request_url`. Change responses include rendered requirement HTML for display. Focused update endpoints mutate only the named field and return the refreshed change.
+Create payloads use `title`, `requirement_body`, optional `pull_request_body`, and optional `pull_request_url`. Clients must not send `ref` or `slug` in create or update payloads.
+
+Change responses include `id`, project-scoped `ref`, stable `slug`, and rendered requirement HTML for display. Change list, get, create, and focused update responses all return `ref` and `slug` when returning a change object.
+
+Focused update endpoints mutate only the named field and return the refreshed change. They must preserve the existing `ref` and `slug`.
 
 ## Test Cases
 Test cases are managed with POST endpoints:

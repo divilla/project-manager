@@ -3,6 +3,10 @@
 ## Overview
 A change is the delivery unit. It can exist independently or reference one epic. It is never part of a nested change tree.
 
+Each change has a backend-owned `ref` and `slug`. The `ref` is a project-scoped numeric reference allocated from the owning project. The `slug` is a stable identifier derived from the allocated reference and title.
+
+Users and clients must not create, edit, or overwrite `ref`, `slug`, or the project's reference counter. These fields are assigned by backend persistence and returned to clients as read-only identity data.
+
 ## Create
 Creating a change requires:
 
@@ -17,14 +21,19 @@ Creating a change requires:
 
 The backend validates the project and reference options before insert.
 
+After a successful create, the returned change includes its database ID, project-scoped `ref`, and `slug`. Creating multiple changes in the same project advances that project's reference sequence. Creating changes in different projects uses independent reference sequences.
+
 Codex-assisted planning tools may create planned changes after the user confirms the generated test cases. These changes use the `backlog` phase until the user moves them through the normal lifecycle.
 
 ## List
 Project-scoped lists show active changes grouped by workflow phase. Ordering follows database-provided phase priority and change ordering rules.
 
+List items include `ref` and `slug` so clients can render stable change identity without deriving it locally.
+
 ## Detail
 The detail view shows:
 
+- project-scoped reference and slug
 - title and requirement body
 - pull request body and URL when present
 - phase and type information
@@ -37,6 +46,8 @@ Markdown requirement body rendering is sanitized by the backend before display.
 
 ## Update
 Editing a change can update title, requirement body, pull request body, type classification, epic reference, phase, and closed state. History-bearing fields must preserve the previous row before mutation.
+
+Focused updates return the refreshed change with its existing `ref` and `slug`. Updating the title does not let clients supply replacement identity values.
 
 ## Delete
 Deleting a change is destructive and must be confirmed. Test cases linked to the change are archived or removed according to backend history rules before the active change is removed.
