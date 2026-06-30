@@ -29,12 +29,17 @@ api-test: ## Rebuild changes_test and run HTTP integration tests
 		*/changes_test|*/changes_test\?*) ;; \
 		*) echo "API_TEST_DB_URL must target changes_test"; exit 1 ;; \
 	esac
+	@(command -v pkill >/dev/null 2>&1 && pkill -f '[a]ipm-server .* -port $(API_TEST_PORT)' >/dev/null 2>&1) || true
 	@psql $(API_TEST_DB_URL) -v ON_ERROR_STOP=1 -f ../db/init.sql >/tmp/aipm-api-test-db.log 2>&1
 	@psql $(API_TEST_DB_URL) -v ON_ERROR_STOP=1 -f ../db/seed.sql >>/tmp/aipm-api-test-db.log 2>&1
 	@go build -o aipm-server cmd/server/*.go
 	@./aipm-server -db $(API_TEST_DB_URL) -port $(API_TEST_PORT) >/tmp/aipm-api-test.log 2>&1 & pid=$$!; \
 		trap 'kill $$pid >/dev/null 2>&1 || true; rm -f aipm-server' EXIT; \
 		for _ in $$(seq 1 50); do \
+			if ! kill -0 $$pid >/dev/null 2>&1; then \
+				cat /tmp/aipm-api-test.log; \
+				exit 1; \
+			fi; \
 			if curl -fsS $(API_TEST_BASE_URL)/api/v1/health >/dev/null 2>&1; then \
 				API_TEST_BASE_URL=$(API_TEST_BASE_URL) go test -count=1 ./api-tests/...; \
 				exit $$?; \

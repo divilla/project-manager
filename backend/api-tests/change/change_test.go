@@ -13,7 +13,7 @@ import (
 
 type project struct {
 	ID      int   `json:"id"`
-	LastRef int16 `json:"last_ref"`
+	LastRef int32 `json:"last_ref"`
 }
 
 type epic struct {
@@ -35,7 +35,7 @@ type referenceOption struct {
 type change struct {
 	ID              int      `json:"id"`
 	Version         int16    `json:"version"`
-	Ref             int16    `json:"ref"`
+	Ref             int32    `json:"ref"`
 	Slug            string   `json:"slug"`
 	ProjectID       int      `json:"project_id"`
 	EpicID          *int     `json:"epic_id"`

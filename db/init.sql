@@ -274,7 +274,7 @@ create function public.fn_change_insert(_project_id bigint, _change_types text[]
 as
 $$
 declare
-    _ref smallint;
+    _ref int;
     _slug text;
     _id bigint;
 begin

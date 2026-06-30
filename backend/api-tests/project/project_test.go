@@ -14,7 +14,7 @@ import (
 type project struct {
 	ID          int       `json:"id"`
 	Name        string    `json:"name"`
-	LastRef     int16     `json:"last_ref"`
+	LastRef     int32     `json:"last_ref"`
 	Created     time.Time `json:"created"`
 	Modified    time.Time `json:"modified"`
 	ChangeCount int       `json:"change_count"`
@@ -30,7 +30,7 @@ func TestProjectCRUD(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
 	assert.Equal(t, name, created.Name)
-	assert.Equal(t, int16(0), created.LastRef)
+	assert.Equal(t, int32(0), created.LastRef)
 	assert.False(t, created.Created.IsZero())
 	assert.False(t, created.Modified.IsZero())
 	assert.Equal(t, 0, created.ChangeCount)
