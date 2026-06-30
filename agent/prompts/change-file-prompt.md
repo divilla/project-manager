@@ -1,5 +1,3 @@
-A strong prompt would be:
-
 Take my initial ideas from `agent/changes/106-db-changes-ref-slug-insert-seed.md` and turn them into a complete Change specification using the exact structure from `agent/prompts/change-file-structure.md`.
 
 First, clarify any missing details that are required to make the Change testable. If the idea is clear enough, make reasonable assumptions and state them in the Change file.
