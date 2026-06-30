@@ -29,6 +29,7 @@ Refreshes demo data with 100 generated Changes for demo1 from paired closed Echo
 - git diff --check
 - gzip -t db/backup/changes_106_db_changes_ref_slug_insert_seed.sql.gz
 
-## Reference Slug
+## References
 
-- 106-db-changes-ref-slug-insert-seed
+- Slug: 106-db-changes-ref-slug-insert-seed
+- Change: agent/changes/106-db-changes-ref-slug-insert-seed.md
