@@ -13,7 +13,7 @@ type (
 	Change struct {
 		ID              int       `json:"id"`
 		Version         int16     `json:"version"`
-		Ref             int16     `json:"ref"`
+		Ref             int32     `json:"ref"`
 		Slug            string    `json:"slug"`
 		ProjectID       int       `json:"project_id"`
 		EpicID          *int      `json:"epic_id"`
