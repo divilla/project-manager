@@ -20,10 +20,10 @@ vet: ## Vet the files
 	@go vet ${PKG_LIST}
 
 test: ## Run tests
+	@go clean -testcache
 	@go test -short ${PKG_LIST}
 
 api-test: ## Rebuild changes_test and run HTTP integration tests
-	@pkill -9 -x aipm-server >/dev/null 2>&1 || true
 	@go clean -testcache
 	@case "$(API_TEST_DB_URL)" in \
 		*/changes_test|*/changes_test\?*) ;; \
