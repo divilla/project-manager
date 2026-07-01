@@ -18,6 +18,13 @@ type Client interface {
 	GetProject(id int) (dto.Project, error)
 	CreateProject(name string) (dto.Project, error)
 	UpdateProject(id int, name string) (dto.Project, error)
+	ListChangeRows(projectID string) ([]dto.Change, error)
+	GetChange(id int) (dto.Change, error)
+	CreateChange(input dto.ChangeCreateInput) (dto.Change, error)
+	UpdateChangeTitle(id int, title string) (dto.Change, error)
+	UpdateChangeRequirementBody(id int, requirementBody string) (dto.Change, error)
+	UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error)
+	UpdateChangeEpic(id int, epicID *int) (dto.Change, error)
 	ListEpics(projectID string) ([]dto.Option, error)
 	ListPhases() ([]dto.Option, error)
 	ListTypes() ([]dto.Option, error)
@@ -86,15 +93,83 @@ func (c HTTPClient) UpdateProject(id int, name string) (dto.Project, error) {
 	})
 }
 
+// ListChangeRows loads changes for a project.
+func (c HTTPClient) ListChangeRows(projectID string) ([]dto.Change, error) {
+	numericProjectID, err := numericCurrentProjectID(projectID)
+	if err != nil {
+		return nil, err
+	}
+	return c.postChanges("/api/v1/change/list", map[string]any{"project_id": numericProjectID}, "changes")
+}
+
+// GetChange loads a single change by numeric ID.
+func (c HTTPClient) GetChange(id int) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/get", map[string]any{"id": id})
+}
+
+// CreateChange creates a change.
+func (c HTTPClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error) {
+	if input.ProjectID <= 0 {
+		return dto.Change{}, fmt.Errorf("project ID must be a valid positive number")
+	}
+	payload := map[string]any{
+		"project_id":       input.ProjectID,
+		"title":            input.Title,
+		"requirement_body": input.RequirementBody,
+		"change_types":     input.ChangeTypes,
+	}
+	if input.EpicID != nil {
+		payload["epic_id"] = *input.EpicID
+	}
+	return c.postChange("/api/v1/change/create", payload)
+}
+
+// UpdateChangeTitle updates a change title.
+func (c HTTPClient) UpdateChangeTitle(id int, title string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-title", map[string]any{"id": id, "title": title})
+}
+
+// UpdateChangeRequirementBody updates a change requirement body.
+func (c HTTPClient) UpdateChangeRequirementBody(id int, requirementBody string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-requirement-body", map[string]any{
+		"id":               id,
+		"requirement_body": requirementBody,
+	})
+}
+
+// UpdateChangeTypes updates change type slugs.
+func (c HTTPClient) UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-change-types", map[string]any{
+		"id":           id,
+		"change_types": changeTypes,
+	})
+}
+
+// UpdateChangeEpic updates or clears the change epic.
+func (c HTTPClient) UpdateChangeEpic(id int, epicID *int) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-epic", map[string]any{"id": id, "epic_id": epicID})
+}
+
 // ListEpics loads epic selector options for a project.
 func (c HTTPClient) ListEpics(projectID string) ([]dto.Option, error) {
-	projectID = strings.TrimSpace(projectID)
-	if projectID == "" {
-		return nil, fmt.Errorf("current project is required")
-	}
-	numericProjectID, err := strconv.Atoi(projectID)
+	numericProjectID, err := numericCurrentProjectID(projectID)
 	if err != nil {
-		return nil, fmt.Errorf("current project must be numeric")
+		return nil, err
 	}
 	return c.postOptions("/api/v1/epic/list", map[string]any{"project_id": numericProjectID}, "epics")
 }
@@ -143,6 +218,26 @@ func (c HTTPClient) postProject(path string, payload any) (dto.Project, error) {
 		return dto.Project{}, fmt.Errorf("project response missing project")
 	}
 	return project, nil
+}
+
+func (c HTTPClient) postChanges(path string, payload any, group string) ([]dto.Change, error) {
+	data, err := c.postJSON(path, payload)
+	if err != nil {
+		return nil, err
+	}
+	return findChanges(data, group), nil
+}
+
+func (c HTTPClient) postChange(path string, payload any) (dto.Change, error) {
+	data, err := c.postJSON(path, payload)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	change, ok := findChange(data)
+	if !ok {
+		return dto.Change{}, fmt.Errorf("change response missing change")
+	}
+	return change, nil
 }
 
 func (c HTTPClient) postJSON(path string, payload any) (any, error) {
@@ -224,6 +319,55 @@ func findProjects(value any, group string) []dto.Project {
 	return nil
 }
 
+func findChanges(value any, group string) []dto.Change {
+	switch typed := value.(type) {
+	case []any:
+		return changesFromArray(typed)
+	case map[string]any:
+		for key, candidate := range typed {
+			if key == group {
+				if list, ok := candidate.([]any); ok {
+					return changesFromArray(list)
+				}
+			}
+		}
+		for _, candidate := range typed {
+			if nested := findChanges(candidate, group); len(nested) > 0 {
+				return nested
+			}
+		}
+	}
+	return nil
+}
+
+func findChange(value any) (dto.Change, bool) {
+	switch typed := value.(type) {
+	case []any:
+		changes := changesFromArray(typed)
+		if len(changes) > 0 {
+			return changes[0], true
+		}
+	case map[string]any:
+		for _, key := range []string{"change", "data", "result"} {
+			if candidate, ok := typed[key]; ok {
+				if change, found := findChange(candidate); found {
+					return change, true
+				}
+			}
+		}
+		change := changeFromMap(typed)
+		if change.ID != "" || change.Title != "" {
+			return change, true
+		}
+		for _, candidate := range typed {
+			if change, found := findChange(candidate); found {
+				return change, true
+			}
+		}
+	}
+	return dto.Change{}, false
+}
+
 func findProject(value any) (dto.Project, bool) {
 	switch typed := value.(type) {
 	case []any:
@@ -291,6 +435,22 @@ func projectsFromArray(values []any) []dto.Project {
 	return projects
 }
 
+func changesFromArray(values []any) []dto.Change {
+	changes := make([]dto.Change, 0, len(values))
+	for _, value := range values {
+		typed, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		change := changeFromMap(typed)
+		if change.ID == "" && change.Title == "" {
+			continue
+		}
+		changes = append(changes, change)
+	}
+	return changes
+}
+
 func projectFromMap(values map[string]any) dto.Project {
 	return dto.Project{
 		ID:          firstString(values, "id", "project_id"),
@@ -300,6 +460,39 @@ func projectFromMap(values map[string]any) dto.Project {
 		Created:     firstString(values, "created", "created_at"),
 		Modified:    firstString(values, "modified", "updated", "updated_at"),
 	}
+}
+
+func changeFromMap(values map[string]any) dto.Change {
+	return dto.Change{
+		ID:              firstString(values, "id", "change_id"),
+		Ref:             firstString(values, "ref"),
+		Slug:            firstString(values, "slug"),
+		ProjectID:       firstString(values, "project_id"),
+		EpicID:          firstString(values, "epic_id"),
+		EpicName:        firstString(values, "epic_name", "epic_title", "epic"),
+		ChangePhase:     firstString(values, "change_phase", "phase"),
+		ChangeTypes:     firstStringSlice(values, "change_types", "types"),
+		Title:           firstString(values, "title", "name"),
+		RequirementBody: firstString(values, "requirement_body", "requirement"),
+		Closed:          firstBool(values, "closed"),
+		Done:            firstInt(values, "done_tc", "done"),
+		Total:           firstInt(values, "total_tc", "total"),
+		Completed:       firstInt(values, "completed", "completed_pct"),
+		Created:         firstString(values, "created", "created_at"),
+		Modified:        firstString(values, "modified", "updated", "updated_at"),
+	}
+}
+
+func numericCurrentProjectID(projectID string) (int, error) {
+	projectID = strings.TrimSpace(projectID)
+	if projectID == "" {
+		return 0, fmt.Errorf("current project is required")
+	}
+	numericProjectID, err := strconv.Atoi(projectID)
+	if err != nil || numericProjectID <= 0 {
+		return 0, fmt.Errorf("current project must be numeric")
+	}
+	return numericProjectID, nil
 }
 
 func firstString(values map[string]any, keys ...string) string {
@@ -339,4 +532,50 @@ func firstInt(values map[string]any, keys ...string) int {
 		}
 	}
 	return 0
+}
+
+func firstStringSlice(values map[string]any, keys ...string) []string {
+	for _, key := range keys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case []any:
+			items := make([]string, 0, len(typed))
+			for _, item := range typed {
+				switch value := item.(type) {
+				case string:
+					items = append(items, value)
+				case float64:
+					items = append(items, strconv.FormatInt(int64(value), 10))
+				}
+			}
+			return items
+		case []string:
+			return append([]string(nil), typed...)
+		case string:
+			if strings.TrimSpace(typed) == "" {
+				return nil
+			}
+			return strings.Split(typed, "|")
+		}
+	}
+	return nil
+}
+
+func firstBool(values map[string]any, keys ...string) bool {
+	for _, key := range keys {
+		value, ok := values[key]
+		if !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case bool:
+			return typed
+		case string:
+			return typed == "true"
+		}
+	}
+	return false
 }

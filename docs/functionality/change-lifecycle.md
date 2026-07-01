@@ -23,7 +23,7 @@ After a successful create, the returned change includes its database ID, project
 Codex-assisted planning tools may create planned changes after the user confirms the generated test cases. These changes use the `backlog` phase until the user moves them through the normal lifecycle.
 
 ## List
-Project-scoped lists show active changes grouped by workflow phase. Ordering follows database-provided phase priority and change ordering rules.
+Project-scoped lists show active changes for one project. Lists are ordered by `modified` descending so the most recently changed Change appears first.
 
 List items include `ref` and `slug` so clients can render stable change identity without deriving it locally.
 

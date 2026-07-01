@@ -27,6 +27,15 @@ func (m Model) View() string {
 	if m.state == ProjectsListState && !m.hasDropdown() {
 		lines = append(lines, "", projects.TableView(m.projectList, width))
 	}
+	if m.state == ChangesListState && !m.hasDropdown() {
+		lines = append(lines, "", changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows()))
+	}
+	if m.state == ChangeDetailsState {
+		details := changes.DetailsView(m.changeList.Detail, width)
+		if details != "" {
+			lines = append(lines, "", details)
+		}
+	}
 	if m.state == ProjectDetailsState {
 		details := projects.DetailsView(m.projectList.Detail, width)
 		if details != "" {
@@ -116,9 +125,26 @@ func promptValueLines(value string) []string {
 func (m Model) footerText() string {
 	currentProject := "Current Project: " + m.currentProjectFooter()
 	if m.status != "" {
-		return fmt.Sprintf("/ commands  |  esc safe action  |  status %s  |  %s", m.status, currentProject)
+		return fmt.Sprintf("/ commands  |  esc safe action  |  status %s  |  %s  |  %s", m.status, currentProject, footerColorStrip())
 	}
-	return "/ commands  |  esc safe action  |  " + currentProject
+	return "/ commands  |  esc safe action  |  " + currentProject + "  |  " + footerColorStrip()
+}
+
+func footerColorStrip() string {
+	cells := make([]string, 0, 17)
+	for color := 0; color <= 16; color++ {
+		label := fmt.Sprintf("%d", color)
+		foreground := lipgloss.Color("15")
+		switch color {
+		case 7, 10, 11, 12, 14, 15, 16:
+			foreground = lipgloss.Color("0")
+		}
+		cells = append(cells, lipgloss.NewStyle().
+			Background(lipgloss.Color(label)).
+			Foreground(foreground).
+			Render(label))
+	}
+	return strings.Join(cells, " ")
 }
 
 func appTitle() string {
@@ -180,4 +206,13 @@ func screenTitle(state State) string {
 
 func terminalWidth(width int) int {
 	return ui.NormalizeWidth(width)
+}
+
+func (m Model) changeTableRows() int {
+	const reservedRows = 12
+	available := m.height - reservedRows
+	if available < 3 {
+		return 3
+	}
+	return available
 }

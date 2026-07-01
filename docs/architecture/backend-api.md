@@ -58,9 +58,13 @@ Changes are managed with POST endpoints:
 
 Create payloads use `project_id`, `title`, `requirement_body`, `change_types`, and optional `epic_id`. Clients must not send `ref`, `slug`, `change_phase`, `pull_request_body`, or `pull_request_url` in create payloads.
 
-Change responses include `id`, project-scoped `ref`, stable `slug`, and rendered requirement HTML for display. Change list, get, create, and focused update responses all return `ref` and `slug` when returning a change object.
+Change responses include `id`, project-scoped `ref`, stable `slug`, aggregate fields such as `done_tc`, `total_tc`, and `completed`, timestamps, and rendered requirement HTML for display. Change list, get, create, and focused update responses all return `ref` and `slug` when returning a change object.
 
-Focused update endpoints mutate only the named field and return the refreshed change. They must preserve the existing `ref` and `slug`.
+Change list requests require a numeric `project_id` field. Clients must not send `project_id` as a JSON string. List responses are ordered by `modified` descending.
+
+Change get requests identify the Change by numeric `id`. Clients that navigate from a Change list to detail should reload the selected Change through `POST /api/v1/change/get` instead of treating list row data as the detail source of truth.
+
+Focused update endpoints identify the Change by numeric `id`, mutate only the named field, and return the refreshed Change. They must preserve the existing `ref` and `slug`. Clients that update Change title, `requirement_body`, `change_types`, or `epic_id` should use the matching focused endpoint rather than submitting a broad edit payload.
 
 ## Test Cases
 Test cases are managed with POST endpoints:

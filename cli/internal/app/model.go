@@ -50,6 +50,7 @@ type changesFilters struct {
 	phase dto.Option
 	epic  dto.Option
 	typ   dto.Option
+	find  string
 }
 
 type dropdownModel struct {
@@ -89,6 +90,24 @@ type projectLoadedMsg struct {
 	err     error
 }
 
+type changeListLoadedMsg struct {
+	changes []dto.Change
+	err     error
+}
+
+type changeLoadedMsg struct {
+	id     int
+	change dto.Change
+	err    error
+}
+
+type changeSavedMsg struct {
+	source    State
+	change    dto.Change
+	err       error
+	reloadErr error
+}
+
 type currentProjectLoadedMsg struct {
 	id      int
 	project dto.Project
@@ -115,6 +134,7 @@ type Model struct {
 	state           State
 	previousState   State
 	width           int
+	height          int
 	quitting        bool
 	err             string
 	status          string
@@ -123,6 +143,7 @@ type Model struct {
 	promptCursorCol int
 	pendingAltO     bool
 	changesFilters  changesFilters
+	changeList      changes.Model
 	currentProject  dto.Option
 	projectList     projects.Model
 	client          appClient
@@ -153,7 +174,7 @@ func newModelWithConfig(client appClient, cfg appConfig, configPath string) Mode
 	input.Prompt = "> "
 	input.ShowLineNumbers = false
 	input.EndOfBufferCharacter = ' '
-	input.CharLimit = 240
+	input.CharLimit = defaultPromptCharLimit
 	input.SetWidth(0)
 	input.SetHeight(1)
 	input.FocusedStyle.Base = styles.Default.InputBand
@@ -179,6 +200,7 @@ func newModelWithConfig(client appClient, cfg appConfig, configPath string) Mode
 		input:          input,
 		state:          MainState,
 		width:          80,
+		height:         24,
 		currentProject: currentProject,
 		client:         client,
 		appConfig:      cfg,

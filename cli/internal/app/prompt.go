@@ -6,13 +6,25 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const defaultPromptCharLimit = 240
+
 func (m Model) setPromptValue(value string) Model {
+	m.applyPromptLimit()
 	m.input.SetValue(value)
 	m.movePromptCursorToEnd()
 	return m
 }
 
+func (m *Model) applyPromptLimit() {
+	if m.state == ChangeCreateState || m.state == ChangeUpdateState {
+		m.input.CharLimit = 0
+		return
+	}
+	m.input.CharLimit = defaultPromptCharLimit
+}
+
 func (m *Model) preparePromptInput() {
+	m.applyPromptLimit()
 	m.input.SetWidth(terminalWidth(m.width))
 	m.input.SetHeight(len(promptValueLines(m.input.Value())))
 	m.clampPromptCursor()

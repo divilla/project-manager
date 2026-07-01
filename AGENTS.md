@@ -84,7 +84,7 @@ Agents must never run read queries against a live or local database unless the u
 - If the database contract appears wrong, blocks implementation, or causes a test hang or failure, report the database blocker to the user instead of changing SQL files or mutating live database structure.
 - AI agents may read files under `db/**`, but must never write to them unless the user gives an explicit instruction naming the exact database file and the exact intended change.
 - This ban includes creating, editing, deleting, moving, renaming, formatting, reverting, restoring, conflict-resolving, chmodding, staging generated edits, or applying patches to any file under `db/**`.
-- If an agent discovers that `db/**` is modified, including by the agent itself, it must stop immediately. It must not revert, clean up, stage, commit, or further edit the file.
+- If `db/**` is modified, agents may inspect and review those file changes, but must not edit, stage, revert, execute, seed, migrate, or mutate database files or database state unless explicitly instructed.
 - Use simple, conventional transactions (`Begin`, deferred `Rollback`, and `Commit`) to keep multi-step mutations atomic.
 - Do not introduce project-wide or aggregate locking protocols, advisory locks, isolation-level escalation, or coordinated locking across repository paths unless explicitly requested.
 - Prefer the simpler transaction design when stronger concurrency control would add substantial implementation and maintenance complexity. Accept the documented concurrency trade-off until requirements justify that complexity.

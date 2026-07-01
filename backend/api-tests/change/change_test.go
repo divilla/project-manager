@@ -193,6 +193,53 @@ func TestChangeCRUDAndReferences(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, status)
 }
 
+func TestChangeListOrdersByModifiedDescending(t *testing.T) {
+	client := shared.NewClient(t)
+
+	projectID := createProject(t, client)
+	defer shared.CleanupProject(t, client, projectID)
+
+	var older change
+	status := client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id":   projectID,
+		"title":        fmt.Sprintf("api-test-older-change-%d", time.Now().UnixNano()),
+		"change_types": []string{"feature"},
+	}, &older)
+	require.Equal(t, http.StatusCreated, status)
+
+	time.Sleep(10 * time.Millisecond)
+
+	var newer change
+	status = client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id":   projectID,
+		"title":        fmt.Sprintf("api-test-newer-change-%d", time.Now().UnixNano()),
+		"change_types": []string{"feature"},
+	}, &newer)
+	require.Equal(t, http.StatusCreated, status)
+
+	var listed []change
+	status = client.Post(t, "/api/v1/change/list", map[string]any{"project_id": projectID}, &listed)
+	require.Equal(t, http.StatusOK, status)
+	require.Len(t, listed, 2)
+	assert.Equal(t, newer.ID, listed[0].ID)
+	assert.Equal(t, older.ID, listed[1].ID)
+
+	time.Sleep(10 * time.Millisecond)
+
+	var updated change
+	status = client.Post(t, "/api/v1/change/update-title", map[string]any{
+		"id":    older.ID,
+		"title": older.Title + "-updated",
+	}, &updated)
+	require.Equal(t, http.StatusOK, status)
+
+	status = client.Post(t, "/api/v1/change/list", map[string]any{"project_id": projectID}, &listed)
+	require.Equal(t, http.StatusOK, status)
+	require.Len(t, listed, 2)
+	assert.Equal(t, older.ID, listed[0].ID)
+	assert.Equal(t, newer.ID, listed[1].ID)
+}
+
 func TestChangeCreateRejectsInvalidReferences(t *testing.T) {
 	client := shared.NewClient(t)
 

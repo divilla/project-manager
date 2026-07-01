@@ -81,7 +81,7 @@ func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Change, error) {
 		select `+changeColumns+`
 		from public.change
 		where project_id = $1
-		order by (select priority from public.change_phase where slug = change.change_phase), created, id
+		order by modified desc, id desc
 	`, projectID)
 	if err != nil {
 		return nil, err

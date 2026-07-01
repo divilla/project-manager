@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	"mch/internal/changes"
 	"mch/internal/dto"
 	"mch/internal/navigation"
 	"mch/internal/projects"
@@ -76,6 +77,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "no projects"
 		}
 		return m, nil
+	case changeListLoadedMsg:
+		if m.state != ChangesListState {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.changeList = m.changeList.WithError()
+			m.err = msg.err.Error()
+			return m, nil
+		}
+		m.changeList = m.changeList.WithRows(msg.changes)
+		if len(m.changeList.Rows) == 0 {
+			m.status = "no changes"
+		}
+		return m, nil
+	case changeLoadedMsg:
+		if m.state != ChangeDetailsState {
+			return m, nil
+		}
+		if currentID, err := changeNumericID(m.changeList.Detail); err == nil && currentID != msg.id {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "load failed"
+			return m, nil
+		}
+		m.changeList.Detail = msg.change
+		m.status = "loaded change"
+		return m, nil
+	case changeSavedMsg:
+		if m.state != msg.source {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "save failed"
+			return m, nil
+		}
+		m.changeList.Detail = msg.change
+		m.state = ChangeDetailsState
+		m.status = "save"
+		if msg.reloadErr != nil {
+			m.err = msg.reloadErr.Error()
+			m.status = "load failed"
+		}
+		m = m.setPromptValue("")
+		return m, nil
 	case projectSavedMsg:
 		if m.state != msg.source {
 			return m, nil
@@ -125,6 +173,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "editor failed"
 			return m, tea.ClearScreen
 		}
+		if msg.source == ChangeCreateState || msg.source == ChangeUpdateState {
+			m = m.setPromptValue(msg.content)
+		}
 		next, cmd := m.submitPromptValue(msg.content)
 		m = next.(Model)
 		if cmd == nil {
@@ -133,6 +184,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Sequence(tea.ClearScreen, cmd)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -152,6 +204,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == FindInputState {
 		return m.handleFindKey(key, msg)
+	}
+
+	if updated, cmd, ok := m.handleListNavigationKey(key, msg); ok {
+		return updated, cmd
 	}
 
 	if isPromptNewlineKey(msg) {
@@ -175,15 +231,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		return m.handleEsc()
 	case "up":
-		if m.state == ProjectsListState && m.input.Value() == "" {
-			m.projectList = m.projectList.MoveSelection(-1)
-			return m, nil
-		}
 	case "down":
-		if m.state == ProjectsListState && m.input.Value() == "" {
-			m.projectList = m.projectList.MoveSelection(1)
-			return m, nil
-		}
 	case "/":
 		if m.input.Value() == "" {
 			m.openCommandDropdown()
@@ -194,6 +242,45 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m.updatePromptInput(msg)
+}
+
+func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.Cmd, bool) {
+	if m.input.Value() != "" {
+		return m, nil, false
+	}
+	switch m.state {
+	case ChangesListState:
+		switch {
+		case key == "up":
+			m.changeList = m.changeList.MoveSelection(-1, m.changeFilters(), m.changeTableRows())
+			return m, nil, true
+		case key == "down":
+			m.changeList = m.changeList.MoveSelection(1, m.changeFilters(), m.changeTableRows())
+			return m, nil, true
+		case key == "pgup":
+			m.changeList = m.changeList.MoveSelection(-m.changeTableRows(), m.changeFilters(), m.changeTableRows())
+			return m, nil, true
+		case key == "pgdown":
+			m.changeList = m.changeList.MoveSelection(m.changeTableRows(), m.changeFilters(), m.changeTableRows())
+			return m, nil, true
+		case key == "enter" || msg.Type == tea.KeyCtrlJ:
+			updated, cmd := m.handleListSelection()
+			return updated.(Model), cmd, true
+		}
+	case ProjectsListState:
+		switch {
+		case key == "up":
+			m.projectList = m.projectList.MoveSelection(-1)
+			return m, nil, true
+		case key == "down":
+			m.projectList = m.projectList.MoveSelection(1)
+			return m, nil, true
+		case key == "enter" || msg.Type == tea.KeyCtrlJ:
+			updated, cmd := m.handleListSelection()
+			return updated.(Model), cmd, true
+		}
+	}
+	return m, nil, false
 }
 
 func (m Model) handleFindKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -240,6 +327,12 @@ func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
 func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
 	trimmed := strings.TrimSpace(value)
 	if commandAllowed(m.state, "/save") {
+		if m.state == ChangeCreateState {
+			return m.saveChangeCreateValue(value)
+		}
+		if m.state == ChangeUpdateState {
+			return m.saveChangeUpdateValue(value)
+		}
 		if m.state == ProjectCreateState {
 			return m.saveProjectCreateValue(value)
 		}
@@ -267,6 +360,14 @@ func (m Model) submitFindValue(value string) (tea.Model, tea.Cmd) {
 	if query == "" {
 		m.state = m.previousState
 		m.err = "find text is required"
+		return m, nil
+	}
+	if m.previousState == ChangesListState {
+		m.changesFilters.find = query
+		m.clampChangeListSelection()
+		m.state = ChangesListState
+		m.input.Placeholder = defaultInputPlaceholder
+		m.status = "find filter"
 		return m, nil
 	}
 	m.helpQuery = query
@@ -312,7 +413,20 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 	switch m.state {
 	case ChangesListState:
-		m.openDropdown(ListSelectionDropDownState, dropdownList, m.state, ChangeDetailsState, "Changes", []dto.Option{{ID: "change-1", Label: "Example Change"}}, false)
+		next, selected, ok := m.changeList.SelectDetail(m.changeFilters())
+		m.changeList = next
+		if !ok {
+			m.err = "no changes selectable"
+			return m, nil
+		}
+		m.state = ChangeDetailsState
+		m.status = "selected " + selected.Title
+		id, err := changeNumericID(selected)
+		if err != nil {
+			m.err = err.Error()
+			return m, nil
+		}
+		return m, changeGetCommand(m.client, id)
 	case ChangeDetailsState:
 		m.openDropdown(ListSelectionDropDownState, dropdownList, m.state, TestCaseDetailsState, "Test Cases", []dto.Option{{ID: "test-case-1", Label: "Example Test Case"}}, false)
 	case EpicsListState:
@@ -360,7 +474,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		m.quitting = true
 		return m, tea.Quit
 	case "/changes":
-		m.state = ChangesListState
+		return m.arrive(ChangesListState, string(ChangesListState))
 	case "/epics":
 		m.state = EpicsListState
 	case "/projects":
@@ -374,14 +488,23 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		m.state = FindInputState
 		m = m.setPromptValue("")
 	case "/find-filter":
-		m.status = "find filter"
+		m.previousState = ChangesListState
+		m.state = FindInputState
+		m = m.setPromptValue("")
+		m.input.Placeholder = "Find changes"
 	case "/clear-filters":
 		m.changesFilters = changesFilters{}
+		m.clampChangeListSelection()
 		m.status = "filters cleared"
 	case "/return":
 		return m.arrive(navigation.ReturnTargets()[source], "return")
 	case "/new-change", "/new-test-case", "/new-epic", "/new-project":
 		m.state = navigation.CreateTarget(source)
+		if m.state == ChangeCreateState {
+			m = m.setPromptValue("")
+			m.input.Placeholder = defaultInputPlaceholder
+			return m.openPromptEditor(ChangeCreateState)
+		}
 		if m.state == ProjectCreateState {
 			m = m.setPromptValue("")
 			m.input.Placeholder = "Write a Name"
@@ -390,11 +513,22 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		}
 	case "/edit":
 		m.state = navigation.UpdateTarget(source)
+		if m.state == ChangeUpdateState {
+			m = m.setPromptValue(changes.RequirementMarkdown(m.changeList.Detail))
+			m.input.Placeholder = defaultInputPlaceholder
+			return m.openPromptEditor(ChangeUpdateState)
+		}
 		if m.state == ProjectUpdateState {
 			m = m.setPromptValue(m.projectList.Detail.Name)
 		}
 		m.input.Placeholder = defaultInputPlaceholder
 	case "/save":
+		if source == ChangeCreateState {
+			return m.saveChangeCreate()
+		}
+		if source == ChangeUpdateState {
+			return m.saveChangeUpdate()
+		}
 		if source == ProjectCreateState {
 			return m.saveProjectCreate()
 		}
@@ -432,10 +566,22 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 func (m Model) arrive(state State, status string) (tea.Model, tea.Cmd) {
 	m.state = state
 	m.status = status
+	m.applyPromptLimit()
 	if state != ProjectCreateState {
 		m.input.Placeholder = defaultInputPlaceholder
 	}
 	switch state {
+	case ChangesListState:
+		m.changeList = changes.StartLoading()
+		return m, changeListCommand(m.client, m.currentProject.ID)
+	case ChangeDetailsState:
+		id, err := changeNumericID(m.changeList.Detail)
+		if err != nil {
+			m.err = err.Error()
+			return m, nil
+		}
+		m.status = "loading change"
+		return m, changeGetCommand(m.client, id)
 	case ProjectsListState:
 		m.projectList = projects.StartLoading()
 		return m, projectListCommand(m.client)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"mch/internal/changes"
 	"mch/internal/dto"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,6 +26,7 @@ func (m *Model) setChangesFilter(field filterField, option dto.Option) {
 	case filterType:
 		m.changesFilters.typ = option
 	}
+	m.clampChangeListSelection()
 }
 
 func (m *Model) clearChangesFilter(field filterField) {
@@ -35,6 +37,20 @@ func (m *Model) clearChangesFilter(field filterField) {
 		m.changesFilters.epic = dto.Option{}
 	case filterType:
 		m.changesFilters.typ = dto.Option{}
+	}
+	m.clampChangeListSelection()
+}
+
+func (m *Model) clampChangeListSelection() {
+	m.changeList = m.changeList.ClampSelection(m.changeFilters(), m.changeTableRows())
+}
+
+func (m Model) changeFilters() changes.Filters {
+	return changes.Filters{
+		Phase: m.changesFilters.phase,
+		Epic:  m.changesFilters.epic,
+		Type:  m.changesFilters.typ,
+		Find:  m.changesFilters.find,
 	}
 }
 
@@ -95,5 +111,12 @@ func projectListCommand(client appClient) tea.Cmd {
 	return func() tea.Msg {
 		projects, err := client.ListProjectRows()
 		return projectListLoadedMsg{projects: projects, err: err}
+	}
+}
+
+func changeListCommand(client appClient, projectID string) tea.Cmd {
+	return func() tea.Msg {
+		changes, err := client.ListChangeRows(projectID)
+		return changeListLoadedMsg{changes: changes, err: err}
 	}
 }

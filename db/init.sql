@@ -135,6 +135,18 @@ create table public.test_case_history
     primary key (id, version)
 );
 
+create view public.vw_project as
+SELECT p.id,
+       p.name,
+       p.last_ref,
+       p.created,
+       p.modified,
+       COALESCE(count(c.*), 0::bigint) AS change_count
+FROM project p
+         LEFT JOIN change c ON p.id = c.project_id
+GROUP BY p.id, p.name, p.last_ref, p.created, p.modified
+ORDER BY p.id;
+
 create view public.vw_epic as
 SELECT e.id,
        e.version,
@@ -151,17 +163,24 @@ FROM epic e
 GROUP BY e.id, e.version, e.project_id, e.name, e.done_tc, e.total_tc, e.completed, e.created, e.modified
 ORDER BY e.name;
 
-create view public.vw_project as
-SELECT p.id,
-       p.name,
-       p.last_ref,
-       p.created,
-       p.modified,
-       COALESCE(count(c.*), 0::bigint) AS change_count
-FROM project p
-         LEFT JOIN change c ON p.id = c.project_id
-GROUP BY p.id, p.name, p.last_ref, p.created, p.modified
-ORDER BY p.id;
+create view public.vw_change_list as
+SELECT c.id,
+       c.ref,
+       c.slug,
+       c.project_id,
+       c.change_phase,
+       c.change_types,
+       c.epic_id,
+       e.name AS epic_name,
+       c.title,
+       c.closed,
+       c.done_tc,
+       c.total_tc,
+       c.completed,
+       c.modified
+FROM change c
+         LEFT JOIN epic e ON c.epic_id = e.id
+ORDER BY c.modified DESC;
 
 create view public.vw_foreign_key as
 SELECT conname             AS foreign_key_name,
