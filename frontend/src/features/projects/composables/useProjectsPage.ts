@@ -5,10 +5,16 @@ import { useProjectSelectionStore } from '@/features/projects/model/projectSelec
 import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
 import {
   deleteChange,
-  getChangeReferences,
+  getChangePhases,
+  getChangeTypes,
   updateChangePhase,
 } from '@/features/changes/api/changeApi';
-import type { ReferenceOption, SelectOption, Change } from '@/features/changes/model/change.types';
+import type {
+  ChangePhase,
+  ChangeType,
+  SelectOption,
+  ChangeListItem,
+} from '@/features/changes/model/change.types';
 
 function errorMessage(err: unknown, fallback: string) {
   return err instanceof Error ? err.message : fallback;
@@ -24,8 +30,8 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
   const changeCache = useChangeCacheStore();
   const { projects, currentProjectId, currentProject } = storeToRefs(projectSelection);
   const { changes, epics } = storeToRefs(changeCache);
-  const phases = ref<ReferenceOption[]>([]);
-  const types = ref<ReferenceOption[]>([]);
+  const phases = ref<ChangePhase[]>([]);
+  const types = ref<ChangeType[]>([]);
   const projectName = ref('');
   const changeTitle = ref('');
   const changeType = ref('');
@@ -46,16 +52,18 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
   const typeOptions = computed<SelectOption[]>(() =>
     types.value.map((type) => ({ label: type.slug, value: type.slug })),
   );
-  const boardPhases = computed(() => (phases.value.length ? phases.value : uniqueChangePhases.value));
+  const boardPhases = computed(() =>
+    phases.value.length ? phases.value : uniqueChangePhases.value,
+  );
 
-  const uniqueChangePhases = computed<ReferenceOption[]>(() =>
+  const uniqueChangePhases = computed<ChangePhase[]>(() =>
     [...new Set(changes.value.map((change) => change.change_phase))].map((slug, index) => ({
       slug,
       priority: index,
     })),
   );
 
-  const filteredChanges = computed<Change[]>(() => {
+  const filteredChanges = computed<ChangeListItem[]>(() => {
     const title = changeTitle.value.trim().toLowerCase();
     const type = changeType.value;
     const phase = changePhase.value;
@@ -68,8 +76,8 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     });
   });
 
-  const changesByPhase = computed<Record<string, Change[]>>(() => {
-    const grouped: Record<string, Change[]> = {};
+  const changesByPhase = computed<Record<string, ChangeListItem[]>>(() => {
+    const grouped: Record<string, ChangeListItem[]> = {};
     for (const phase of boardPhases.value) grouped[phase.slug] = [];
     for (const change of filteredChanges.value) {
       const group = grouped[change.change_phase] || [];
@@ -85,12 +93,13 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
 
     try {
       if (changesEnabled) {
-        const [references] = await Promise.all([
-          getChangeReferences(),
+        const [loadedPhases, loadedTypes] = await Promise.all([
+          getChangePhases(),
+          getChangeTypes(),
           projectSelection.loadProjects(),
         ]);
-        phases.value = references.phases;
-        types.value = references.types;
+        phases.value = loadedPhases;
+        types.value = loadedTypes;
 
         if (currentProjectId.value) {
           await loadChanges(currentProjectId.value);
@@ -206,7 +215,7 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     await loadAll();
   }
 
-  async function moveChange(change: Change, phase: string) {
+  async function moveChange(change: ChangeListItem, phase: string) {
     try {
       const moved = await updateChangePhase(change.id, phase);
       changeCache.upsertChange(moved);
@@ -222,11 +231,11 @@ export function useProjectsPage(options: UseProjectsPageOptions = {}) {
     }
   }
 
-  function removeChange(change: Change) {
+  function removeChange(change: ChangeListItem) {
     requestConfirmation(() => removeChangeConfirmed(change));
   }
 
-  async function removeChangeConfirmed(change: Change) {
+  async function removeChangeConfirmed(change: ChangeListItem) {
     try {
       await deleteChange(change.id);
       await refreshCurrentProjectChanges();

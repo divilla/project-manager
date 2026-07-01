@@ -2,32 +2,42 @@ import type { TestCase } from '@/features/test-cases/model/testCase.types';
 
 export type { Epic } from '@/features/epics/model/epic.types';
 
-export interface ReferenceOption {
+export interface ChangePhase {
   slug: string;
   priority: number;
 }
 
-export interface Change {
+export interface ChangeType {
+  slug: string;
+  priority: number;
+}
+
+export interface ChangeListItem {
   id: number;
-  version: number;
   ref: number;
   slug: string;
   project_id: number;
   epic_id?: number | null;
+  epic_name?: string | null;
   change_phase: string;
   change_types: string[];
   title: string;
-  requirement_body: string;
-  requirement_html: string;
-  pull_request_body: string;
-  pull_request_html: string;
-  pull_request_url: string;
-  closed: boolean;
+  agent_edit: boolean;
+  open: boolean;
   done_tc: number;
   total_tc: number;
   completed: number;
-  created: string;
   modified: string;
+}
+
+export interface Change extends ChangeListItem {
+  version: number;
+  body: string;
+  html: string;
+  pr_body: string;
+  pr_html: string;
+  pr_url: string;
+  created: string;
 }
 
 export interface ChangeDetail {
@@ -35,15 +45,10 @@ export interface ChangeDetail {
   test_cases: TestCase[];
 }
 
-export interface ChangeReferences {
-  phases: ReferenceOption[];
-  types: ReferenceOption[];
-}
-
 export interface ChangeRenderedBody {
   id: number;
-  requirement_html: string;
-  pull_request_html: string;
+  html: string;
+  pr_html: string;
 }
 
 export interface ChangeRenderedBodiesResponse {
@@ -54,7 +59,7 @@ export interface ChangeCreateInput {
   project_id: number;
   epic_id?: number | null;
   title: string;
-  requirement_body?: string;
+  body?: string;
   change_types: string[];
 }
 

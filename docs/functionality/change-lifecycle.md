@@ -12,7 +12,7 @@ Creating a change requires:
 
 - project ID
 - title
-- optional requirement body
+- optional body
 - one or more types from `change_type`
 - optional epic ID
 
@@ -23,26 +23,28 @@ After a successful create, the returned change includes its database ID, project
 Codex-assisted planning tools may create planned changes after the user confirms the generated test cases. These changes use the `backlog` phase until the user moves them through the normal lifecycle.
 
 ## List
-Project-scoped lists show active changes for one project. Lists are ordered by `modified` descending so the most recently changed Change appears first.
+Project-scoped lists show active changes for one project. Lists include list-appropriate fields only: identity, phase and type data, linked epic identity and `epic_name` when present, title, `agent_edit`, open state, completion counters, and modified time.
 
-List items include `ref` and `slug` so clients can render stable change identity without deriving it locally.
+List items include `ref` and `slug` so clients can render stable change identity without deriving it locally. Clients must use the backend response order.
 
 ## Detail
 The detail view shows:
 
 - project-scoped reference and slug
-- title and requirement body
-- pull request body and URL when present
+- title and body
+- PR body and PR URL when present
 - phase and type information
-- linked epic when present
+- linked epic and `epic_name` when present
 - test case list
 - completion counters
-- version and modified time
+- `agent_edit`
+- open state
+- version, created time, and modified time
 
-Markdown requirement body rendering is sanitized by the backend before display.
+Markdown body and PR body rendering is sanitized by the backend before display.
 
 ## Update
-Editing a change can update title, requirement body, pull request body, pull request URL, type classification, epic reference, phase, and closed state. History-bearing fields must preserve the previous row before mutation.
+Editing a change can update title, body, PR body, PR URL, type classification, epic reference, phase, open state, and `agent_edit`. History-bearing fields must preserve the previous row before mutation.
 
 Focused updates return the refreshed change with its existing `ref` and `slug`. Updating the title does not let clients supply replacement identity values.
 

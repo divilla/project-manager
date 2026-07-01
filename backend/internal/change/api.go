@@ -24,30 +24,22 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 		s: s,
 	}
 
-	a.g.POST("/reference", a.references)
 	a.g.POST("/list", a.listChanges)
 	a.g.POST("/get", a.getChange)
 	a.g.POST("/rendered-bodies", a.renderedBodies)
 	a.g.POST("/create", a.createChange)
 	a.g.POST("/update-epic", a.updateEpic)
 	a.g.POST("/update-phase", a.updatePhase)
-	a.g.POST("/update-closed", a.updateClosed)
+	a.g.POST("/update-open", a.updateOpen)
 	a.g.POST("/update-change-types", a.updateChangeTypes)
 	a.g.POST("/update-title", a.updateTitle)
-	a.g.POST("/update-requirement-body", a.updateRequirementBody)
-	a.g.POST("/update-pull-request-body", a.updatePullRequestBody)
-	a.g.POST("/update-pull-request-url", a.updatePullRequestURL)
+	a.g.POST("/update-body", a.updateBody)
+	a.g.POST("/update-pr-body", a.updatePRBody)
+	a.g.POST("/update-pr-url", a.updatePRUrl)
+	a.g.POST("/update-agent-edit", a.updateAgentEdit)
 	a.g.POST("/delete", a.deleteChange)
 
 	return a
-}
-
-func (a *API) references(c *echo.Context) error {
-	res, err := a.s.References(c.Request().Context())
-	if err != nil {
-		return err
-	}
-	return c.JSON(http.StatusOK, &res)
 }
 
 func (a *API) listChanges(c *echo.Context) error {
@@ -134,36 +126,48 @@ func (a *API) updateTitle(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) updateRequirementBody(c *echo.Context) error {
-	var req dto.ChangeUpdateRequirementBodyRequest
+func (a *API) updateBody(c *echo.Context) error {
+	var req dto.ChangeUpdateBodyRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change requirement body payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change body payload")
 	}
-	res, err := a.s.UpdateRequirementBody(c.Request().Context(), req)
+	res, err := a.s.UpdateBody(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) updatePullRequestBody(c *echo.Context) error {
-	var req dto.ChangeUpdatePullRequestBodyRequest
+func (a *API) updatePRBody(c *echo.Context) error {
+	var req dto.ChangeUpdatePRBodyRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pull request body payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pr body payload")
 	}
-	res, err := a.s.UpdatePullRequestBody(c.Request().Context(), req)
+	res, err := a.s.UpdatePRBody(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) updatePullRequestURL(c *echo.Context) error {
-	var req dto.ChangeUpdatePullRequestURLRequest
+func (a *API) updatePRUrl(c *echo.Context) error {
+	var req dto.ChangeUpdatePRUrlRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pull request url payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pr url payload")
 	}
-	res, err := a.s.UpdatePullRequestURL(c.Request().Context(), req)
+	res, err := a.s.UpdatePRUrl(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updateAgentEdit(c *echo.Context) error {
+	var req dto.ChangeUpdateAgentEditRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change agent edit payload")
+	}
+	res, err := a.s.UpdateAgentEdit(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}
@@ -182,12 +186,12 @@ func (a *API) updatePhase(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) updateClosed(c *echo.Context) error {
-	var req dto.ChangeUpdateClosedRequest
+func (a *API) updateOpen(c *echo.Context) error {
+	var req dto.ChangeUpdateOpenRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change closed payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change open payload")
 	}
-	res, err := a.s.UpdateClosed(c.Request().Context(), req)
+	res, err := a.s.UpdateOpen(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}

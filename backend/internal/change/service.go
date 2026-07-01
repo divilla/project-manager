@@ -3,6 +3,7 @@ package change
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 
 	"aipm/internal/dto"
@@ -28,13 +29,8 @@ func NewService(changeRepository Repository, renderer Renderer) *Service {
 	return &Service{repo: changeRepository, renderer: renderer}
 }
 
-// References executes References behavior.
-func (s *Service) References(ctx context.Context) (dto.ChangeReferences, error) {
-	return s.repo.References(ctx)
-}
-
 // ListChanges executes ListChanges behavior.
-func (s *Service) ListChanges(ctx context.Context, req dto.ChangeListRequest) ([]dto.Change, error) {
+func (s *Service) ListChanges(ctx context.Context, req dto.ChangeListRequest) ([]dto.ChangeListItem, error) {
 	if req.ProjectID <= 0 {
 		return nil, ErrInvalidInput
 	}
@@ -71,9 +67,9 @@ func (s *Service) RenderedBodies(ctx context.Context, req dto.ChangeRenderedBodi
 	for _, item := range changes {
 		item = s.renderer.RenderChange(item)
 		bodies = append(bodies, dto.ChangeRenderedBody{
-			ID:              item.ID,
-			RequirementHTML: item.RequirementHTML,
-			PullRequestHTML: item.PullRequestHTML,
+			ID:     item.ID,
+			HTML:   item.HTML,
+			PRHtml: item.PRHtml,
 		})
 	}
 	return dto.ChangeRenderedBodiesResponse{Bodies: bodies}, nil
@@ -82,7 +78,7 @@ func (s *Service) RenderedBodies(ctx context.Context, req dto.ChangeRenderedBodi
 // CreateChange executes CreateChange behavior.
 func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
-	req.RequirementBody = strings.TrimSpace(req.RequirementBody)
+	req.Body = strings.TrimSpace(req.Body)
 	req.ChangeTypes = normalizeTypes(req.ChangeTypes)
 	if req.ProjectID <= 0 || req.Title == "" || len(req.ChangeTypes) == 0 || invalidOptionalID(req.EpicID) {
 		return dto.Change{}, ErrInvalidInput
@@ -120,39 +116,51 @@ func (s *Service) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequ
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdateRequirementBody executes UpdateRequirementBody behavior.
-func (s *Service) UpdateRequirementBody(ctx context.Context, req dto.ChangeUpdateRequirementBodyRequest) (dto.Change, error) {
-	req.RequirementBody = strings.TrimSpace(req.RequirementBody)
+// UpdateBody executes UpdateBody behavior.
+func (s *Service) UpdateBody(ctx context.Context, req dto.ChangeUpdateBodyRequest) (dto.Change, error) {
+	req.Body = strings.TrimSpace(req.Body)
 	if req.ID <= 0 {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.UpdateRequirementBody(ctx, req)
+	change, err := s.repo.UpdateBody(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdatePullRequestBody executes UpdatePullRequestBody behavior.
-func (s *Service) UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error) {
-	req.PullRequestBody = strings.TrimSpace(req.PullRequestBody)
+// UpdatePRBody executes UpdatePRBody behavior.
+func (s *Service) UpdatePRBody(ctx context.Context, req dto.ChangeUpdatePRBodyRequest) (dto.Change, error) {
+	req.PRBody = strings.TrimSpace(req.PRBody)
 	if req.ID <= 0 {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.UpdatePullRequestBody(ctx, req)
+	change, err := s.repo.UpdatePRBody(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdatePullRequestURL executes UpdatePullRequestURL behavior.
-func (s *Service) UpdatePullRequestURL(ctx context.Context, req dto.ChangeUpdatePullRequestURLRequest) (dto.Change, error) {
-	req.PullRequestURL = strings.TrimSpace(req.PullRequestURL)
-	if req.ID <= 0 {
+// UpdatePRUrl executes UpdatePRUrl behavior.
+func (s *Service) UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error) {
+	req.PRUrl = strings.TrimSpace(req.PRUrl)
+	if req.ID <= 0 || invalidPRURL(req.PRUrl) {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.UpdatePullRequestURL(ctx, req)
+	change, err := s.repo.UpdatePRUrl(ctx, req)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	return s.renderer.RenderChange(change), nil
+}
+
+// UpdateAgentEdit executes UpdateAgentEdit behavior.
+func (s *Service) UpdateAgentEdit(ctx context.Context, req dto.ChangeUpdateAgentEditRequest) (dto.Change, error) {
+	if req.ID <= 0 || req.AgentEdit == nil {
+		return dto.Change{}, ErrInvalidInput
+	}
+	change, err := s.repo.UpdateAgentEdit(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -184,12 +192,12 @@ func (s *Service) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequ
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdateClosed executes UpdateClosed behavior.
-func (s *Service) UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedRequest) (dto.Change, error) {
-	if req.ID <= 0 {
+// UpdateOpen executes UpdateOpen behavior.
+func (s *Service) UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) (dto.Change, error) {
+	if req.ID <= 0 || req.Open == nil {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.UpdateClosed(ctx, req)
+	change, err := s.repo.UpdateOpen(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -239,4 +247,18 @@ func normalizeTypes(values []string) []string {
 
 func invalidOptionalID(value *int) bool {
 	return value != nil && *value <= 0
+}
+
+func invalidPRURL(value string) bool {
+	if value == "" {
+		return false
+	}
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return true
+	}
+	if parsed.Host == "" {
+		return true
+	}
+	return !strings.EqualFold(parsed.Scheme, "https") && !strings.EqualFold(parsed.Scheme, "http")
 }

@@ -34,7 +34,7 @@ declare
 begin
     select id into _project_id from public.project where name = 'demo1';
 
-    -- Echo PR pair 1: #3028 creates the Change, #3024 supplies pull_request_body.
+    -- Echo PR pair 1: #3028 creates the Change, #3024 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -63,7 +63,7 @@ Update the gzip negotiation logic to honor `q=0` quality values and skip gzip wh
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Split out of #3023 at @aldas''s request so the router and JSON changes land as independent PRs.
+        pr_body = 'Split out of #3023 at @aldas''s request so the router and JSON changes land as independent PRs.
 
 ## What
 
@@ -84,10 +84,10 @@ allocations: 0, unchanged
 The companion ServeHTTP benchmark harness lands with #3023 (the JSON PR); routing benchmarks there exercise this change once both merge.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3028'
+        pr_url = 'https://github.com/labstack/echo/pull/3028'
     where id = _change_id;
 
-    -- Echo PR pair 2: #3023 creates the Change, #3020 supplies pull_request_body.
+    -- Echo PR pair 2: #3023 creates the Change, #3020 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -117,11 +117,11 @@ This PR also adds the general ServeHTTP/JSON benchmark harness (`perf_bench_test
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'changelog + version string bump',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3023'
+        pr_body = 'changelog + version string bump',
+        pr_url = 'https://github.com/labstack/echo/pull/3023'
     where id = _change_id;
 
-    -- Echo PR pair 3: #3019 creates the Change, #3018 supplies pull_request_body.
+    -- Echo PR pair 3: #3019 creates the Change, #3018 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -175,11 +175,11 @@ for static middleware
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'remove dependency on labstack/echo v5 introduced in go.mod and go.sum in https://github.com/labstack/echo/pull/3017',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3019'
+        pr_body = 'remove dependency on labstack/echo v5 introduced in go.mod and go.sum in https://github.com/labstack/echo/pull/3017',
+        pr_url = 'https://github.com/labstack/echo/pull/3019'
     where id = _change_id;
 
-    -- Echo PR pair 4: #3017 creates the Change, #3016 supplies pull_request_body.
+    -- Echo PR pair 4: #3017 creates the Change, #3016 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -189,15 +189,15 @@ for static middleware
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Revert PR #3009 changes to just disabling path escaping by default in static methods/middleware
+        pr_body = 'Revert PR #3009 changes to just disabling path escaping by default in static methods/middleware
 
 #3009 is a little bit brute force hack to solve the problem from LLM. Claude proposed checking and fixing path used is not a maintainable solutions and there could be so many clever ways how bad actors try to manipulate the path, and the root cause is that the Router and code serving Static files are conceptionally using path differently - so more maintainable solution is to make these 2 acting consitently.
 
 Note: disabling path escaping in static methods and static middleware is a breaking change.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3017'
+        pr_url = 'https://github.com/labstack/echo/pull/3017'
     where id = _change_id;
 
-    -- Echo PR pair 5: #3015 creates the Change, #3014 supplies pull_request_body.
+    -- Echo PR pair 5: #3015 creates the Change, #3014 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -248,11 +248,11 @@ Static files whose names contain URL-encoded characters (e.g. `"hello world.txt"
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Replaces all occurrences of `interface{}` with `any` for Go 1.18+ compatibility.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3015'
+        pr_body = 'Replaces all occurrences of `interface{}` with `any` for Go 1.18+ compatibility.',
+        pr_url = 'https://github.com/labstack/echo/pull/3015'
     where id = _change_id;
 
-    -- Echo PR pair 6: #3013 creates the Change, #3012 supplies pull_request_body.
+    -- Echo PR pair 6: #3013 creates the Change, #3012 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -271,7 +271,7 @@ Because `pull_request` workflows run from the **base** branch''s config, this PR
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Release prep for **v4.15.3** (v4 LTS).
+        pr_body = 'Release prep for **v4.15.3** (v4 LTS).
 
 - Bumps `Version` in echo.go 4.15.2 → 4.15.3.
 - Adds the v4.15.3 `CHANGELOG.md` entry.
@@ -279,10 +279,10 @@ Because `pull_request` workflows run from the **base** branch''s config, this PR
 Headline: fixes **GHSA-vfp3-v2gw-7wfq** — the encoded path separator static bypass (v4 backport of #3009, merged in #3011). After merge, tag `v4.15.3`, publish the release, and amend the advisory to add the v4 affected product.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3013'
+        pr_url = 'https://github.com/labstack/echo/pull/3013'
     where id = _change_id;
 
-    -- Echo PR pair 7: #3011 creates the Change, #3010 supplies pull_request_body.
+    -- Echo PR pair 7: #3011 creates the Change, #3010 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -312,7 +312,7 @@ Targets the **v4** branch for a **v4.15.3** release; the advisory will be amende
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Release prep for **v5.2.0**.
+        pr_body = 'Release prep for **v5.2.0**.
 
 - Bumps `version.go` 5.1.1 → 5.2.0 (minor: the diff since v5.1.1 includes `feat(middleware): RateLimiterStoreContext` #3007).
 - Adds the v5.2.0 `CHANGELOG.md` entry.
@@ -320,10 +320,10 @@ Targets the **v4** branch for a **v4.15.3** release; the advisory will be amende
 Headline: fixes **GHSA-vfp3-v2gw-7wfq** (encoded path separator static bypass, #3009). After merge, tag `v5.2.0` and publish the GitHub release.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3011'
+        pr_url = 'https://github.com/labstack/echo/pull/3011'
     where id = _change_id;
 
-    -- Echo PR pair 8: #3009 creates the Change, #3008 supplies pull_request_body.
+    -- Echo PR pair 8: #3009 creates the Change, #3008 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -364,7 +364,7 @@ e.StaticFS("/", os.DirFS("public"))
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Optimizes Echo''s per-request hot paths to remove avoidable allocations and CPU work. **No public API changes; the standard-library JSON serializer remains the default.** All numbers are `benchstat` medians (n=8, Apple M3 Max / arm64, Go 1.26).
 
@@ -424,10 +424,10 @@ Measured (this machine, arm64): sonic **decode −44%** (a clear win on any arch
 
 - `go test ./...` + `-race` pass; `gofmt` + `go vet` clean.
 - Added: store no-leak across `Reset`, JSON status across `Reset`, nested `c.JSON`, global/pre middleware on 404/405/OPTIONS, `randomString` concurrency, query fast-path stdlib-equivalence.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3009'
+        pr_url = 'https://github.com/labstack/echo/pull/3009'
     where id = _change_id;
 
-    -- Echo PR pair 9: #3007 creates the Change, #3006 supplies pull_request_body.
+    -- Echo PR pair 9: #3007 creates the Change, #3006 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -463,7 +463,7 @@ Addresses #2961.
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Problem (#2599)
+        pr_body = '## Problem (#2599)
 
 A file whose name contains a percent sign cannot be downloaded via the static middleware:
 
@@ -488,10 +488,10 @@ GET /foo%2520bar.txt  → 200  "literal percent twenty"
 Fixes #2599.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3007'
+        pr_url = 'https://github.com/labstack/echo/pull/3007'
     where id = _change_id;
 
-    -- Echo PR pair 10: #3005 creates the Change, #3004 supplies pull_request_body.
+    -- Echo PR pair 10: #3005 creates the Change, #3004 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -528,7 +528,7 @@ Fixes #2629.
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Problem (#2771)
+        pr_body = '## Problem (#2771)
 
 A binding error returned from a handler is serialized as `{"message":"Bad Request"}` — the field name **and** the binder message are both lost.
 
@@ -556,10 +556,10 @@ This is the approach the maintainer outlined in the issue thread ("we could make
 Fixes #2771.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3005'
+        pr_url = 'https://github.com/labstack/echo/pull/3005'
     where id = _change_id;
 
-    -- Echo PR pair 11: #3003 creates the Change, #3002 supplies pull_request_body.
+    -- Echo PR pair 11: #3003 creates the Change, #3002 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -590,7 +590,7 @@ This replaces an earlier version of this PR whose comments described a middlewar
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Why
+        pr_body = '## Why
 
 Echo is actively maintained and shipping (v5.1.1 + v4.15.2 on 2026-05-01, `master` commits within days), but to a casual visitor the repo can read as inactive. This PR adds low-cost, **self-updating** signals that Echo is alive and clarifies its positioning.
 
@@ -604,10 +604,10 @@ Echo is actively maintained and shipping (v5.1.1 + v4.15.2 on 2026-05-01, `maste
 No code changes. Docs only.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3003'
+        pr_url = 'https://github.com/labstack/echo/pull/3003'
     where id = _change_id;
 
-    -- Echo PR pair 12: #3000 creates the Change, #2994 supplies pull_request_body.
+    -- Echo PR pair 12: #3000 creates the Change, #2994 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -658,7 +658,7 @@ This intentionally does not change `Content-Encoding`, `GetBody`, or multiple co
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Description
+        pr_body = '## Description
 
 This PR fixes https://github.com/labstack/echo/issues/2993
 
@@ -691,10 +691,10 @@ dropped.
 ## Background
 
 We hit this in production with an Echo-based WebSocket reverse proxy fronting an internal service that uses echo.ExtractIPFromXFFHeader for IP-based authorization. Multi-hop deployments (customer proxy → our reverse proxy → backend) broke because the reverse proxy''s egress IP was missing from the chain reaching the backend.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/3000'
+        pr_url = 'https://github.com/labstack/echo/pull/3000'
     where id = _change_id;
 
-    -- Echo PR pair 13: #2992 creates the Change, #2990 supplies pull_request_body.
+    -- Echo PR pair 13: #2992 creates the Change, #2990 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -714,7 +714,7 @@ Doc comment only — no behavior change.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Fixes #2853.
+        pr_body = 'Fixes #2853.
 
 When Echo CORS middleware is run in a chained proxy setup (or in front of any handler copying upstream headers using Add), headers like Access-Control-Allow-Origin and Vary get duplicated in the response.
 
@@ -722,10 +722,10 @@ Changes:
 - Run simple request CORS header writing inside a Before hook on the response. This allows the proxy''s CORS config to cleanly Set the headers, overriding duplicated upstream headers from the proxy or downstream response copy.
 - Implement addVaryHeader helper to merge and deduplicate Vary values case-insensitively.
 - Add unit test simulating ReverseProxy behavior to verify headers are not duplicated.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2992'
+        pr_url = 'https://github.com/labstack/echo/pull/2992'
     where id = _change_id;
 
-    -- Echo PR pair 14: #2989 creates the Change, #2988 supplies pull_request_body.
+    -- Echo PR pair 14: #2989 creates the Change, #2988 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -740,13 +740,13 @@ Notes:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Spotted while reading binder.go. The doc comments on `MustUnixTime`, `MustUnixTimeMilli`, `MustUnixTimeNano` all say "bind to time.Duration variable" but the function signature is `dest *time.Time` and the non-Must variants directly above each one correctly say "binds parameter to time.Time variable". Looks like a copy-paste from the actual `MustDuration` doc that never got updated.
+        pr_body = 'Spotted while reading binder.go. The doc comments on `MustUnixTime`, `MustUnixTimeMilli`, `MustUnixTimeNano` all say "bind to time.Duration variable" but the function signature is `dest *time.Time` and the non-Must variants directly above each one correctly say "binds parameter to time.Time variable". Looks like a copy-paste from the actual `MustDuration` doc that never got updated.
 
 While there, dropped a stray double space and changed "nano second" to "nanosecond" on the Nano variant. No code change.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2989'
+        pr_url = 'https://github.com/labstack/echo/pull/2989'
     where id = _change_id;
 
-    -- Echo PR pair 15: #2986 creates the Change, #2985 supplies pull_request_body.
+    -- Echo PR pair 15: #2986 creates the Change, #2985 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -768,7 +768,7 @@ Groups created with middleware always registered the default JSON `NotFoundHandl
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Fixes #2961
 
@@ -787,10 +787,10 @@ Implementation follows the maintainer suggestion from the issue: an optional une
 - [x] `go test ./middleware -run TestRateLimiter`
 - [x] `go test -race ./middleware -run TestRateLimiterMemoryStore`
 - [x] New test `TestRateLimiterMemoryStore_AllowContext_SetsHeaders` verifies headers on allowed and denied requests',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2986'
+        pr_url = 'https://github.com/labstack/echo/pull/2986'
     where id = _change_id;
 
-    -- Echo PR pair 16: #2984 creates the Change, #2983 supplies pull_request_body.
+    -- Echo PR pair 16: #2984 creates the Change, #2983 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -811,7 +811,7 @@ Fixes #2775'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 - For simple (non-preflight) CORS requests, apply CORS response headers after the handler runs
 - Skip setting `Access-Control-Allow-Origin` and related headers when an upstream handler (e.g. reverse proxy) already set them
@@ -823,10 +823,10 @@ Fixes #2775'
 - [x] `TestCORSNoDuplicateHeadersFromUpstream` — proxy layer + upstream both use CORS middleware, response has single `Access-Control-Allow-Origin` and `Vary`
 
 Fixes #2853',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2984'
+        pr_url = 'https://github.com/labstack/echo/pull/2984'
     where id = _change_id;
 
-    -- Echo PR pair 17: #2982 creates the Change, #2979 supplies pull_request_body.
+    -- Echo PR pair 17: #2982 creates the Change, #2979 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -855,7 +855,7 @@ Fixes #2731'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Fixes typos in CSRFConfig comments so they reference the actual exported field names:
+        pr_body = 'Fixes typos in CSRFConfig comments so they reference the actual exported field names:
 
 - TrustedOrigin -> TrustedOrigins
 - AllowSecFetchSameSite -> AllowSecFetchSiteFunc
@@ -864,10 +864,10 @@ Fixes #2731'
 Also clarifies the trusted origin wording.
 
 No behavior changes.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2982'
+        pr_url = 'https://github.com/labstack/echo/pull/2982'
     where id = _change_id;
 
-    -- Echo PR pair 18: #2977 creates the Change, #2973 supplies pull_request_body.
+    -- Echo PR pair 18: #2977 creates the Change, #2973 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -885,7 +885,7 @@ Tests pass with `go test ./... -count=1`.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Enables zero-copy (sendfile) serving. Disabled when ''After'' hooks are present to maintain backward compatibility.
+        pr_body = 'Enables zero-copy (sendfile) serving. Disabled when ''After'' hooks are present to maintain backward compatibility.
 
 fix #2725
 -----
@@ -902,10 +902,10 @@ Environment
    1 BenchmarkContext_File_RealServer/Zero-Copy-Optimized-12       32718676 ns/op    3204.82 MB/s
    2 BenchmarkContext_File_RealServer/User-Space-Standard-12       40801873 ns/op    2569.92 MB/s
 ```',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2977'
+        pr_url = 'https://github.com/labstack/echo/pull/2977'
     where id = _change_id;
 
-    -- Echo PR pair 19: #2971 creates the Change, #2970 supplies pull_request_body.
+    -- Echo PR pair 19: #2971 creates the Change, #2970 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -915,11 +915,11 @@ Environment
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Modernizes the codebase using the Go 1.26 gofix tool to adopt newer idioms and library features while maintaining compatibility with the current toolchain.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2971'
+        pr_body = 'Modernizes the codebase using the Go 1.26 gofix tool to adopt newer idioms and library features while maintaining compatibility with the current toolchain.',
+        pr_url = 'https://github.com/labstack/echo/pull/2971'
     where id = _change_id;
 
-    -- Echo PR pair 20: #2969 creates the Change, #2966 supplies pull_request_body.
+    -- Echo PR pair 20: #2969 creates the Change, #2966 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -933,11 +933,11 @@ More info: https://github.com/golang/go/issues/61901'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'In Go 1.21, the standard library includes built-in [max/min](https://pkg.go.dev/builtin@go1.21.0#max) function, which can greatly simplify the code.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2969'
+        pr_body = 'In Go 1.21, the standard library includes built-in [max/min](https://pkg.go.dev/builtin@go1.21.0#max) function, which can greatly simplify the code.',
+        pr_url = 'https://github.com/labstack/echo/pull/2969'
     where id = _change_id;
 
-    -- Echo PR pair 21: #2965 creates the Change, #2964 supplies pull_request_body.
+    -- Echo PR pair 21: #2965 creates the Change, #2964 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -947,13 +947,13 @@ More info: https://github.com/golang/go/issues/61901'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Context.Json should not unwrap response and just wrap Response so other middlewares can use their own "wrapping" Responses and see the status code.
+        pr_body = 'Context.Json should not unwrap response and just wrap Response so other middlewares can use their own "wrapping" Responses and see the status code.
 
 I found this during #2895 when to tried to create middleware that wraps existing response to own and status code setting did not work anymore with `Context.JSON` (always sends 200 to client).',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2965'
+        pr_url = 'https://github.com/labstack/echo/pull/2965'
     where id = _change_id;
 
-    -- Echo PR pair 22: #2963 creates the Change, #2962 supplies pull_request_body.
+    -- Echo PR pair 22: #2963 creates the Change, #2962 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -963,13 +963,13 @@ I found this during #2895 when to tried to create middleware that wraps existing
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Context.Scheme should validate values taken from header
+        pr_body = 'Context.Scheme should validate values taken from header
 
 Backport PR #2953 (d1d8ad3f99dd9b80542cd0c357d56a8916c515df) to `v4`',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2963'
+        pr_url = 'https://github.com/labstack/echo/pull/2963'
     where id = _change_id;
 
-    -- Echo PR pair 23: #2958 creates the Change, #2953 supplies pull_request_body.
+    -- Echo PR pair 23: #2958 creates the Change, #2953 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -979,11 +979,11 @@ Backport PR #2953 (d1d8ad3f99dd9b80542cd0c357d56a8916c515df) to `v4`',
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Relates to: https://github.com/labstack/echo/issues/2952',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2958'
+        pr_body = 'Relates to: https://github.com/labstack/echo/issues/2952',
+        pr_url = 'https://github.com/labstack/echo/pull/2958'
     where id = _change_id;
 
-    -- Echo PR pair 24: #2951 creates the Change, #2946 supplies pull_request_body.
+    -- Echo PR pair 24: #2951 creates the Change, #2946 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1008,17 +1008,17 @@ Low / Documentation-only change with no runtime impact.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Adds a new middleware that mounts a JSON-RPC 2.0 endpoint at a configurable path and auto-exposes registered Echo routes as MCP tools, so AI clients (Claude Desktop, Cursor, etc.) can discover and call them.
+        pr_body = 'Adds a new middleware that mounts a JSON-RPC 2.0 endpoint at a configurable path and auto-exposes registered Echo routes as MCP tools, so AI clients (Claude Desktop, Cursor, etc.) can discover and call them.
 
 Implements initialize, tools/list and tools/call. Tool input schemas are derived from RouteInfo.Parameters; tool calls substitute path parameters via RouteInfo.Reverse and dispatch the synthesized request through e.ServeHTTP, preserving the full middleware chain.
 
 No core Echo files are modified and no new dependencies are introduced.
 
 Fixes #2935',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2951'
+        pr_url = 'https://github.com/labstack/echo/pull/2951'
     where id = _change_id;
 
-    -- Echo PR pair 25: #2945 creates the Change, #2944 supplies pull_request_body.
+    -- Echo PR pair 25: #2945 creates the Change, #2944 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1032,7 +1032,7 @@ No core Echo files are modified and no new dependencies are introduced.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## What this does
+        pr_body = '## What this does
 
 This adds an **optional `AutoHead` flag** that automatically enables HEAD requests for any GET route. No need to define separate HEAD handlers anymore.
 
@@ -1099,10 +1099,10 @@ All tests pass.
 * Fully opt-in
 * Existing code works as-is
 #2895 @markbates @aldas',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2945'
+        pr_url = 'https://github.com/labstack/echo/pull/2945'
     where id = _change_id;
 
-    -- Echo PR pair 26: #2941 creates the Change, #2937 supplies pull_request_body.
+    -- Echo PR pair 26: #2941 creates the Change, #2937 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1135,17 +1135,17 @@ there is no remaining lint issues.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'the behavior is opt-out.
+        pr_body = 'the behavior is opt-out.
 
 I created one flag in both Echo and Group struct (since they are related to the register of new routes) that is private and a function to explicit cancel this behavior.
 
 Why: Mentioned in the issue #2895 I searched and saw that the default behavior in many frameworks is to automatically register a head request with GET, so I agree with the author of the issue that it should be included to guarantee an expected behavior from the programmer.
 
 I added tests and only modified the high level functions, if the author think it is good and relevant enough to be merged, it will be good.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2941'
+        pr_url = 'https://github.com/labstack/echo/pull/2941'
     where id = _change_id;
 
-    -- Echo PR pair 27: #2936 creates the Change, #2934 supplies pull_request_body.
+    -- Echo PR pair 27: #2936 creates the Change, #2934 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1164,11 +1164,11 @@ server behaves after the listener is created.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2934 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2936'
+        pr_body = 'Closed Echo pull request #2934 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2936'
     where id = _change_id;
 
-    -- Echo PR pair 28: #2933 creates the Change, #2932 supplies pull_request_body.
+    -- Echo PR pair 28: #2933 creates the Change, #2932 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1203,13 +1203,13 @@ Read https://echo.labstack.com/docs/ip-address'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Relates to https://github.com/labstack/echox/issues/397 and https://github.com/labstack/echo/issues/2918
+        pr_body = 'Relates to https://github.com/labstack/echox/issues/397 and https://github.com/labstack/echo/issues/2918
 
 we did not set in `v4` and it causing problems for users',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2933'
+        pr_url = 'https://github.com/labstack/echo/pull/2933'
     where id = _change_id;
 
-    -- Echo PR pair 29: #2931 creates the Change, #2930 supplies pull_request_body.
+    -- Echo PR pair 29: #2931 creates the Change, #2930 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1227,7 +1227,7 @@ Relates to https://github.com/labstack/echo/issues/2929'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Relates to: https://github.com/labstack/echo/issues/2924
+        pr_body = 'Relates to: https://github.com/labstack/echo/issues/2924
 
 NB: it does not fix couple of staticcheck problems that are being reported
 ```bash
@@ -1247,10 +1247,10 @@ route.go:88:4: QF1012: Use fmt.Fprintf(...) instead of WriteString(fmt.Sprintf(.
 router.go:998:30: QF1008: could remove embedded field "RouteInfo" from selector (staticcheck)
                 rPath = matchedRouteMethod.RouteInfo.Path
 ```',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2931'
+        pr_url = 'https://github.com/labstack/echo/pull/2931'
     where id = _change_id;
 
-    -- Echo PR pair 30: #2928 creates the Change, #2925 supplies pull_request_body.
+    -- Echo PR pair 30: #2928 creates the Change, #2925 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1310,7 +1310,7 @@ func main() {
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'The documentation for `NewRateLimiterMemoryStore` and
+        pr_body = 'The documentation for `NewRateLimiterMemoryStore` and
 `NewRateLimiterMemoryStoreWithConfig` states that the default Burst
 value is the "rounded down" value of the rate. This was accurate when
 the documentation was added in #2366, where the code used `int(config.Rate)`.
@@ -1318,10 +1318,10 @@ the documentation was added in #2366, where the code used `int(config.Rate)`.
 However, #2852 changed the default burst calculation to use `math.Ceil`,
 making it the rounded up value. The documentation was not updated to
 reflect this change.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2928'
+        pr_url = 'https://github.com/labstack/echo/pull/2928'
     where id = _change_id;
 
-    -- Echo PR pair 31: #2921 creates the Change, #2920 supplies pull_request_body.
+    -- Echo PR pair 31: #2921 creates the Change, #2920 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1343,7 +1343,7 @@ Made with [Cursor](https://cursor.com)'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Add StartConfig.Listener so server with custom Listener is easier to create
+        pr_body = 'Add StartConfig.Listener so server with custom Listener is easier to create
 
 relates to https://github.com/labstack/echo/issues/2918#issuecomment-4089341521
 https://github.com/labstack/echo/issues/1942
@@ -1395,10 +1395,10 @@ func main() {
 }
 
 ```',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2921'
+        pr_url = 'https://github.com/labstack/echo/pull/2921'
     where id = _change_id;
 
-    -- Echo PR pair 32: #2919 creates the Change, #2917 supplies pull_request_body.
+    -- Echo PR pair 32: #2919 creates the Change, #2917 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1408,7 +1408,7 @@ func main() {
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Fixes #2485
 
@@ -1427,10 +1427,10 @@ Traverse the parent node chain to look for a `notFoundHandler`. If found, use it
 Existing route tests pass. The fix ensures `RouteNotFound` handlers registered at a group level are properly invoked for sub-paths.
 
 Signed-off-by: lyydsheep <2230561977@qq.com>',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2919'
+        pr_url = 'https://github.com/labstack/echo/pull/2919'
     where id = _change_id;
 
-    -- Echo PR pair 33: #2916 creates the Change, #2910 supplies pull_request_body.
+    -- Echo PR pair 33: #2916 creates the Change, #2910 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1448,7 +1448,7 @@ All changes are either in comments or in an unexported (internal) struct field n
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Fix for issue: #2761
+        pr_body = 'Fix for issue: #2761
 
 This PR addresses #2761 by introducing SkipMiddlewareOnNotFound. This allows developers to avoid executing heavy global middleware (Auth, DB logging) for requests that result in a 404 or 405, improving performance and reducing log noise
 
@@ -1467,10 +1467,10 @@ ok      github.com/labstack/echo/v5     6.217s
 ```
 
 10-7 = 3 allocations saved for faster runtime',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2916'
+        pr_url = 'https://github.com/labstack/echo/pull/2916'
     where id = _change_id;
 
-    -- Echo PR pair 34: #2908 creates the Change, #2905 supplies pull_request_body.
+    -- Echo PR pair 34: #2908 creates the Change, #2905 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1480,7 +1480,7 @@ ok      github.com/labstack/echo/v5     6.217s
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'CSRF: support older token-based CSRF protection handler that want to render token into template
+        pr_body = 'CSRF: support older token-based CSRF protection handler that want to render token into template
 
 (cherry picked from commit 9183f1e80901fe3e55a61fce607e2c925e1e987b)
 same thing in `v5` https://github.com/labstack/echo/pull/2894
@@ -1489,10 +1489,10 @@ same thing in `v5` https://github.com/labstack/echo/pull/2894
 relates to:
 - https://github.com/labstack/echo/issues/2874
 - https://github.com/labstack/echo/pull/2903',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2908'
+        pr_url = 'https://github.com/labstack/echo/pull/2908'
     where id = _change_id;
 
-    -- Echo PR pair 35: #2903 creates the Change, #2902 supplies pull_request_body.
+    -- Echo PR pair 35: #2903 creates the Change, #2902 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1548,7 +1548,7 @@ This change is backward compatible - it only adds functionality (setting token i
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Fixes issue #2853 - CORS middleware was duplicating headers when multiple Echo services with CORS middleware were chained (e.g., Service A proxies to Service B, both with `middleware.CORS` enabled).
 
@@ -1572,10 +1572,10 @@ This fix addresses the exact scenario described in #2853 where multiple proxy la
 
 **Before**: Multiple CORS middlewares in a chain would each add headers, resulting in duplicates
 **After**: Middleware detects existing CORS headers and skips processing, preventing duplication',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2903'
+        pr_url = 'https://github.com/labstack/echo/pull/2903'
     where id = _change_id;
 
-    -- Echo PR pair 36: #2901 creates the Change, #2900 supplies pull_request_body.
+    -- Echo PR pair 36: #2901 creates the Change, #2900 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1585,7 +1585,7 @@ This fix addresses the exact scenario described in #2853 where multiple proxy la
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Add `ResolveResponseStatus` function to help middleware/handlers determine HTTP status code and echo.Response.
+        pr_body = 'Add `ResolveResponseStatus` function to help middleware/handlers determine HTTP status code and echo.Response.
 
 Loggers and tracing middlewares need to determine status code from either from error or `echo.Response`.  Also - response is needed often for knowing response size from `echo.Response.Size`.  so this function tries to shorten these 2 requirements.
 
@@ -1594,10 +1594,10 @@ and https://github.com/labstack/echo-contrib/blob/master/internal/helpers/status
 
 
 also https://github.com/labstack/echo/pull/2892',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2901'
+        pr_url = 'https://github.com/labstack/echo/pull/2901'
     where id = _change_id;
 
-    -- Echo PR pair 37: #2899 creates the Change, #2898 supplies pull_request_body.
+    -- Echo PR pair 37: #2899 creates the Change, #2898 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1609,13 +1609,13 @@ also https://github.com/labstack/echo/pull/2892',
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'After `http.Server.Serve` returns we need to wait for graceful shutdown goroutine to finish because when application exits immediately there are no graceful shutdown.
+        pr_body = 'After `http.Server.Serve` returns we need to wait for graceful shutdown goroutine to finish because when application exits immediately there are no graceful shutdown.
 
 Fixes: https://github.com/labstack/echo/issues/2897',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2899'
+        pr_url = 'https://github.com/labstack/echo/pull/2899'
     where id = _change_id;
 
-    -- Echo PR pair 38: #2896 creates the Change, #2894 supplies pull_request_body.
+    -- Echo PR pair 38: #2896 creates the Change, #2894 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1625,15 +1625,15 @@ Fixes: https://github.com/labstack/echo/issues/2897',
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'I though I already merged this.  I think  https://github.com/labstack/echo/pull/2876 got closed when I purged all old branches at my fork. I should not have deleted that branch as it was not merged yet
+        pr_body = 'I though I already merged this.  I think  https://github.com/labstack/echo/pull/2876 got closed when I purged all old branches at my fork. I should not have deleted that branch as it was not merged yet
 
 -------------
 
 In case CSRF flow is using `Sec-Fetch-Site` header but there is form still wanting to render CSRF token fields into form we  can help them by setting dummy value to context that atleast something can be rendered into form. As we already know that this browser is able to send `Sec-Fetch-Site` header, we do not need to generate token value or deal with cookies.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2896'
+        pr_url = 'https://github.com/labstack/echo/pull/2896'
     where id = _change_id;
 
-    -- Echo PR pair 39: #2893 creates the Change, #2892 supplies pull_request_body.
+    -- Echo PR pair 39: #2893 creates the Change, #2892 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1671,7 +1671,7 @@ This breaks all server-rendered forms that use `c.Get("csrf")` to embed a CSRF t
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Overview
+        pr_body = '## Overview
 Implemented the `Is` method on the `HTTPError` struct, enabling error checking using `errors.Is` (particularly for comparing with sentinel errors).
 
 ## Background
@@ -1680,10 +1680,10 @@ Starting with Go 1.13, `errors.Is` is recommended for error checking, but Echo''
 ## Changes
 - `httperror.go`: Added an `Is` method to the `HTTPError` struct. When comparing against `*HTTPError` or `*httpError`, it compares the status code.
 - `httperror_test.go`: Added a test case for the `Is` method (`TestHTTPError_Is`).',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2893'
+        pr_url = 'https://github.com/labstack/echo/pull/2893'
     where id = _change_id;
 
-    -- Echo PR pair 40: #2891 creates the Change, #2889 supplies pull_request_body.
+    -- Echo PR pair 40: #2891 creates the Change, #2889 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1698,11 +1698,11 @@ This applies to cases when:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2889 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2891'
+        pr_body = 'Closed Echo pull request #2889 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2891'
     where id = _change_id;
 
-    -- Echo PR pair 41: #2888 creates the Change, #2887 supplies pull_request_body.
+    -- Echo PR pair 41: #2888 creates the Change, #2887 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1712,13 +1712,13 @@ This applies to cases when:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'fix Static middleware listing all files from given filesystem root when browser=true
+        pr_body = 'fix Static middleware listing all files from given filesystem root when browser=true
 
 fixes: https://github.com/labstack/echo/issues/2886',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2888'
+        pr_url = 'https://github.com/labstack/echo/pull/2888'
     where id = _change_id;
 
-    -- Echo PR pair 42: #2885 creates the Change, #2881 supplies pull_request_body.
+    -- Echo PR pair 42: #2885 creates the Change, #2881 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1730,7 +1730,7 @@ Relates to https://github.com/labstack/echo-contrib/pull/141'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'The repository lacked proper documentation for security vulnerability reporting. The existing SECURITY.md only stated "look for maintainers email(s) in commits and email them."
+        pr_body = 'The repository lacked proper documentation for security vulnerability reporting. The existing SECURITY.md only stated "look for maintainers email(s) in commits and email them."
 
 ## Changes
 
@@ -1786,10 +1786,10 @@ The updated policy provides a professional disclosure pathway while GitHub Priva
 ---
 
 ✨ Let Copilot coding agent [set things up for you](https://github.com/labstack/echo/issues/new?title=✨+Set+up+Copilot+instructions&body=Configure%20instructions%20for%20this%20repository%20as%20documented%20in%20%5BBest%20practices%20for%20Copilot%20coding%20agent%20in%20your%20repository%5D%28https://gh.io/copilot-coding-agent-tips%29%2E%0A%0A%3COnboard%20this%20repo%3E&assignees=copilot) — coding agent works faster and does higher quality work when set up for your repo.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2885'
+        pr_url = 'https://github.com/labstack/echo/pull/2885'
     where id = _change_id;
 
-    -- Echo PR pair 43: #2880 creates the Change, #2878 supplies pull_request_body.
+    -- Echo PR pair 43: #2880 creates the Change, #2878 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1799,14 +1799,14 @@ The updated policy provides a professional disclosure pathway while GitHub Priva
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Hi maintainers,
+        pr_body = 'Hi maintainers,
 Just a quick doc fix about the DenyHandler provided example.
 
 Re-opened from #2864',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2880'
+        pr_url = 'https://github.com/labstack/echo/pull/2880'
     where id = _change_id;
 
-    -- Echo PR pair 44: #2877 creates the Change, #2876 supplies pull_request_body.
+    -- Echo PR pair 44: #2877 creates the Change, #2876 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1818,11 +1818,11 @@ Relates to https://github.com/labstack/echo/pull/2866#issuecomment-3778036694'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'CSRF: support older token-based CSRF protection handler that want torender token into template',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2877'
+        pr_body = 'CSRF: support older token-based CSRF protection handler that want torender token into template',
+        pr_url = 'https://github.com/labstack/echo/pull/2877'
     where id = _change_id;
 
-    -- Echo PR pair 45: #2875 creates the Change, #2871 supplies pull_request_body.
+    -- Echo PR pair 45: #2875 creates the Change, #2871 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1856,13 +1856,13 @@ All existing tests pass, including new test cases that verify:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Panic middleware: will now return a custom PanicStackError with stack trace when config.DisablePrintStack is set to false.
+        pr_body = 'Panic middleware: will now return a custom PanicStackError with stack trace when config.DisablePrintStack is set to false.
 
 relates to https://github.com/labstack/echo/issues/2869#issuecomment-3771782789',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2875'
+        pr_url = 'https://github.com/labstack/echo/pull/2875'
     where id = _change_id;
 
-    -- Echo PR pair 46: #2868 creates the Change, #2866 supplies pull_request_body.
+    -- Echo PR pair 46: #2868 creates the Change, #2866 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1883,7 +1883,7 @@ Replace all:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '##  Bug Fix
+        pr_body = '##  Bug Fix
 
 ### Problem
 The `json()` method in `context.go` (line 504) was inconsistent with other response methods in how it sets the HTTP status code.
@@ -1915,10 +1915,10 @@ All other similar response methods already use `WriteHeader()`:
 - `xml()` - line 543: `c.response.WriteHeader(code)`
 - `Blob()` - line 578: `c.response.WriteHeader(code)`
 - `JSONPBlob()` - line 530: `c.response.WriteHeader(code)`',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2868'
+        pr_url = 'https://github.com/labstack/echo/pull/2868'
     where id = _change_id;
 
-    -- Echo PR pair 47: #2864 creates the Change, #2860 supplies pull_request_body.
+    -- Echo PR pair 47: #2864 creates the Change, #2860 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -1929,7 +1929,7 @@ Just a quick doc fix about the DenyHandler provided example.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '# Changelog
+        pr_body = '# Changelog
 
 ## v4.15.0 - 2026-01-01
 
@@ -2111,10 +2111,10 @@ e.GET("/async-task", func(c echo.Context) error {
 * Fixes by @aldas in https://github.com/labstack/echo/pull/2852
 * Generic functions by @aldas in https://github.com/labstack/echo/pull/2856
 * CRSF with Sec-Fetch-Site checks by @aldas in https://github.com/labstack/echo/pull/2858',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2864'
+        pr_url = 'https://github.com/labstack/echo/pull/2864'
     where id = _change_id;
 
-    -- Echo PR pair 48: #2859 creates the Change, #2858 supplies pull_request_body.
+    -- Echo PR pair 48: #2859 creates the Change, #2858 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2129,7 +2129,7 @@ e.GET("/async-task", func(c echo.Context) error {
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'From: https://github.com/labstack/echo/issues/2855
+        pr_body = 'From: https://github.com/labstack/echo/issues/2855
 
 Note to self: [Hackernews](https://news.ycombinator.com/item?id=46351666) had this blog post posted.
 
@@ -2138,10 +2138,10 @@ Note to self: [Hackernews](https://news.ycombinator.com/item?id=46351666) had th
 * https://github.com/rails/rails/pull/56350
 
 see https://github.com/golang/go/blob/master/src/net/http/csrf.go  which was introduced in GO 1.25',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2859'
+        pr_url = 'https://github.com/labstack/echo/pull/2859'
     where id = _change_id;
 
-    -- Echo PR pair 49: #2856 creates the Change, #2852 supplies pull_request_body.
+    -- Echo PR pair 49: #2856 creates the Change, #2852 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2221,12 +2221,12 @@ Example with JWT middleware:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '* Mark timeout middleware as deprecated
+        pr_body = '* Mark timeout middleware as deprecated
 * fixes/improvements for things that Claude and Codex analysis found',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2856'
+        pr_url = 'https://github.com/labstack/echo/pull/2856'
     where id = _change_id;
 
-    -- Echo PR pair 50: #2851 creates the Change, #2850 supplies pull_request_body.
+    -- Echo PR pair 50: #2851 creates the Change, #2850 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2236,11 +2236,11 @@ Example with JWT middleware:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2850 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2851'
+        pr_body = 'Closed Echo pull request #2850 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2851'
     where id = _change_id;
 
-    -- Echo PR pair 51: #2849 creates the Change, #2843 supplies pull_request_body.
+    -- Echo PR pair 51: #2849 creates the Change, #2843 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2264,15 +2264,15 @@ Example with JWT middleware:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'dependabot complains that [golang.org/x/crypto](http://golang.org/x/crypto) need upgrading
+        pr_body = 'dependabot complains that [golang.org/x/crypto](http://golang.org/x/crypto) need upgrading
 
 Altough we do not used SSH package we still are "marked" as affected:
 * https://github.com/advisories/GHSA-f6x5-jh6r-wrfv
 * https://github.com/advisories/GHSA-j5w8-q4qc-rx2x',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2849'
+        pr_url = 'https://github.com/labstack/echo/pull/2849'
     where id = _change_id;
 
-    -- Echo PR pair 52: #2842 creates the Change, #2838 supplies pull_request_body.
+    -- Echo PR pair 52: #2842 creates the Change, #2838 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2304,12 +2304,12 @@ The setup is really simple:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '(#2837)
+        pr_body = '(#2837)
 Ensure proxy connection is closed in proxy middleware `proxyRaw` function',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2842'
+        pr_url = 'https://github.com/labstack/echo/pull/2842'
     where id = _change_id;
 
-    -- Echo PR pair 53: #2835 creates the Change, #2833 supplies pull_request_body.
+    -- Echo PR pair 53: #2835 creates the Change, #2833 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2319,15 +2319,15 @@ Ensure proxy connection is closed in proxy middleware `proxyRaw` function',
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Correct the fixture path used in `group_test.go`.
+        pr_body = 'Correct the fixture path used in `group_test.go`.
 
 ### Change
 
 - Remove the redundant slash in the file path used in `group_test.go`',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2835'
+        pr_url = 'https://github.com/labstack/echo/pull/2835'
     where id = _change_id;
 
-    -- Echo PR pair 54: #2832 creates the Change, #2829 supplies pull_request_body.
+    -- Echo PR pair 54: #2832 creates the Change, #2829 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2374,7 +2374,7 @@ change the value, but the code is now clearer and matches the intended logic.
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Complete redesign of the README with a modern, professional, and visually appealing layout that positions Echo as the premium choice for Go web development.
 
@@ -2428,10 +2428,10 @@ This README transforms Echo''s first impression from a simple framework descript
 This positions Echo competitively against other frameworks and provides a compelling case for adoption.
 
 🤖 Generated with [Claude Code](https://claude.ai/code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2832'
+        pr_url = 'https://github.com/labstack/echo/pull/2832'
     where id = _change_id;
 
-    -- Echo PR pair 55: #2828 creates the Change, #2827 supplies pull_request_body.
+    -- Echo PR pair 55: #2828 creates the Change, #2827 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2457,7 +2457,7 @@ Fixes a simple typo in the SetParamValues method documentation.
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Fixes a simple typo in the ContextTimeout middleware documentation.
 
@@ -2474,10 +2474,10 @@ Fixes a simple typo in the ContextTimeout middleware documentation.
 - [x] Tests pass
 
 🤖 Generated with [Claude Code](https://claude.ai/code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2828'
+        pr_url = 'https://github.com/labstack/echo/pull/2828'
     where id = _change_id;
 
-    -- Echo PR pair 56: #2826 creates the Change, #2825 supplies pull_request_body.
+    -- Echo PR pair 56: #2826 creates the Change, #2825 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2509,7 +2509,7 @@ Fixes #2799
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Modernizes the BasicAuth middleware with improved code readability and RFC compliance.
 
@@ -2531,10 +2531,10 @@ Modernizes the BasicAuth middleware with improved code readability and RFC compl
 Fixes #2794
 
 🤖 Generated with [Claude Code](https://claude.ai/code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2826'
+        pr_url = 'https://github.com/labstack/echo/pull/2826'
     where id = _change_id;
 
-    -- Echo PR pair 57: #2824 creates the Change, #2823 supplies pull_request_body.
+    -- Echo PR pair 57: #2824 creates the Change, #2823 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2564,7 +2564,7 @@ Completes the modernization of `context.go` by replacing all remaining `interfac
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Modernizes a for loop in `context.go` to use Go 1.22''s new range over int syntax for cleaner iteration.
 
@@ -2583,10 +2583,10 @@ Modernizes a for loop in `context.go` to use Go 1.22''s new range over int synta
 - [x] No behavioral changes
 
 🤖 Generated with [Claude Code](https://claude.ai/code)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2824'
+        pr_url = 'https://github.com/labstack/echo/pull/2824'
     where id = _change_id;
 
-    -- Echo PR pair 58: #2822 creates the Change, #2821 supplies pull_request_body.
+    -- Echo PR pair 58: #2822 creates the Change, #2821 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2655,7 +2655,7 @@ This change modernizes Echo''s public API to follow current Go conventions while
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Addresses issue #2382 by correcting the misleading comment on `Context.Bind` that did not accurately describe the actual binding behavior.
 
@@ -2714,10 +2714,10 @@ Fixes #2382
 ---
 
 *This is a simple documentation improvement that enhances clarity for Echo developers using the binding functionality.*',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2822'
+        pr_url = 'https://github.com/labstack/echo/pull/2822'
     where id = _change_id;
 
-    -- Echo PR pair 59: #2819 creates the Change, #2818 supplies pull_request_body.
+    -- Echo PR pair 59: #2819 creates the Change, #2818 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2809,7 +2809,7 @@ This PR complements PR #2818 (Logger middleware documentation) as part of ongoin
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 
 Addresses issue #2665 by providing comprehensive documentation for the Logger middleware that was previously lacking detailed explanations and examples.
 
@@ -2871,10 +2871,10 @@ Fixes #2665
 **After:** 200+ lines of comprehensive documentation with 8+ complete configuration examples
 
 The issue specifically requested "detailed explanations of configuration options and comprehensive examples for various use cases" - this PR delivers exactly that.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2819'
+        pr_url = 'https://github.com/labstack/echo/pull/2819'
     where id = _change_id;
 
-    -- Echo PR pair 60: #2815 creates the Change, #2812 supplies pull_request_body.
+    -- Echo PR pair 60: #2815 creates the Change, #2812 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2888,11 +2888,11 @@ when a nil handler is provided, so that misconfigurations can be detected earlie
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2812 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2815'
+        pr_body = 'Closed Echo pull request #2812 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2815'
     where id = _change_id;
 
-    -- Echo PR pair 61: #2810 creates the Change, #2807 supplies pull_request_body.
+    -- Echo PR pair 61: #2810 creates the Change, #2807 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2902,11 +2902,11 @@ when a nil handler is provided, so that misconfigurations can be detected earlie
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'update `golang.org/x/` libs to current versions',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2810'
+        pr_body = 'update `golang.org/x/` libs to current versions',
+        pr_url = 'https://github.com/labstack/echo/pull/2810'
     where id = _change_id;
 
-    -- Echo PR pair 62: #2798 creates the Change, #2797 supplies pull_request_body.
+    -- Echo PR pair 62: #2798 creates the Change, #2797 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -2919,7 +2919,7 @@ when a nil handler is provided, so that misconfigurations can be detected earlie
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Proposal
+        pr_body = '## Proposal
 ### 1. Error handling when reading request body:
 Currently, errors in io.ReadAll(c.Request().Body) are ignored. If the read fails, subsequent handlers may receive an incomplete body, causing unexpected behavior. I believe that the robustness of the middleware can be improved by interrupting processing when an error occurs and returning an error.
 
@@ -2967,10 +2967,10 @@ func (w *bodyDumpResponseWriter) Flush() {
 ```
 
 ### 3. Modification of tests to accommodate the above changes',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2798'
+        pr_url = 'https://github.com/labstack/echo/pull/2798'
     where id = _change_id;
 
-    -- Echo PR pair 63: #2795 creates the Change, #2793 supplies pull_request_body.
+    -- Echo PR pair 63: #2795 creates the Change, #2793 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3030,7 +3030,7 @@ These changes will further improve the robustness and maintainability of the mid
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Sorry, I accidentally deleted the local directory I forked from, so I created a new Pull Request!
+        pr_body = 'Sorry, I accidentally deleted the local directory I forked from, so I created a new Pull Request!
 
 ## Changes
 Changed the PANIC message to be more specific.
@@ -3042,10 +3042,10 @@ When Flush is not supported, it is clear which ResponseWriter is the culprit, sp
 ## Improved Developer Experience:
 More specific error information makes it easier for developers to understand the cause of problems.
 More specific error information helps developers understand the cause of problems.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2795'
+        pr_url = 'https://github.com/labstack/echo/pull/2795'
     where id = _change_id;
 
-    -- Echo PR pair 64: #2792 creates the Change, #2790 supplies pull_request_body.
+    -- Echo PR pair 64: #2792 creates the Change, #2790 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3062,7 +3062,7 @@ Improvements have been made to the WriteHeader and Flush methods of response.go.
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Changes
+        pr_body = '## Changes
 Changed the PANIC message to be more specific.
 
 ## Improved debugging efficiency.
@@ -3071,10 +3071,10 @@ When Flush is not supported, it is clear which ResponseWriter is the culprit, sp
 ## Improved Developer Experience:
 More specific error information makes it easier for developers to understand the cause of problems.
 More specific error information helps developers understand the cause of problems.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2792'
+        pr_url = 'https://github.com/labstack/echo/pull/2792'
     where id = _change_id;
 
-    -- Echo PR pair 65: #2787 creates the Change, #2783 supplies pull_request_body.
+    -- Echo PR pair 65: #2787 creates the Change, #2783 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3091,11 +3091,11 @@ When a proxy target URL contains User credentials, proxy middleware does not sen
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2783 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2787'
+        pr_body = 'Closed Echo pull request #2783 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2787'
     where id = _change_id;
 
-    -- Echo PR pair 66: #2782 creates the Change, #2781 supplies pull_request_body.
+    -- Echo PR pair 66: #2782 creates the Change, #2781 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3107,11 +3107,11 @@ See: https://github.com/labstack/echo/issues/2767'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2781 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2782'
+        pr_body = 'Closed Echo pull request #2781 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2782'
     where id = _change_id;
 
-    -- Echo PR pair 67: #2780 creates the Change, #2764 supplies pull_request_body.
+    -- Echo PR pair 67: #2780 creates the Change, #2764 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3125,15 +3125,15 @@ See: https://github.com/labstack/echo/issues/2767'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Added test explicit verification for [reuse CSRF token logic](https://github.com/labstack/echo/blob/3598f295f95f316bbeb252b7b332fe34e120815c/middleware/csrf.go#L136):
+        pr_body = 'Added test explicit verification for [reuse CSRF token logic](https://github.com/labstack/echo/blob/3598f295f95f316bbeb252b7b332fe34e120815c/middleware/csrf.go#L136):
 - Strictly validates token is reused when cookie exists
 - Confirms new token is generated when no cookie provided
 
 This reinforces detailed test for CSRF token behavior.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2780'
+        pr_url = 'https://github.com/labstack/echo/pull/2780'
     where id = _change_id;
 
-    -- Echo PR pair 68: #2762 creates the Change, #2760 supplies pull_request_body.
+    -- Echo PR pair 68: #2762 creates the Change, #2760 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3160,11 +3160,11 @@ https://pkg.go.dev/github.com/coder/websocket'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2760 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2762'
+        pr_body = 'Closed Echo pull request #2760 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2762'
     where id = _change_id;
 
-    -- Echo PR pair 69: #2755 creates the Change, #2753 supplies pull_request_body.
+    -- Echo PR pair 69: #2755 creates the Change, #2753 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3174,11 +3174,11 @@ https://pkg.go.dev/github.com/coder/websocket'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2753 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2755'
+        pr_body = 'Closed Echo pull request #2753 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2755'
     where id = _change_id;
 
-    -- Echo PR pair 70: #2752 creates the Change, #2750 supplies pull_request_body.
+    -- Echo PR pair 70: #2752 creates the Change, #2750 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3212,13 +3212,13 @@ All tests pass successfully, confirming the interface works as expected.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'relates to #23
+        pr_body = 'relates to #23
 
 - Replaces large switch statement to a map to lower CCN from 15 to 5 (67% reduction).',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2752'
+        pr_url = 'https://github.com/labstack/echo/pull/2752'
     where id = _change_id;
 
-    -- Echo PR pair 71: #2749 creates the Change, #2748 supplies pull_request_body.
+    -- Echo PR pair 71: #2749 creates the Change, #2748 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3228,11 +3228,11 @@ All tests pass successfully, confirming the interface works as expected.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Go 1.24 was released https://tip.golang.org/doc/go1.24',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2749'
+        pr_body = 'Go 1.24 was released https://tip.golang.org/doc/go1.24',
+        pr_url = 'https://github.com/labstack/echo/pull/2749'
     where id = _change_id;
 
-    -- Echo PR pair 72: #2744 creates the Change, #2735 supplies pull_request_body.
+    -- Echo PR pair 72: #2744 creates the Change, #2735 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3246,11 +3246,11 @@ All tests pass successfully, confirming the interface works as expected.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2735 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2744'
+        pr_body = 'Closed Echo pull request #2735 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2744'
     where id = _change_id;
 
-    -- Echo PR pair 73: #2733 creates the Change, #2732 supplies pull_request_body.
+    -- Echo PR pair 73: #2733 creates the Change, #2732 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3260,13 +3260,13 @@ All tests pass successfully, confirming the interface works as expected.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'reject requests with 401 for non-preflight request with not matching origin header
+        pr_body = 'reject requests with 401 for non-preflight request with not matching origin header
 
 fixes #2730',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2733'
+        pr_url = 'https://github.com/labstack/echo/pull/2733'
     where id = _change_id;
 
-    -- Echo PR pair 74: #2727 creates the Change, #2722 supplies pull_request_body.
+    -- Echo PR pair 74: #2727 creates the Change, #2722 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3276,11 +3276,11 @@ fixes #2730',
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Update golang.org/x/net dependency [GO-2024-3333](https://pkg.go.dev/vuln/GO-2024-3333)',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2727'
+        pr_body = 'Update golang.org/x/net dependency [GO-2024-3333](https://pkg.go.dev/vuln/GO-2024-3333)',
+        pr_url = 'https://github.com/labstack/echo/pull/2727'
     where id = _change_id;
 
-    -- Echo PR pair 75: #2721 creates the Change, #2719 supplies pull_request_body.
+    -- Echo PR pair 75: #2721 creates the Change, #2719 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3292,11 +3292,11 @@ I do not see us directly affected us but dependabot reports are going to make pe
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'https://github.com/labstack/echo/pull/2717 which fixes https://github.com/labstack/echo/pull/2710',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2721'
+        pr_body = 'https://github.com/labstack/echo/pull/2717 which fixes https://github.com/labstack/echo/pull/2710',
+        pr_url = 'https://github.com/labstack/echo/pull/2721'
     where id = _change_id;
 
-    -- Echo PR pair 76: #2717 creates the Change, #2715 supplies pull_request_body.
+    -- Echo PR pair 76: #2717 creates the Change, #2715 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3324,11 +3324,11 @@ Fixes #2716.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'echo.Static serves files but unsorted. To make them sorted, I''ve followed the same procedure as was done for [net/http](https://github.com/golang/go/issues/11879) (the fix they did is shown [here](https://github.com/golang/go/commit/25b00177af9f62f683ec68f1d697c2607d087ea6#diff-0661442fffb473f85dc4d4472172edbfb4b9b1837db3ab1a73e838bed3e6ab70R597)).',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2717'
+        pr_body = 'echo.Static serves files but unsorted. To make them sorted, I''ve followed the same procedure as was done for [net/http](https://github.com/golang/go/issues/11879) (the fix they did is shown [here](https://github.com/golang/go/commit/25b00177af9f62f683ec68f1d697c2607d087ea6#diff-0661442fffb473f85dc4d4472172edbfb4b9b1837db3ab1a73e838bed3e6ab70R597)).',
+        pr_url = 'https://github.com/labstack/echo/pull/2717'
     where id = _change_id;
 
-    -- Echo PR pair 77: #2713 creates the Change, #2712 supplies pull_request_body.
+    -- Echo PR pair 77: #2713 creates the Change, #2712 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3338,13 +3338,13 @@ Fixes #2716.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Next release `v4.13.0` will be Wednesday 2024.12.04.  This will upset probably quite a few people as we have breaking change. At least it is not on Friday :)
+        pr_body = 'Next release `v4.13.0` will be Wednesday 2024.12.04.  This will upset probably quite a few people as we have breaking change. At least it is not on Friday :)
 
 I will wait till December, after the Black Friday is over.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2713'
+        pr_url = 'https://github.com/labstack/echo/pull/2713'
     where id = _change_id;
 
-    -- Echo PR pair 78: #2711 creates the Change, #2710 supplies pull_request_body.
+    -- Echo PR pair 78: #2711 creates the Change, #2710 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3354,7 +3354,7 @@ I will wait till December, after the Black Friday is over.',
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'I am writing a unit test and using httptest.NewRequestWithContext to create an http request, it will return a new http request with content-length = -1 with body as http.NoBody
+        pr_body = 'I am writing a unit test and using httptest.NewRequestWithContext to create an http request, it will return a new http request with content-length = -1 with body as http.NoBody
 
 ```go
 httpReq := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
@@ -3424,10 +3424,10 @@ func NewRequestWithContext(ctx context.Context, method, url string, body io.Read
 			// period. People depend on it being 0 I
 			// guess. Maybe retry later. See Issue 18117.
 ```',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2711'
+        pr_url = 'https://github.com/labstack/echo/pull/2711'
     where id = _change_id;
 
-    -- Echo PR pair 79: #2709 creates the Change, #2705 supplies pull_request_body.
+    -- Echo PR pair 79: #2709 creates the Change, #2705 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3441,11 +3441,11 @@ Reported by https://github.com/labstack/echo/issues/2708'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Reported by https://github.com/labstack/echo/issues/2703',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2709'
+        pr_body = 'Reported by https://github.com/labstack/echo/issues/2703',
+        pr_url = 'https://github.com/labstack/echo/pull/2709'
     where id = _change_id;
 
-    -- Echo PR pair 80: #2702 creates the Change, #2701 supplies pull_request_body.
+    -- Echo PR pair 80: #2702 creates the Change, #2701 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3455,15 +3455,15 @@ Reported by https://github.com/labstack/echo/issues/2708'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'For #2699
+        pr_body = 'For #2699
 
 [Seems consensus is to remove this middleware](https://github.com/labstack/echo/issues/2699#issuecomment-2464675851) and rely on the middleware for  https://github.com/labstack/echo-jwt .
 
 This PR removes the dependencies and the middleware.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2702'
+        pr_url = 'https://github.com/labstack/echo/pull/2702'
     where id = _change_id;
 
-    -- Echo PR pair 81: #2700 creates the Change, #2698 supplies pull_request_body.
+    -- Echo PR pair 81: #2700 creates the Change, #2698 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3477,7 +3477,7 @@ Tests are passing locally with the new version.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## CHANGE
+        pr_body = '## CHANGE
 use method, `echo.AcqurireContext` which defined.
 
 ```diff
@@ -3497,10 +3497,10 @@ func (e *Echo) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 +	e.ReleaseContext(c)
 }
 ```',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2700'
+        pr_url = 'https://github.com/labstack/echo/pull/2700'
     where id = _change_id;
 
-    -- Echo PR pair 82: #2695 creates the Change, #2692 supplies pull_request_body.
+    -- Echo PR pair 82: #2695 creates the Change, #2692 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3513,7 +3513,7 @@ multiple auth headers is something that can happen in environments like corporat
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Summary
+        pr_body = '## Summary
 This PR formats `interface{}` -> `any`.
 `any` is an alias for `interface{}`
 ```go
@@ -3533,10 +3533,10 @@ https://github.com/golang/go/blob/67f131485541f362c8e932cd254982a8ad2cfc09/src/b
 ```sh
 go test ./... -cover
 ```',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2695'
+        pr_url = 'https://github.com/labstack/echo/pull/2695'
     where id = _change_id;
 
-    -- Echo PR pair 83: #2691 creates the Change, #2690 supplies pull_request_body.
+    -- Echo PR pair 83: #2691 creates the Change, #2690 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3546,13 +3546,13 @@ go test ./... -cover
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Add TemplateRenderer struct to ease creating renderers for `html/template` and `text/template` packages.
+        pr_body = 'Add TemplateRenderer struct to ease creating renderers for `html/template` and `text/template` packages.
 
 Different take on #2673 ideas',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2691'
+        pr_url = 'https://github.com/labstack/echo/pull/2691'
     where id = _change_id;
 
-    -- Echo PR pair 84: #2688 creates the Change, #2684 supplies pull_request_body.
+    -- Echo PR pair 84: #2688 creates the Change, #2684 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3579,7 +3579,7 @@ Am willing to refactor more tests if the table-driven format is desirable'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '**Summary**
+        pr_body = '**Summary**
 This PR introduces support for handling multipart requests that contain multiple files in the `bind` function. It extends the current functionality to allow seamless parsing and binding of multiple files uploaded through multipart form data.
 
 **Changes**
@@ -3593,10 +3593,10 @@ This PR introduces support for handling multipart requests that contain multiple
 
 **Additional Information**
 This update improves the flexibility of the `bind` function when dealing with file uploads, making it easier to handle bulk file operations in a single request.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2688'
+        pr_url = 'https://github.com/labstack/echo/pull/2688'
     where id = _change_id;
 
-    -- Echo PR pair 85: #2683 creates the Change, #2682 supplies pull_request_body.
+    -- Echo PR pair 85: #2683 creates the Change, #2682 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3608,11 +3608,11 @@ This update improves the flexibility of the `bind` function when dealing with fi
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'improve `MultipartForm` to make it easier to know how to use it',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2683'
+        pr_body = 'improve `MultipartForm` to make it easier to know how to use it',
+        pr_url = 'https://github.com/labstack/echo/pull/2683'
     where id = _change_id;
 
-    -- Echo PR pair 86: #2675 creates the Change, #2673 supplies pull_request_body.
+    -- Echo PR pair 86: #2675 creates the Change, #2673 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3624,11 +3624,11 @@ So we support Go 1.20, 1.21, 1.22, 1.23 from now.'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'I have added a pre-built templates function to render HTML easily.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2675'
+        pr_body = 'I have added a pre-built templates function to render HTML easily.',
+        pr_url = 'https://github.com/labstack/echo/pull/2675'
     where id = _change_id;
 
-    -- Echo PR pair 87: #2671 creates the Change, #2664 supplies pull_request_body.
+    -- Echo PR pair 87: #2671 creates the Change, #2664 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3647,12 +3647,12 @@ These updates should help both new and experienced Echo users better understand 
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'github.com/golang-jwt/jwt v3 version is not getting updates anymore, updated to v5
+        pr_body = 'github.com/golang-jwt/jwt v3 version is not getting updates anymore, updated to v5
 all tests pass',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2671'
+        pr_url = 'https://github.com/labstack/echo/pull/2671'
     where id = _change_id;
 
-    -- Echo PR pair 88: #2660 creates the Change, #2659 supplies pull_request_body.
+    -- Echo PR pair 88: #2660 creates the Change, #2659 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3691,7 +3691,7 @@ Now I can create a Custom Context that hold various extra details about the requ
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'I need to adjust the context when using ServeHTTP, this is not feasible with normal middleware.
+        pr_body = 'I need to adjust the context when using ServeHTTP, this is not feasible with normal middleware.
 
 Consider the following scenario.
 
@@ -3721,10 +3721,10 @@ I have an Amazon AWS API Gateway routing all traffic to one Lambada Function, wr
 On receiving the call, I create a http.Request and ResponseWriter and perform ServeHTTP on echo, to handle the call.
 
 Now I can create a Custom Context that hold various extra details about the request from API gateway.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2660'
+        pr_url = 'https://github.com/labstack/echo/pull/2660'
     where id = _change_id;
 
-    -- Echo PR pair 89: #2657 creates the Change, #2656 supplies pull_request_body.
+    -- Echo PR pair 89: #2657 creates the Change, #2656 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3796,7 +3796,7 @@ curl -ik  http://localhost:8080/v2/wildcard1/wildcard2/nowildcard/tags/list
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'This PR modifies the bindData function to preserve the pre v4.12.0 behavior for **map[string]interface{}** while supporting the new functionality:
+        pr_body = 'This PR modifies the bindData function to preserve the pre v4.12.0 behavior for **map[string]interface{}** while supporting the new functionality:
 
 - Single values are stored as strings
 - Multiple values are stored as []string
@@ -3809,10 +3809,10 @@ Testing:
 - Updated existing tests to reflect the new behavior
 
 Please review and let me know if any further changes are needed.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2657'
+        pr_url = 'https://github.com/labstack/echo/pull/2657'
     where id = _change_id;
 
-    -- Echo PR pair 90: #2655 creates the Change, #2654 supplies pull_request_body.
+    -- Echo PR pair 90: #2655 creates the Change, #2654 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3828,12 +3828,12 @@ The middleware also sets the `Accept` header field to the specified content type
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'just added http:// or https:// in front of the address when printed into the console to make it clickable.
+        pr_body = 'just added http:// or https:// in front of the address when printed into the console to make it clickable.
 probably better if i print it myself but this way its the last thing that''s printed in the console and it''s just easier',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2655'
+        pr_url = 'https://github.com/labstack/echo/pull/2655'
     where id = _change_id;
 
-    -- Echo PR pair 91: #2653 creates the Change, #2636 supplies pull_request_body.
+    -- Echo PR pair 91: #2653 creates the Change, #2636 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3843,7 +3843,7 @@ probably better if i print it myself but this way its the last thing that''s pri
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## Pull requset to resolve #2632
+        pr_body = '## Pull requset to resolve #2632
 
 Modified files with saved memory size:
 
@@ -3865,10 +3865,10 @@ Modified files with saved memory size:
 There was potential to further optimize the `Echo` struct in the `echo.go` file, but I chose to respect the readability of the codebase.
 
 @aldas a quick review from you would be awesome whenever you’re free. Thanks!',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2653'
+        pr_url = 'https://github.com/labstack/echo/pull/2653'
     where id = _change_id;
 
-    -- Echo PR pair 92: #2633 creates the Change, #2631 supplies pull_request_body.
+    -- Echo PR pair 92: #2633 creates the Change, #2631 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3878,7 +3878,7 @@ There was potential to further optimize the `Echo` struct in the `echo.go` file,
     ) into _change_id;
     update public.change
     set
-        pull_request_body = '## What
+        pr_body = '## What
 
 replaced `interface{}` to  `any`.
 
@@ -3892,10 +3892,10 @@ If echo follow golang support policy, the smarter using any than using interface
 Impact for an application run the environment that golang version  is < golang 1.18.
 The application run at environment is  under golang 1.18  will be failed to run, since type alias any is supported after golang 1.18.
 If echo support the application run at environment is under golang 1.18, this PR should be contained to v5.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2633'
+        pr_url = 'https://github.com/labstack/echo/pull/2633'
     where id = _change_id;
 
-    -- Echo PR pair 93: #2627 creates the Change, #2626 supplies pull_request_body.
+    -- Echo PR pair 93: #2627 creates the Change, #2626 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3912,13 +3912,13 @@ i have added some tiny improvements in struct binding:
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Changelog for v4.12.0
+        pr_body = 'Changelog for v4.12.0
 
 I''ll tag it as minor version as we have quite a lot of different things here this time',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2627'
+        pr_url = 'https://github.com/labstack/echo/pull/2627'
     where id = _change_id;
 
-    -- Echo PR pair 94: #2625 creates the Change, #2624 supplies pull_request_body.
+    -- Echo PR pair 94: #2625 creates the Change, #2624 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -3936,7 +3936,7 @@ I''ll tag it as minor version as we have quite a lot of different things here th
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Relates to #1172
+        pr_body = 'Relates to #1172
 
 Use `httputil.ReverseProxy` to proxy SSE requests as it has support for streaming responses. See:
 https://github.com/golang/go/blob/b107d95b9a66bfe7150fd4f2915e9bb876a6999a/src/net/http/httputil/reverseproxy.go#L601
@@ -4115,10 +4115,10 @@ in the same folder as app create index.html
 ```
 
 3. Open http://localhost:8080 in your browser. You should see Ping messages streamed, assuming proxy middleware handles SSE requests as raw proxy',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2625'
+        pr_url = 'https://github.com/labstack/echo/pull/2625'
     where id = _change_id;
 
-    -- Echo PR pair 95: #2618 creates the Change, #2616 supplies pull_request_body.
+    -- Echo PR pair 95: #2618 creates the Change, #2616 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -4132,7 +4132,7 @@ Currently, `Allow` method acts unexpected behavior that it denies the request ne
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'When route is registered with empty path it is normalized to `/`. Make sure that returned echo.Route structs reflect that behavior.  Internally router has changed `` (empty path) to `/` for a long time but Route that is returned did not reflect that. Is is problematic with `Reverse` function that uses empty string as "not found"
+        pr_body = 'When route is registered with empty path it is normalized to `/`. Make sure that returned echo.Route structs reflect that behavior.  Internally router has changed `` (empty path) to `/` for a long time but Route that is returned did not reflect that. Is is problematic with `Reverse` function that uses empty string as "not found"
 
 Related to #2615
 
@@ -4156,10 +4156,10 @@ func TestTest(t *testing.T) {
 ```
 
 whis this change `assert.Equal(t, "", existingEmpty)` shoulb be change to  `assert.Equal(t, "/", existingEmpty)`to pass the test',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2618'
+        pr_url = 'https://github.com/labstack/echo/pull/2618'
     where id = _change_id;
 
-    -- Echo PR pair 96: #2611 creates the Change, #2609 supplies pull_request_body.
+    -- Echo PR pair 96: #2611 creates the Change, #2609 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -4171,11 +4171,11 @@ Relates to https://github.com/labstack/echo/issues/1705'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'I have fixed the TargetHeader option of the RequestIDConfig, which was disabled.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2611'
+        pr_body = 'I have fixed the TargetHeader option of the RequestIDConfig, which was disabled.',
+        pr_url = 'https://github.com/labstack/echo/pull/2611'
     where id = _change_id;
 
-    -- Echo PR pair 97: #2608 creates the Change, #2607 supplies pull_request_body.
+    -- Echo PR pair 97: #2608 creates the Change, #2607 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -4187,7 +4187,7 @@ Related issue https://github.com/labstack/echo/issues/2381'
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Default binder can use `UnmarshalParams(params []string) error` interface to bind multiple input values at one go.
+        pr_body = 'Default binder can use `UnmarshalParams(params []string) error` interface to bind multiple input values at one go.
 
 Relates to https://github.com/labstack/echo/pull/2602
 
@@ -4230,10 +4230,10 @@ func TestBindUnmarshalParams(t *testing.T) {
 	})
 }
 ```',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2608'
+        pr_url = 'https://github.com/labstack/echo/pull/2608'
     where id = _change_id;
 
-    -- Echo PR pair 98: #2606 creates the Change, #2605 supplies pull_request_body.
+    -- Echo PR pair 98: #2606 creates the Change, #2605 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -4245,11 +4245,11 @@ I admit this is yak shaving but answering issues with good examples is probably 
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Upgrade deps',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2606'
+        pr_body = 'Upgrade deps',
+        pr_url = 'https://github.com/labstack/echo/pull/2606'
     where id = _change_id;
 
-    -- Echo PR pair 99: #2604 creates the Change, #2603 supplies pull_request_body.
+    -- Echo PR pair 99: #2604 creates the Change, #2603 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -4261,11 +4261,11 @@ NB: year is 2015 as this is @vishr first commit year in this repo. copypright nu
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'Closed Echo pull request #2603 did not include a body.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2604'
+        pr_body = 'Closed Echo pull request #2603 did not include a body.',
+        pr_url = 'https://github.com/labstack/echo/pull/2604'
     where id = _change_id;
 
-    -- Echo PR pair 100: #2602 creates the Change, #2596 supplies pull_request_body.
+    -- Echo PR pair 100: #2602 creates the Change, #2596 supplies pr_body.
     select public.fn_change_insert(
         _project_id,
         array['feature']::text[],
@@ -4283,32 +4283,10 @@ consistency between the builtin slices and the aliased slices for query paramete
     ) into _change_id;
     update public.change
     set
-        pull_request_body = 'I just fixed some typos.',
-        pull_request_url = 'https://github.com/labstack/echo/pull/2602'
+        pr_body = 'I just fixed some typos.',
+        pr_url = 'https://github.com/labstack/echo/pull/2602'
     where id = _change_id;
 
-end;
-$$;
-
-insert into public.test_case (change_id, scenario, done)
-select c.id, seed.scenario, seed.done
-from public.change c
-join (values
-    ('Respect q=0 in gzip content negotiation', 'Created from the first Echo pull request in a paired seed import.', true),
-    ('perf(json): pooled-buffer JSON deserialize', 'Pull request body was updated from the second Echo pull request in its pair.', true),
-    ('backport PR 3016 from v5 to v4', 'Pull request URL points to the first Echo pull request in its pair.', false),
-    ('Update CI action versions for v4 branch', 'Generated ref was allocated by fn_change_insert after demo1 last_ref was advanced.', false)
-) as seed(title, scenario, done)
-    on seed.title = c.title;
-
-do
-$$
-declare
-    _change record;
-begin
-    for _change in select id from public.change loop
-        call public.sp_change_test_case_recalculate(_change.id);
-    end loop;
 end;
 $$;
 
@@ -4364,8 +4342,8 @@ begin
 
         update public.change
         set
-            pull_request_body = _pr.body_body,
-            pull_request_url = format('https://github.com/labstack/echo/pull/%s', _pr.create_number),
+            pr_body = _pr.body_body,
+            pr_url = format('https://github.com/labstack/echo/pull/%s', _pr.create_number),
             modified = _pr.create_updated_at
         where id = _change_id;
     end loop;
@@ -4375,6 +4353,7 @@ $$;
 do
 $$
 declare
+    _change record;
     _epic record;
 begin
     -- Demo board distribution: 40% backlog, the remaining 60% spread across active phases.
@@ -4425,22 +4404,6 @@ begin
         on epics.rn = ((ranked.rn - floor(ranked.total_count * 0.30)::int - 1) % epics.total_count) + 1
     where c.id = ranked.id;
 
-    -- Fill demo completeness counters with random values while preserving done_tc <= total_tc.
-    with totals as (
-        select
-            c.id,
-            floor(random() * 17)::smallint as total_tc
-        from public.change c
-        join public.project p on p.id = c.project_id
-        where p.name = 'demo1'
-    )
-    update public.change c
-    set
-        total_tc = totals.total_tc,
-        done_tc = floor(random() * (totals.total_tc + 1))::smallint
-    from totals
-    where c.id = totals.id;
-
     -- Existing demo Changes predate the scraped PR timestamp batch, so keep them recent and varied.
     update public.change c
     set modified = now() - (random() * interval '10 days')
@@ -4448,6 +4411,26 @@ begin
     where p.id = c.project_id
       and p.name = 'demo1'
       and c.ref <= 300;
+
+    insert into public.test_case (change_id, scenario, done)
+    select c.id, seed.scenario, seed.done
+    from public.change c
+    join public.project p on p.id = c.project_id
+    cross join lateral (values
+        ('Review the Change body and confirm it states the user-visible behavior.', true),
+        ('Exercise the primary success path for this Change.', (c.ref % 3) <> 0),
+        ('Verify the documented failure or boundary path for this Change.', (c.ref % 4) = 0)
+    ) as seed(scenario, done)
+    where p.name = 'demo1';
+
+    for _change in
+        select c.id
+        from public.change c
+        join public.project p on p.id = c.project_id
+        where p.name = 'demo1'
+    loop
+        call public.sp_change_test_case_recalculate(_change.id);
+    end loop;
 
     for _epic in
         select e.id

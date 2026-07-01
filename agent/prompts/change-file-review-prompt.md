@@ -2,7 +2,7 @@
 
 Review the current branch against `origin/stage` as a 10x senior engineer.
 
-Change contract: `agent/changes/108-cli-improve-changes-and-agentic-workflow.md`
+Change contract: `agent/changes/109-db-alters-and-views.md`
 
 ## Review Steps
 
@@ -24,17 +24,33 @@ Change contract: `agent/changes/108-cli-improve-changes-and-agentic-workflow.md`
 
 ## Findings Format
 
-For each finding, include:
+Report findings only.
+
+Each finding must be exactly one grouped block of four bullet lines:
 
 - Severity: `P0`, `P1`, `P2`, or `P3`
-- File and line
-- Concrete impact
-- Specific fix direction
+- File and line: `path/to/file:line`
+- Concrete impact: describe the user-visible or system impact
+- Specific fix direction: describe the actionable fix
 
-Do not add blank lines between bullet points within a finding. Add one blank line between separate findings.
+Do not add blank lines between the four bullet lines inside a finding.
+
+Add exactly one blank line between separate findings.
 
 ## No Blocking Issues
 
 If there are no blocking issues, say exactly:
 
 `No blocking issues found.`
+
+Example:
+
+- Severity: `P1`
+- File and line: `backend/internal/change/repository.go:85`
+- Concrete impact: The endpoint returns detail-only fields in list responses, which violates the list contract and can cause clients to cache incomplete detail data.
+- Specific fix direction: Return the dedicated list DTO from repository, service, and API layers, and add an API test that asserts list response fields.
+
+- Severity: `P2`
+- File and line: `frontend/src/pages/index/changes/[id].vue:43`
+- Concrete impact: The UI ignores backend-provided epic names and can show stale linked epic display data.
+- Specific fix direction: Add `epic_name` to the frontend Change type and render it before falling back to local epic lookup.

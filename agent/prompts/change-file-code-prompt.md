@@ -1,26 +1,42 @@
-Implement the code described in Change file `agent/changes/108-cli-improve-changes-and-agentic-workflow.md` with senior-level discipline.
+Implement `agent/changes/109-db-alters-and-views.md` with senior-level discipline.
+
+The Change file is the implementation contract. The current branch documentation under `docs/` is the behavioral reference. Implement the smallest coherent code, test, seed, and database-file changes needed to satisfy that contract.
 
 Before coding:
-1. Read the full Change file and use it as the source of truth and implementation contract.
-2. Read all relevant docs under `docs/` and use the current branch documentation as the behavioral reference.
+1. Read the full Change file.
+2. Read every relevant doc under `docs/`, especially the docs listed in the Change file.
 3. Compare the Change file and docs for conflicts.
-4. Inspect the existing implementation patterns before choosing an approach.
+4. Inspect the existing backend, frontend, CLI, database, seed, and test patterns before choosing an approach.
+5. Inspect the current worktree and preserve unrelated local changes.
+
+Stop conditions:
+- If the Change file and docs conflict, stop before coding and report the exact file/section conflict.
+- If the required external behavior, API contract, persistence contract, field naming, endpoint naming, history behavior, seed behavior, or verification expectation is unclear, stop and ask one specific clarifying question.
+- If unrelated local changes block a safe implementation, stop and describe the conflict.
+- If database behavior blocks implementation, report the blocker instead of mutating live/local database state outside approved verification commands.
 
 Hard rules:
 - Do not broaden scope beyond the Change file and docs.
-- If the Change file and docs conflict, stop and report the exact conflict before coding.
-- If any implementation detail is unclear, do not guess or silently choose an approach. Stop and ask one specific clarifying question.
-- Preserve unrelated local changes.
 - Do not refactor unrelated code.
-- Follow existing project architecture, naming, and test patterns.
+- Do not revert or overwrite unrelated local changes.
+- Follow existing project architecture, naming, transaction, DTO, API, frontend, CLI, and test patterns.
+- Keep implementation scoped to the files required by this Change.
+- Do not create foreign keys.
+- Do not introduce broad locking, advisory locks, isolation escalation, or cross-path locking unless explicitly required by the Change.
+- Do not mutate any live/local database manually. Only use documented disposable test-database verification commands when needed.
+- Do not weaken, skip, delete, rebaseline, or bypass tests to make verification pass.
 
-Implementation requirements:
-- Implement only the behavior required by the Change file and docs.
-- Add or update focused tests for every changed behavior.
-- Keep user-facing behavior observable and aligned with the documented contract.
-- Avoid new abstractions unless they clearly reduce complexity or match an existing pattern.
+Verification:
+- First run focused tests for touched behavior.
+- Then run every required verification command from the Change file for each touched area.
+- If a command fails, report:
+    - exact command
+    - failing test or error
+    - whether local uncommitted changes may have influenced it
+    - whether it appears to be a product bug, test bug, environment issue, or unclear contract dependency
 
-After implementation:
-1. Run focused tests for touched behavior.
-2. Run the required verification commands for every touched area.
-3. Report what changed, which files were touched, and which verification commands passed or failed.
+Final report:
+- Summarize the implemented behavior.
+- List the main files changed.
+- List verification commands run and their pass/fail status.
+- Call out any unresolved follow-ups or risks. 

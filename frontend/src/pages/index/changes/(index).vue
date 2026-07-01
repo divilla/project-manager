@@ -43,7 +43,7 @@ import { useRouter } from 'vue-router';
 import { useProjectsPage } from '@/features/projects/composables/useProjectsPage';
 import ChangeBoard from '@/features/changes/components/ChangeBoard.vue';
 import ChangeSearchForm from '@/features/changes/components/ChangeSearchForm.vue';
-import type { Change } from '@/features/changes/model/change.types';
+import type { ChangeListItem } from '@/features/changes/model/change.types';
 import DeleteConfirmationDialog from '@/shared/ui/DeleteConfirmationDialog.vue';
 
 const router = useRouter();
@@ -67,7 +67,7 @@ const {
   confirm,
 } = useProjectsPage();
 
-function openChangePage(change: Change) {
+function openChangePage(change: ChangeListItem) {
   void router.push(`/changes/${change.id}`);
 }
 

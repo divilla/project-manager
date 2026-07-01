@@ -506,6 +506,8 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 			return m.beginDetailTextEditor(detailEditRequirement)
 		case "Pull Request":
 			return m.beginDetailTextEditor(detailEditPullRequest)
+		case "PR URL":
+			return m.beginDetailTextEditor(detailEditPRUrl)
 		}
 		m.status = "selected " + row.Label
 	case EpicsListState:
@@ -723,9 +725,11 @@ func (m Model) beginDetailTextEditor(field detailEditField) (tea.Model, tea.Cmd)
 	m.detailEditField = field
 	switch field {
 	case detailEditRequirement:
-		m = m.setPromptValue(m.changeList.Detail.RequirementBody)
+		m = m.setPromptValue(m.changeList.Detail.Body)
 	case detailEditPullRequest:
-		m = m.setPromptValue(m.changeList.Detail.PullRequestBody)
+		m = m.setPromptValue(m.changeList.Detail.PRBody)
+	case detailEditPRUrl:
+		m = m.setPromptValue(m.changeList.Detail.PRUrl)
 	default:
 		m.err = "unsupported editable detail text field"
 		return m, nil

@@ -4,7 +4,9 @@
       <q-btn flat round icon="arrow_back" aria-label="Back to change" @click="goBack" />
       <div>
         <div class="text-caption text-grey-7">Change</div>
-        <div v-if="loadedChange" class="text-subtitle1">#{{ loadedChange.id }} {{ loadedChange.title }}</div>
+        <div v-if="loadedChange" class="text-subtitle1">
+          #{{ loadedChange.id }} {{ loadedChange.title }}
+        </div>
         <div v-else class="text-subtitle1">Loading</div>
       </div>
     </div>
@@ -58,17 +60,36 @@
         :disable="loading || saving"
       />
 
-      <q-toggle v-model="closed" label="Closed" :disable="loading || saving" />
+      <q-toggle v-model="open" label="Open" :disable="loading || saving" />
 
       <q-input
-        v-model="requirementBody"
+        v-model="body"
         outlined
         type="textarea"
-        label="Requirement body"
-        class="change-requirement-body-input"
+        label="Body"
+        class="change-body-input"
         input-style="min-height: 600px"
         :disable="loading || saving"
       />
+
+      <q-input
+        v-model="prBody"
+        outlined
+        type="textarea"
+        label="PR body"
+        class="change-body-input"
+        input-style="min-height: 240px"
+        :disable="loading || saving"
+      />
+
+      <q-input
+        v-model="prUrl"
+        outlined
+        label="PR URL"
+        :disable="loading || saving"
+      />
+
+      <q-toggle v-model="agentEdit" label="Agent edit" :disable="loading || saving" />
 
       <div class="change-create-actions">
         <q-btn flat icon="close" label="Cancel" :disable="saving" @click="goBack" />
@@ -84,11 +105,15 @@ import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
   getChange,
-  getChangeReferences,
-  updateChangeClosed,
+  getChangePhases,
+  getChangeTypes,
+  updateChangeAgentEdit,
   updateChangeEpic,
+  updateChangeOpen,
   updateChangePhase,
-  updateChangeRequirementBody,
+  updateChangeBody,
+  updateChangePRBody,
+  updateChangePRUrl,
   updateChangeTitle,
   updateChangeTypes,
 } from '@/features/changes/api/changeApi';
@@ -102,11 +127,14 @@ const { epics } = storeToRefs(changeCache);
 
 const loadedChange = ref<Change | null>(null);
 const title = ref('');
-const requirementBody = ref('');
+const body = ref('');
+const prBody = ref('');
+const prUrl = ref('');
 const changeTypes = ref<string[]>([]);
 const changePhase = ref('');
 const epicId = ref<number | null>(null);
-const closed = ref(false);
+const open = ref(true);
+const agentEdit = ref(false);
 const typeOptions = ref<SelectOption[]>([]);
 const phaseOptions = ref<SelectOption[]>([]);
 const loading = ref(false);
@@ -138,16 +166,23 @@ async function loadEditContext() {
   error.value = '';
 
   try {
-    const [references, detail] = await Promise.all([getChangeReferences(), getChange(changeId.value)]);
-    typeOptions.value = references.types.map((type) => ({ label: type.slug, value: type.slug }));
-    phaseOptions.value = references.phases.map((phase) => ({ label: phase.slug, value: phase.slug }));
+    const [phases, types, detail] = await Promise.all([
+      getChangePhases(),
+      getChangeTypes(),
+      getChange(changeId.value),
+    ]);
+    typeOptions.value = types.map((type) => ({ label: type.slug, value: type.slug }));
+    phaseOptions.value = phases.map((phase) => ({ label: phase.slug, value: phase.slug }));
     loadedChange.value = detail.change;
     title.value = detail.change.title;
-    requirementBody.value = detail.change.requirement_body;
+    body.value = detail.change.body;
+    prBody.value = detail.change.pr_body;
+    prUrl.value = detail.change.pr_url;
     changeTypes.value = [...detail.change.change_types];
     changePhase.value = detail.change.change_phase;
     epicId.value = detail.change.epic_id || null;
-    closed.value = detail.change.closed;
+    open.value = detail.change.open;
+    agentEdit.value = detail.change.agent_edit;
     await changeCache.loadProjectChanges(detail.change.project_id);
     changeCache.upsertChange(detail.change);
   } catch (err) {
@@ -172,8 +207,14 @@ async function saveChangeFromPage() {
     if (changeTitle !== change.title) {
       change = await updateChangeTitle(change.id, changeTitle);
     }
-    if (requirementBody.value.trim() !== change.requirement_body) {
-      change = await updateChangeRequirementBody(change.id, requirementBody.value.trim());
+    if (body.value.trim() !== change.body) {
+      change = await updateChangeBody(change.id, body.value.trim());
+    }
+    if (prBody.value.trim() !== change.pr_body) {
+      change = await updateChangePRBody(change.id, prBody.value.trim());
+    }
+    if (prUrl.value.trim() !== change.pr_url) {
+      change = await updateChangePRUrl(change.id, prUrl.value.trim());
     }
     if (!sameStringList(changeTypes.value, change.change_types)) {
       change = await updateChangeTypes(change.id, changeTypes.value);
@@ -184,8 +225,11 @@ async function saveChangeFromPage() {
     if ((epicId.value || null) !== (change.epic_id || null)) {
       change = await updateChangeEpic(change.id, epicId.value || null);
     }
-    if (closed.value !== change.closed) {
-      change = await updateChangeClosed(change.id, closed.value);
+    if (open.value !== change.open) {
+      change = await updateChangeOpen(change.id, open.value);
+    }
+    if (agentEdit.value !== change.agent_edit) {
+      change = await updateChangeAgentEdit(change.id, agentEdit.value);
     }
 
     await changeCache.loadProjectChanges(change.project_id);

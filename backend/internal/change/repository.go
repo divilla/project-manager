@@ -20,41 +20,60 @@ type (
 
 	// Repository defines Repository values.
 	Repository interface {
-		References(ctx context.Context) (dto.ChangeReferences, error)
-		List(ctx context.Context, projectID int) ([]dto.Change, error)
+		List(ctx context.Context, projectID int) ([]dto.ChangeListItem, error)
 		Get(ctx context.Context, id int) (dto.ChangeDetail, error)
 		Bodies(ctx context.Context, ids []int) ([]dto.Change, error)
 		Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error)
 		UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error)
 		UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error)
-		UpdateRequirementBody(ctx context.Context, req dto.ChangeUpdateRequirementBodyRequest) (dto.Change, error)
-		UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error)
-		UpdatePullRequestURL(ctx context.Context, req dto.ChangeUpdatePullRequestURLRequest) (dto.Change, error)
+		UpdateBody(ctx context.Context, req dto.ChangeUpdateBodyRequest) (dto.Change, error)
+		UpdatePRBody(ctx context.Context, req dto.ChangeUpdatePRBodyRequest) (dto.Change, error)
+		UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error)
+		UpdateAgentEdit(ctx context.Context, req dto.ChangeUpdateAgentEditRequest) (dto.Change, error)
 		UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error)
 		UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error)
-		UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedRequest) (dto.Change, error)
+		UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) (dto.Change, error)
 		Delete(ctx context.Context, req dto.ChangeIDRequest) error
 	}
 )
 
-const changeColumns = `
+const changeDetailColumns = `
 	id,
 	ref,
-	slug,
 	version,
+	slug,
 	project_id,
-	epic_id,
 	change_phase,
 	change_types,
+	epic_id,
+	epic_name,
 	title,
-	coalesce(requirement_body, ''),
-	coalesce(pull_request_body, ''),
-	coalesce(pull_request_url, ''),
-	closed,
+	coalesce(body, ''),
+	coalesce(pr_body, ''),
+	coalesce(pr_url, ''),
+	agent_edit,
+	open,
 	done_tc,
 	total_tc,
 	completed,
 	created,
+	modified`
+
+const changeListColumns = `
+	id,
+	ref,
+	slug,
+	project_id,
+	change_phase,
+	change_types,
+	epic_id,
+	epic_name,
+	title,
+	agent_edit,
+	open,
+	done_tc,
+	total_tc,
+	completed,
 	modified`
 
 // NewRepo initializes or executes NewRepo behavior.
@@ -62,35 +81,22 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 	return &Repo{pool: pool}
 }
 
-// References executes References behavior.
-func (r *Repo) References(ctx context.Context) (dto.ChangeReferences, error) {
-	phases, err := r.referenceOptions(ctx, "change_phase")
-	if err != nil {
-		return dto.ChangeReferences{}, err
-	}
-	types, err := r.referenceOptions(ctx, "change_type")
-	if err != nil {
-		return dto.ChangeReferences{}, err
-	}
-	return dto.ChangeReferences{Phases: phases, Types: types}, nil
-}
-
 // List executes List behavior.
-func (r *Repo) List(ctx context.Context, projectID int) ([]dto.Change, error) {
+func (r *Repo) List(ctx context.Context, projectID int) ([]dto.ChangeListItem, error) {
 	rows, err := r.pool.Query(ctx, `
-		select `+changeColumns+`
-		from public.change
+		select `+changeListColumns+`
+		from public.vw_change_list
 		where project_id = $1
-		order by modified desc, id desc
+		order by modified desc, id
 	`, projectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	changes := make([]dto.Change, 0)
+	changes := make([]dto.ChangeListItem, 0)
 	for rows.Next() {
-		change, err := scanChange(rows)
+		change, err := scanChangeList(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -115,7 +121,7 @@ func (r *Repo) Get(ctx context.Context, id int) (dto.ChangeDetail, error) {
 // Bodies executes Bodies behavior.
 func (r *Repo) Bodies(ctx context.Context, ids []int) ([]dto.Change, error) {
 	rows, err := r.pool.Query(ctx, `
-		select requested.id::integer, coalesce(c.requirement_body, ''), coalesce(c.pull_request_body, '')
+		select requested.id::integer, coalesce(c.body, ''), coalesce(c.pr_body, '')
 		from unnest($1::bigint[]) with ordinality as requested(id, ord)
 		join public.change c on c.id = requested.id
 		order by requested.ord
@@ -128,7 +134,7 @@ func (r *Repo) Bodies(ctx context.Context, ids []int) ([]dto.Change, error) {
 	changes := make([]dto.Change, 0, len(ids))
 	for rows.Next() {
 		var change dto.Change
-		if err := rows.Scan(&change.ID, &change.RequirementBody, &change.PullRequestBody); err != nil {
+		if err := rows.Scan(&change.ID, &change.Body, &change.PRBody); err != nil {
 			return nil, err
 		}
 		changes = append(changes, change)
@@ -159,7 +165,7 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	var id int
 	err = tx.QueryRow(ctx, `
 		select public.fn_change_insert($1, $2, $3, $4, nullif($5, ''))
-	`, req.ProjectID, req.ChangeTypes, req.EpicID, req.Title, req.RequirementBody).Scan(&id)
+	`, req.ProjectID, req.ChangeTypes, req.EpicID, req.Title, req.Body).Scan(&id)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -196,43 +202,57 @@ func (r *Repo) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest
 	`, req.Title)
 }
 
-// UpdateRequirementBody executes UpdateRequirementBody behavior.
-func (r *Repo) UpdateRequirementBody(ctx context.Context, req dto.ChangeUpdateRequirementBodyRequest) (dto.Change, error) {
+// UpdateBody executes UpdateBody behavior.
+func (r *Repo) UpdateBody(ctx context.Context, req dto.ChangeUpdateBodyRequest) (dto.Change, error) {
 	return r.updateField(ctx, req.ID, func(current state) bool {
-		return current.RequirementBody == req.RequirementBody
+		return current.Body == req.Body
 	}, `
 		update public.change
-		set requirement_body = nullif($2, ''),
+		set body = nullif($2, ''),
 			version = version + 1,
 			modified = now()
 		where id = $1
-	`, req.RequirementBody)
+	`, req.Body)
 }
 
-// UpdatePullRequestBody executes UpdatePullRequestBody behavior.
-func (r *Repo) UpdatePullRequestBody(ctx context.Context, req dto.ChangeUpdatePullRequestBodyRequest) (dto.Change, error) {
+// UpdatePRBody executes UpdatePRBody behavior.
+func (r *Repo) UpdatePRBody(ctx context.Context, req dto.ChangeUpdatePRBodyRequest) (dto.Change, error) {
 	return r.updateField(ctx, req.ID, func(current state) bool {
-		return current.PullRequestBody == req.PullRequestBody
+		return current.PRBody == req.PRBody
 	}, `
 		update public.change
-		set pull_request_body = nullif($2, ''),
+		set pr_body = nullif($2, ''),
 			version = version + 1,
 			modified = now()
 		where id = $1
-	`, req.PullRequestBody)
+	`, req.PRBody)
 }
 
-// UpdatePullRequestURL executes UpdatePullRequestURL behavior.
-func (r *Repo) UpdatePullRequestURL(ctx context.Context, req dto.ChangeUpdatePullRequestURLRequest) (dto.Change, error) {
+// UpdatePRUrl executes UpdatePRUrl behavior.
+func (r *Repo) UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error) {
 	return r.updateField(ctx, req.ID, func(current state) bool {
-		return current.PullRequestURL == req.PullRequestURL
+		return current.PRUrl == req.PRUrl
 	}, `
 		update public.change
-		set pull_request_url = nullif($2, ''),
+		set pr_url = nullif($2, ''),
 			version = version + 1,
 			modified = now()
 		where id = $1
-	`, req.PullRequestURL)
+	`, req.PRUrl)
+}
+
+// UpdateAgentEdit executes UpdateAgentEdit behavior.
+func (r *Repo) UpdateAgentEdit(ctx context.Context, req dto.ChangeUpdateAgentEditRequest) (dto.Change, error) {
+	agentEdit := *req.AgentEdit
+	return r.updateField(ctx, req.ID, func(current state) bool {
+		return current.AgentEdit == agentEdit
+	}, `
+		update public.change
+		set agent_edit = $2,
+			version = version + 1,
+			modified = now()
+		where id = $1
+	`, agentEdit)
 }
 
 // UpdateEpic executes UpdateEpic behavior.
@@ -314,8 +334,9 @@ func (r *Repo) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest
 	return finishMutation(ctx, tx, req.ID)
 }
 
-// UpdateClosed executes UpdateClosed behavior.
-func (r *Repo) UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedRequest) (dto.Change, error) {
+// UpdateOpen executes UpdateOpen behavior.
+func (r *Repo) UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) (dto.Change, error) {
+	open := *req.Open
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return dto.Change{}, err
@@ -326,7 +347,7 @@ func (r *Repo) UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedReque
 	if err != nil {
 		return dto.Change{}, err
 	}
-	if current.Closed == req.Closed {
+	if current.Open == open {
 		return finishMutation(ctx, tx, req.ID)
 	}
 	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, false)", req.ID); err != nil {
@@ -334,11 +355,11 @@ func (r *Repo) UpdateClosed(ctx context.Context, req dto.ChangeUpdateClosedReque
 	}
 	tag, err := tx.Exec(ctx, `
 		update public.change
-		set closed = $2,
+		set open = $2,
 			version = version + 1,
 			modified = now()
 		where id = $1
-	`, req.ID, req.Closed)
+	`, req.ID, open)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -386,23 +407,6 @@ func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 		return err
 	}
 	return tx.Commit(ctx)
-}
-
-func (r *Repo) referenceOptions(ctx context.Context, table string) ([]dto.ChangePhase, error) {
-	rows, err := r.pool.Query(ctx, "select slug, priority from public."+table+" order by priority, slug")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	options := make([]dto.ChangePhase, 0)
-	for rows.Next() {
-		var option dto.ChangePhase
-		if err := rows.Scan(&option.Slug, &option.Priority); err != nil {
-			return nil, err
-		}
-		options = append(options, option)
-	}
-	return options, rows.Err()
 }
 
 func (r *Repo) ensureReference(ctx context.Context, table, slug string) error {
@@ -454,7 +458,7 @@ func ensureEpic(ctx context.Context, q queryer, projectID, id int) error {
 }
 
 func getChange(ctx context.Context, q queryer, id int) (dto.Change, error) {
-	change, err := scanChange(q.QueryRow(ctx, "select "+changeColumns+" from public.change where id = $1", id))
+	change, err := scanChange(q.QueryRow(ctx, "select "+changeDetailColumns+" from public.vw_change_details where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Change{}, ErrNotFound
 	}
@@ -486,10 +490,12 @@ func listTestCases(ctx context.Context, q queryer, changeID int) ([]dto.TestCase
 func scanChange(row pgx.Row) (dto.Change, error) {
 	var change dto.Change
 	var epicID pgtype.Int8
+	var epicName pgtype.Text
 	err := row.Scan(
-		&change.ID, &change.Ref, &change.Slug, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
-		&change.ChangeTypes, &change.Title, &change.RequirementBody, &change.PullRequestBody,
-		&change.PullRequestURL, &change.Closed, &change.DoneTC,
+		&change.ID, &change.Ref, &change.Version, &change.Slug, &change.ProjectID,
+		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
+		&change.Body, &change.PRBody, &change.PRUrl, &change.AgentEdit,
+		&change.Open, &change.DoneTC,
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
@@ -499,29 +505,57 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 		value := int(epicID.Int64)
 		change.EpicID = &value
 	}
+	if epicName.Valid {
+		value := epicName.String
+		change.EpicName = &value
+	}
+	return change, nil
+}
+
+func scanChangeList(row pgx.Row) (dto.ChangeListItem, error) {
+	var change dto.ChangeListItem
+	var epicID pgtype.Int8
+	var epicName pgtype.Text
+	err := row.Scan(
+		&change.ID, &change.Ref, &change.Slug, &change.ProjectID, &change.ChangePhase,
+		&change.ChangeTypes, &epicID, &epicName, &change.Title, &change.AgentEdit,
+		&change.Open, &change.DoneTC, &change.TotalTC, &change.Completed, &change.Modified,
+	)
+	if err != nil {
+		return dto.ChangeListItem{}, err
+	}
+	if epicID.Valid {
+		value := int(epicID.Int64)
+		change.EpicID = &value
+	}
+	if epicName.Valid {
+		value := epicName.String
+		change.EpicName = &value
+	}
 	return change, nil
 }
 
 type state struct {
-	ProjectID       int
-	EpicID          *int
-	ChangePhase     string
-	ChangeTypes     []string
-	Title           string
-	RequirementBody string
-	PullRequestBody string
-	PullRequestURL  string
-	Closed          bool
+	ProjectID   int
+	EpicID      *int
+	ChangePhase string
+	ChangeTypes []string
+	Title       string
+	Body        string
+	PRBody      string
+	PRUrl       string
+	AgentEdit   bool
+	Open        bool
 }
 
 func getState(ctx context.Context, tx pgx.Tx, id int) (state, error) {
 	var item state
 	var epicID pgtype.Int8
 	err := tx.QueryRow(ctx, `
-		select project_id, epic_id, change_phase, change_types, title, coalesce(requirement_body, ''), coalesce(pull_request_body, ''), coalesce(pull_request_url, ''), closed
+		select project_id, epic_id, change_phase, change_types, title, coalesce(body, ''), coalesce(pr_body, ''), coalesce(pr_url, ''), agent_edit, open
 		from public.change
 		where id = $1
-	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.RequirementBody, &item.PullRequestBody, &item.PullRequestURL, &item.Closed)
+	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Body, &item.PRBody, &item.PRUrl, &item.AgentEdit, &item.Open)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return state{}, ErrNotFound
 	}

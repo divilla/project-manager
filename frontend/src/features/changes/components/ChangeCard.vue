@@ -25,16 +25,16 @@
 </template>
 
 <script setup lang="ts">
-import type { SelectOption, Change } from '../model/change.types';
+import type { SelectOption, ChangeListItem } from '../model/change.types';
 
 defineProps<{
-  change: Change;
+  change: ChangeListItem;
   phaseOptions: SelectOption[];
 }>();
 
 defineEmits<{
-  open: [change: Change];
-  move: [change: Change, phase: string];
-  delete: [change: Change];
+  open: [change: ChangeListItem];
+  move: [change: ChangeListItem, phase: string];
+  delete: [change: ChangeListItem];
 }>();
 </script>

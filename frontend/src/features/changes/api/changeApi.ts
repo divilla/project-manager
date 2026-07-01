@@ -3,16 +3,22 @@ import type {
   Change,
   ChangeCreateInput,
   ChangeDetail,
-  ChangeReferences,
+  ChangeListItem,
+  ChangePhase,
   ChangeRenderedBodiesResponse,
+  ChangeType,
 } from '../model/change.types';
 
-export function getChangeReferences(): Promise<ChangeReferences> {
-  return post<ChangeReferences>('/api/v1/change/reference');
+export function getChangePhases(): Promise<ChangePhase[]> {
+  return post<ChangePhase[]>('/api/v1/options/change-phases-list');
 }
 
-export function listChanges(projectId: number): Promise<Change[]> {
-  return post<Change[]>('/api/v1/change/list', { project_id: projectId });
+export function getChangeTypes(): Promise<ChangeType[]> {
+  return post<ChangeType[]>('/api/v1/options/change-types-list');
+}
+
+export function listChanges(projectId: number): Promise<ChangeListItem[]> {
+  return post<ChangeListItem[]>('/api/v1/change/list', { project_id: projectId });
 }
 
 export function getChange(id: number): Promise<ChangeDetail> {
@@ -35,28 +41,32 @@ export function updateChangeTitle(id: number, title: string): Promise<Change> {
   return post<Change>('/api/v1/change/update-title', { id, title });
 }
 
-export function updateChangeRequirementBody(id: number, requirementBody: string): Promise<Change> {
-  return post<Change>('/api/v1/change/update-requirement-body', { id, requirement_body: requirementBody });
+export function updateChangeBody(id: number, body: string): Promise<Change> {
+  return post<Change>('/api/v1/change/update-body', { id, body: body });
 }
 
 export function updateChangeTypes(id: number, changeTypes: string[]): Promise<Change> {
   return post<Change>('/api/v1/change/update-change-types', { id, change_types: changeTypes });
 }
 
-export function updateChangePullRequestBody(id: number, pullRequestBody: string): Promise<Change> {
-  return post<Change>('/api/v1/change/update-pull-request-body', { id, pull_request_body: pullRequestBody });
+export function updateChangePRBody(id: number, prBody: string): Promise<Change> {
+  return post<Change>('/api/v1/change/update-pr-body', { id, pr_body: prBody });
 }
 
-export function updateChangePullRequestURL(id: number, pullRequestURL: string): Promise<Change> {
-  return post<Change>('/api/v1/change/update-pull-request-url', { id, pull_request_url: pullRequestURL });
+export function updateChangePRUrl(id: number, prUrl: string): Promise<Change> {
+  return post<Change>('/api/v1/change/update-pr-url', { id, pr_url: prUrl });
+}
+
+export function updateChangeAgentEdit(id: number, agentEdit: boolean): Promise<Change> {
+  return post<Change>('/api/v1/change/update-agent-edit', { id, agent_edit: agentEdit });
 }
 
 export function updateChangePhase(id: number, changePhase: string): Promise<Change> {
   return post<Change>('/api/v1/change/update-phase', { id, change_phase: changePhase });
 }
 
-export function updateChangeClosed(id: number, closed: boolean): Promise<Change> {
-  return post<Change>('/api/v1/change/update-closed', { id, closed });
+export function updateChangeOpen(id: number, open: boolean): Promise<Change> {
+  return post<Change>('/api/v1/change/update-open', { id, open });
 }
 
 export function deleteChange(id: number): Promise<void> {

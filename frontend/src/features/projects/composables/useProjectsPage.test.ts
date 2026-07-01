@@ -11,12 +11,17 @@ import { useProjectSelectionStore } from '@/features/projects/model/projectSelec
 import type { Project } from '@/features/projects/model/project.types';
 import {
   deleteChange,
-  getChangeReferences,
+  getChangePhases,
+  getChangeTypes,
   listChanges,
   updateChangePhase,
 } from '@/features/changes/api/changeApi';
 import { listEpics } from '@/features/epics/api/epicApi';
-import { changeFixture, changeReferencesFixture } from '@/features/changes/model/change.fixtures';
+import {
+  changeFixture,
+  changePhasesFixture,
+  changeTypesFixture,
+} from '@/features/changes/model/change.fixtures';
 import { useProjectsPage } from './useProjectsPage';
 
 vi.mock('@/features/projects/api/projectApi', () => ({
@@ -28,7 +33,8 @@ vi.mock('@/features/projects/api/projectApi', () => ({
 
 vi.mock('@/features/changes/api/changeApi', () => ({
   deleteChange: vi.fn(),
-  getChangeReferences: vi.fn(),
+  getChangePhases: vi.fn(),
+  getChangeTypes: vi.fn(),
   listChanges: vi.fn(),
   updateChangePhase: vi.fn(),
 }));
@@ -64,7 +70,8 @@ describe('useProjectsPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     localStorage.clear();
-    vi.mocked(getChangeReferences).mockResolvedValue(changeReferencesFixture());
+    vi.mocked(getChangePhases).mockResolvedValue(changePhasesFixture());
+    vi.mocked(getChangeTypes).mockResolvedValue(changeTypesFixture());
     vi.mocked(listProjects).mockResolvedValue([
       projectFixture({ id: 1, name: 'Project', change_count: 1 }),
     ]);
@@ -88,7 +95,7 @@ describe('useProjectsPage', () => {
     localStorage.clear();
   });
 
-  it('loads references, projects, empty search fields, and changes on mount', async () => {
+  it('loads phase and type options, projects, empty search fields, and changes on mount', async () => {
     const { state } = mountProjectsPage();
     await flushPromises();
 
@@ -104,9 +111,24 @@ describe('useProjectsPage', () => {
 
   it('filters visible change board results by search fields', async () => {
     vi.mocked(listChanges).mockResolvedValueOnce([
-      changeFixture({ id: 10, title: 'Build change search', change_types: ['feature'], change_phase: 'backlog' }),
-      changeFixture({ id: 11, title: 'Review filters', change_types: ['fix'], change_phase: 'review' }),
-      changeFixture({ id: 12, title: 'Build refresh', change_types: ['feature'], change_phase: 'review' }),
+      changeFixture({
+        id: 10,
+        title: 'Build change search',
+        change_types: ['feature'],
+        change_phase: 'backlog',
+      }),
+      changeFixture({
+        id: 11,
+        title: 'Review filters',
+        change_types: ['fix'],
+        change_phase: 'review',
+      }),
+      changeFixture({
+        id: 12,
+        title: 'Build refresh',
+        change_types: ['feature'],
+        change_phase: 'review',
+      }),
     ]);
     const { state } = mountProjectsPage();
     await flushPromises();
@@ -117,7 +139,12 @@ describe('useProjectsPage', () => {
 
     expect(state.changesByPhase.value.backlog).toEqual([]);
     expect(state.changesByPhase.value.review).toEqual([
-      changeFixture({ id: 12, title: 'Build refresh', change_types: ['feature'], change_phase: 'review' }),
+      changeFixture({
+        id: 12,
+        title: 'Build refresh',
+        change_types: ['feature'],
+        change_phase: 'review',
+      }),
     ]);
   });
 
@@ -167,7 +194,8 @@ describe('useProjectsPage', () => {
       projectFixture({ id: 1, name: 'Project', change_count: 1 }),
     ]);
     expect(state.currentProjectId.value).toBe(1);
-    expect(getChangeReferences).not.toHaveBeenCalled();
+    expect(getChangePhases).not.toHaveBeenCalled();
+    expect(getChangeTypes).not.toHaveBeenCalled();
     expect(listChanges).not.toHaveBeenCalled();
 
     await state.selectProject(1);
@@ -248,7 +276,9 @@ describe('useProjectsPage', () => {
     const { state } = mountProjectsPage();
     await flushPromises();
     vi.mocked(listChanges).mockClear();
-    vi.mocked(listChanges).mockResolvedValueOnce([changeFixture({ id: 10, change_phase: 'review' })]);
+    vi.mocked(listChanges).mockResolvedValueOnce([
+      changeFixture({ id: 10, change_phase: 'review' }),
+    ]);
 
     await state.moveChange(changeFixture({ id: 10 }), 'review');
 

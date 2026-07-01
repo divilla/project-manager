@@ -150,7 +150,17 @@ describe('ChangeDetailPage', () => {
     ]);
     vi.mocked(getChange).mockResolvedValue(
       changeDetailFixture({
-        change: changeFixture({ id: 2, title: 'Current change', project_id: 1, epic_id: 1 }),
+        change: changeFixture({
+          id: 2,
+          title: 'Current change',
+          project_id: 1,
+          epic_id: 1,
+          epic_name: 'Backend Epic',
+          html: '<p>Current body</p>',
+          pr_html: '<p>Pull request body</p>',
+          pr_url: 'https://example.test/pr/2',
+          agent_edit: true,
+        }),
         test_cases: [],
       }),
     );
@@ -187,10 +197,35 @@ describe('ChangeDetailPage', () => {
     expect(wrapper.text()).toContain('Current change');
     expect(wrapper.text()).toContain('#1');
     expect(wrapper.text()).toContain('000001-change');
-    expect(wrapper.text()).toContain('Project Epic');
+    expect(wrapper.text()).toContain('Backend Epic');
+    expect(wrapper.text()).toContain('Agent Edit');
+    expect(wrapper.text()).toContain('Yes');
+    expect(wrapper.text()).toContain('https://example.test/pr/2');
+    expect(wrapper.find('a').attributes('href')).toBe('https://example.test/pr/2');
+    expect(wrapper.html()).toContain('<p>Current body</p>');
+    expect(wrapper.html()).toContain('<p>Pull request body</p>');
     expect(wrapper.findAll('[data-icon="more_vert"]')).toHaveLength(1);
     expect(wrapper.findAll('[data-action="edit-change"]')).toHaveLength(1);
     expect(wrapper.findAll('[data-action="delete-change"]')).toHaveLength(1);
+  });
+
+  it('renders unsafe stored PR URLs as plain text instead of executable links', async () => {
+    vi.mocked(getChange).mockResolvedValue(
+      changeDetailFixture({
+        change: changeFixture({
+          id: 2,
+          title: 'Current change',
+          project_id: 1,
+          pr_url: 'javascript:alert(1)',
+        }),
+        test_cases: [],
+      }),
+    );
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('javascript:alert(1)');
+    expect(wrapper.find('a').exists()).toBe(false);
   });
 
   it('asks before switching project context for a pasted change URL', async () => {

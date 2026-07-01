@@ -1,4 +1,4 @@
-import type { Change, ChangeDetail, ChangeReferences, Epic } from './change.types';
+import type { Change, ChangeDetail, ChangePhase, ChangeType, Epic } from './change.types';
 
 export function changeFixture(overrides: Partial<Change> = {}): Change {
   const change: Change = {
@@ -8,15 +8,17 @@ export function changeFixture(overrides: Partial<Change> = {}): Change {
     slug: '000001-change',
     project_id: 1,
     epic_id: null,
+    epic_name: null,
     change_phase: 'backlog',
     change_types: ['feature'],
     title: 'Change',
-    requirement_body: '',
-    requirement_html: '',
-    pull_request_body: '',
-    pull_request_html: '',
-    pull_request_url: '',
-    closed: false,
+    body: '',
+    html: '',
+    pr_body: '',
+    pr_html: '',
+    pr_url: '',
+    agent_edit: false,
+    open: true,
     done_tc: 0,
     total_tc: 0,
     completed: 0,
@@ -50,16 +52,20 @@ export function epicFixture(overrides: Partial<Epic> = {}): Epic {
   return { ...epic, ...overrides };
 }
 
-export function changeReferencesFixture(overrides: Partial<ChangeReferences> = {}): ChangeReferences {
-  return {
-    phases: [
-      { slug: 'backlog', priority: 1 },
-      { slug: 'review', priority: 2 },
-    ],
-    types: [
-      { slug: 'change', priority: 1 },
-      { slug: 'feature', priority: 2 },
-    ],
-    ...overrides,
-  };
+export function changePhasesFixture(overrides: ChangePhase[] = []): ChangePhase[] {
+  return overrides.length
+    ? overrides
+    : [
+        { slug: 'backlog', priority: 1 },
+        { slug: 'review', priority: 2 },
+      ];
+}
+
+export function changeTypesFixture(overrides: ChangeType[] = []): ChangeType[] {
+  return overrides.length
+    ? overrides
+    : [
+        { slug: 'change', priority: 1 },
+        { slug: 'feature', priority: 2 },
+      ];
 }

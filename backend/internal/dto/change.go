@@ -3,34 +3,49 @@ package dto
 import "time"
 
 type (
-	// ChangeReferences defines ChangeReferences values.
-	ChangeReferences struct {
-		Phases []ChangePhase `json:"phases"`
-		Types  []ChangePhase `json:"types"`
-	}
-
 	// Change defines Change values.
 	Change struct {
-		ID              int       `json:"id"`
-		Version         int16     `json:"version"`
-		Ref             int32     `json:"ref"`
-		Slug            string    `json:"slug"`
-		ProjectID       int       `json:"project_id"`
-		EpicID          *int      `json:"epic_id"`
-		ChangePhase     string    `json:"change_phase"`
-		ChangeTypes     []string  `json:"change_types"`
-		Title           string    `json:"title"`
-		RequirementBody string    `json:"requirement_body"`
-		RequirementHTML string    `json:"requirement_html"`
-		PullRequestBody string    `json:"pull_request_body"`
-		PullRequestHTML string    `json:"pull_request_html"`
-		PullRequestURL  string    `json:"pull_request_url"`
-		Closed          bool      `json:"closed"`
-		DoneTC          int16     `json:"done_tc"`
-		TotalTC         int16     `json:"total_tc"`
-		Completed       int16     `json:"completed"`
-		Created         time.Time `json:"created"`
-		Modified        time.Time `json:"modified"`
+		ID          int       `json:"id"`
+		Version     int16     `json:"version"`
+		Ref         int32     `json:"ref"`
+		Slug        string    `json:"slug"`
+		ProjectID   int       `json:"project_id"`
+		EpicID      *int      `json:"epic_id"`
+		EpicName    *string   `json:"epic_name"`
+		ChangePhase string    `json:"change_phase"`
+		ChangeTypes []string  `json:"change_types"`
+		Title       string    `json:"title"`
+		Body        string    `json:"body"`
+		HTML        string    `json:"html"`
+		PRBody      string    `json:"pr_body"`
+		PRHtml      string    `json:"pr_html"`
+		PRUrl       string    `json:"pr_url"`
+		AgentEdit   bool      `json:"agent_edit"`
+		Open        bool      `json:"open"`
+		DoneTC      int16     `json:"done_tc"`
+		TotalTC     int16     `json:"total_tc"`
+		Completed   int16     `json:"completed"`
+		Created     time.Time `json:"created"`
+		Modified    time.Time `json:"modified"`
+	}
+
+	// ChangeListItem defines ChangeListItem values.
+	ChangeListItem struct {
+		ID          int       `json:"id"`
+		Ref         int32     `json:"ref"`
+		Slug        string    `json:"slug"`
+		ProjectID   int       `json:"project_id"`
+		ChangePhase string    `json:"change_phase"`
+		ChangeTypes []string  `json:"change_types"`
+		EpicID      *int      `json:"epic_id"`
+		EpicName    *string   `json:"epic_name"`
+		Title       string    `json:"title"`
+		AgentEdit   bool      `json:"agent_edit"`
+		Open        bool      `json:"open"`
+		DoneTC      int16     `json:"done_tc"`
+		TotalTC     int16     `json:"total_tc"`
+		Completed   int16     `json:"completed"`
+		Modified    time.Time `json:"modified"`
 	}
 
 	// ChangeDetail defines ChangeDetail values.
@@ -46,9 +61,9 @@ type (
 
 	// ChangeRenderedBody defines ChangeRenderedBody values.
 	ChangeRenderedBody struct {
-		ID              int    `json:"id"`
-		RequirementHTML string `json:"requirement_html"`
-		PullRequestHTML string `json:"pull_request_html"`
+		ID     int    `json:"id"`
+		HTML   string `json:"html"`
+		PRHtml string `json:"pr_html"`
 	}
 
 	// ChangeRenderedBodiesResponse defines ChangeRenderedBodiesResponse values.
@@ -68,11 +83,11 @@ type (
 
 	// ChangeCreateRequest defines ChangeCreateRequest values.
 	ChangeCreateRequest struct {
-		ProjectID       int      `json:"project_id"`
-		ChangeTypes     []string `json:"change_types"`
-		EpicID          *int     `json:"epic_id"`
-		Title           string   `json:"title"`
-		RequirementBody string   `json:"requirement_body"`
+		ProjectID   int      `json:"project_id"`
+		ChangeTypes []string `json:"change_types"`
+		EpicID      *int     `json:"epic_id"`
+		Title       string   `json:"title"`
+		Body        string   `json:"body"`
 	}
 
 	// ChangeUpdatePhaseRequest defines ChangeUpdatePhaseRequest values.
@@ -99,27 +114,33 @@ type (
 		Title string `json:"title"`
 	}
 
-	// ChangeUpdateRequirementBodyRequest defines ChangeUpdateRequirementBodyRequest values.
-	ChangeUpdateRequirementBodyRequest struct {
-		ID              int    `json:"id"`
-		RequirementBody string `json:"requirement_body"`
+	// ChangeUpdateBodyRequest defines ChangeUpdateBodyRequest values.
+	ChangeUpdateBodyRequest struct {
+		ID   int    `json:"id"`
+		Body string `json:"body"`
 	}
 
-	// ChangeUpdatePullRequestBodyRequest defines ChangeUpdatePullRequestBodyRequest values.
-	ChangeUpdatePullRequestBodyRequest struct {
-		ID              int    `json:"id"`
-		PullRequestBody string `json:"pull_request_body"`
+	// ChangeUpdatePRBodyRequest defines ChangeUpdatePRBodyRequest values.
+	ChangeUpdatePRBodyRequest struct {
+		ID     int    `json:"id"`
+		PRBody string `json:"pr_body"`
 	}
 
-	// ChangeUpdatePullRequestURLRequest defines ChangeUpdatePullRequestURLRequest values.
-	ChangeUpdatePullRequestURLRequest struct {
-		ID             int    `json:"id"`
-		PullRequestURL string `json:"pull_request_url"`
+	// ChangeUpdatePRUrlRequest defines ChangeUpdatePRUrlRequest values.
+	ChangeUpdatePRUrlRequest struct {
+		ID    int    `json:"id"`
+		PRUrl string `json:"pr_url"`
 	}
 
-	// ChangeUpdateClosedRequest defines ChangeUpdateClosedRequest values.
-	ChangeUpdateClosedRequest struct {
-		ID     int  `json:"id"`
-		Closed bool `json:"closed"`
+	// ChangeUpdateAgentEditRequest defines ChangeUpdateAgentEditRequest values.
+	ChangeUpdateAgentEditRequest struct {
+		ID        int   `json:"id"`
+		AgentEdit *bool `json:"agent_edit"`
+	}
+
+	// ChangeUpdateOpenRequest defines ChangeUpdateOpenRequest values.
+	ChangeUpdateOpenRequest struct {
+		ID   int   `json:"id"`
+		Open *bool `json:"open"`
 	}
 )

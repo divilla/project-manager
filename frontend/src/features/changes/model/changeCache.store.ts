@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { listChanges } from '../api/changeApi';
-import type { Change, Epic } from './change.types';
+import type { ChangeListItem, Epic } from './change.types';
 import { listEpics } from '@/features/epics/api/epicApi';
 
 export const useChangeCacheStore = defineStore('changeCache', () => {
-  const changes = ref<Change[]>([]);
+  const changes = ref<ChangeListItem[]>([]);
   const epics = ref<Epic[]>([]);
   const projectId = ref(0);
   const loading = ref(false);
@@ -26,13 +26,17 @@ export const useChangeCacheStore = defineStore('changeCache', () => {
     }
   }
 
-  function setChanges(items: Change[], nextProjectId = projectId.value, nextEpics: Epic[] = epics.value) {
+  function setChanges(
+    items: ChangeListItem[],
+    nextProjectId = projectId.value,
+    nextEpics: Epic[] = epics.value,
+  ) {
     changes.value = items;
     epics.value = nextEpics;
     projectId.value = nextProjectId;
   }
 
-  function upsertChange(change: Change) {
+  function upsertChange(change: ChangeListItem) {
     if (projectId.value && change.project_id !== projectId.value) return;
 
     const exists = changes.value.some((item) => item.id === change.id);

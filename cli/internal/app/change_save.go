@@ -44,23 +44,23 @@ func (m Model) saveChangeUpdateValue(body string) (tea.Model, tea.Cmd) {
 
 func changeCreateCommand(client appClient, projectID int, projectIDValue string, body string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := changes.ParseRequirementBodyStructure(body); err != nil {
+		if _, err := changes.ParseBodyStructure(body); err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
 		}
 		types, epics, err := changeReferenceData(client, projectIDValue, body)
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
 		}
-		parsed, err := changes.ParseRequirementBody(body, types, epics)
+		parsed, err := changes.ParseBody(body, types, epics)
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
 		}
 		created, err := client.CreateChange(dto.ChangeCreateInput{
-			ProjectID:       projectID,
-			Title:           parsed.Title,
-			RequirementBody: parsed.RequirementBody,
-			ChangeTypes:     parsed.ChangeTypes,
-			EpicID:          parsed.EpicID,
+			ProjectID:   projectID,
+			Title:       parsed.Title,
+			Body:        parsed.Body,
+			ChangeTypes: parsed.ChangeTypes,
+			EpicID:      parsed.EpicID,
 		})
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
@@ -79,14 +79,14 @@ func changeCreateCommand(client appClient, projectID int, projectIDValue string,
 
 func changeUpdateCommand(client appClient, id int, projectID string, original dto.Change, body string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := changes.ParseRequirementBodyStructure(body); err != nil {
+		if _, err := changes.ParseBodyStructure(body); err != nil {
 			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
 		types, epics, err := changeReferenceData(client, projectID, body)
 		if err != nil {
 			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
-		parsed, err := changes.ParseRequirementBody(body, types, epics)
+		parsed, err := changes.ParseBody(body, types, epics)
 		if err != nil {
 			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
@@ -95,8 +95,8 @@ func changeUpdateCommand(client appClient, id int, projectID string, original dt
 				return changeSavedMsg{source: ChangeUpdateState, err: err}
 			}
 		}
-		if parsed.RequirementBody != original.RequirementBody {
-			if _, err := client.UpdateChangeRequirementBody(id, parsed.RequirementBody); err != nil {
+		if parsed.Body != original.Body {
+			if _, err := client.UpdateChangeBody(id, parsed.Body); err != nil {
 				return changeSavedMsg{source: ChangeUpdateState, err: err}
 			}
 		}
@@ -176,11 +176,15 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditRequirement:
-			if _, err := client.UpdateChangeRequirementBody(id, value); err != nil {
+			if _, err := client.UpdateChangeBody(id, value); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditPullRequest:
-			if _, err := client.UpdateChangePullRequestBody(id, value); err != nil {
+			if _, err := client.UpdateChangePRBody(id, value); err != nil {
+				return changeSavedMsg{source: source, err: err}
+			}
+		case detailEditPRUrl:
+			if _, err := client.UpdateChangePRUrl(id, value); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 		default:

@@ -57,7 +57,7 @@ func TestServiceRendersMutationChangeBodyHTML(t *testing.T) {
 		Scenario: "TestCase",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "clean(parsed(**Change**))", mutation.Change.RequirementHTML)
+	assert.Equal(t, "clean(parsed(**Change**))", mutation.Change.HTML)
 }
 
 type fakeMarkdownParser struct{}
@@ -89,7 +89,7 @@ func (r *fakeTestCaseRepository) Create(_ context.Context, req dto.TestCaseCreat
 	testCase := dto.TestCase{ID: 3, ChangeID: req.ChangeID, Scenario: req.Scenario}
 	return dto.TestCaseMutationResponse{
 		TestCase: &testCase,
-		Change:   dto.Change{ID: req.ChangeID, RequirementBody: "**Change**"},
+		Change:   dto.Change{ID: req.ChangeID, Body: "**Change**"},
 	}, nil
 }
 

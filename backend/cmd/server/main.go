@@ -10,6 +10,7 @@ import (
 	"aipm/internal/change"
 	"aipm/internal/epic"
 	"aipm/internal/health"
+	"aipm/internal/options"
 	"aipm/internal/project"
 	"aipm/internal/testcase"
 	"aipm/pkg/config"
@@ -82,6 +83,10 @@ func main() {
 	epicRepository := epic.NewRepo(pool)
 	epicService := epic.NewService(epicRepository)
 	epic.NewAPI(e, epicService)
+
+	optionsRepository := options.NewRepo(pool)
+	optionsService := options.NewService(optionsRepository)
+	options.NewAPI(e, optionsService)
 
 	changeRepository := change.NewRepo(pool)
 	changeService := change.NewService(changeRepository, changeRenderer)

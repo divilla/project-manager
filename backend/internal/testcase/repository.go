@@ -19,17 +19,19 @@ type Repo struct {
 const changeColumns = `
 	id,
 	ref,
-	slug,
 	version,
+	slug,
 	project_id,
-	epic_id,
 	change_phase,
 	change_types,
+	epic_id,
+	epic_name,
 	title,
-	coalesce(requirement_body, ''),
-	coalesce(pull_request_body, ''),
-	coalesce(pull_request_url, ''),
-	closed,
+	coalesce(body, ''),
+	coalesce(pr_body, ''),
+	coalesce(pr_url, ''),
+	agent_edit,
+	open,
 	done_tc,
 	total_tc,
 	completed,
@@ -268,7 +270,7 @@ func scanTestCase(row pgx.Row) (dto.TestCase, error) {
 }
 
 func getChange(ctx context.Context, q queryer, id int) (dto.Change, error) {
-	change, err := scanChange(q.QueryRow(ctx, "select "+changeColumns+" from public.change where id = $1", id))
+	change, err := scanChange(q.QueryRow(ctx, "select "+changeColumns+" from public.vw_change_details where id = $1", id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return dto.Change{}, ErrNotFound
 	}
@@ -278,10 +280,11 @@ func getChange(ctx context.Context, q queryer, id int) (dto.Change, error) {
 func scanChange(row pgx.Row) (dto.Change, error) {
 	var change dto.Change
 	var epicID pgtype.Int8
+	var epicName pgtype.Text
 	err := row.Scan(
-		&change.ID, &change.Ref, &change.Slug, &change.Version, &change.ProjectID, &epicID, &change.ChangePhase,
-		&change.ChangeTypes, &change.Title, &change.RequirementBody, &change.PullRequestBody,
-		&change.PullRequestURL, &change.Closed, &change.DoneTC,
+		&change.ID, &change.Ref, &change.Version, &change.Slug, &change.ProjectID,
+		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
+		&change.Body, &change.PRBody, &change.PRUrl, &change.AgentEdit, &change.Open, &change.DoneTC,
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
@@ -290,6 +293,10 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	if epicID.Valid {
 		value := int(epicID.Int64)
 		change.EpicID = &value
+	}
+	if epicName.Valid {
+		value := epicName.String
+		change.EpicName = &value
 	}
 	return change, nil
 }

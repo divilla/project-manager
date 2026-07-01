@@ -27,19 +27,19 @@
 </template>
 
 <script setup lang="ts">
-import type { ReferenceOption, SelectOption, Change } from '../model/change.types';
+import type { ChangePhase, SelectOption, ChangeListItem } from '../model/change.types';
 import ChangeCard from './ChangeCard.vue';
 
 defineProps<{
   hasSelectedProject: boolean;
-  boardPhases: ReferenceOption[];
-  changesByPhase: Record<string, Change[]>;
+  boardPhases: ChangePhase[];
+  changesByPhase: Record<string, ChangeListItem[]>;
   phaseOptions: SelectOption[];
 }>();
 
 defineEmits<{
-  'open-change': [change: Change];
-  'move-change': [change: Change, phase: string];
-  'delete-change': [change: Change];
+  'open-change': [change: ChangeListItem];
+  'move-change': [change: ChangeListItem, phase: string];
+  'delete-change': [change: ChangeListItem];
 }>();
 </script>

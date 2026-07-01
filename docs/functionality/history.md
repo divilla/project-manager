@@ -12,9 +12,8 @@ History-bearing change data includes:
 - epic ID
 - change types
 - title
-- requirement body
-- pull request body
-- pull request URL
+- body
+- agent edit marker
 - modified time
 - delete marker
 
@@ -32,4 +31,4 @@ Done toggles may update active state without changing the test case scenario ver
 History insert and active-row mutation must happen in one transaction. If history capture fails, the active row must not change.
 
 ## AI Changes
-AI-initiated updates follow the same history rules as user-initiated updates. The product should make AI changes reviewable and reversible through the same history model.
+AI-initiated updates follow the same history rules as user-initiated updates. When an agent-assisted edit changes the active Change version, the active row and history model must preserve enough `agent_edit` state for the change to remain reviewable.

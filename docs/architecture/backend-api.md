@@ -41,30 +41,42 @@ Epic responses include aggregate completeness fields derived from linked changes
 ## Changes
 Changes are managed with POST endpoints:
 
-- `POST /api/v1/change/reference`
 - `POST /api/v1/change/list`
 - `POST /api/v1/change/get`
 - `POST /api/v1/change/rendered-bodies`
 - `POST /api/v1/change/create`
 - `POST /api/v1/change/update-epic`
 - `POST /api/v1/change/update-phase`
-- `POST /api/v1/change/update-closed`
+- `POST /api/v1/change/update-open`
 - `POST /api/v1/change/update-change-types`
 - `POST /api/v1/change/update-title`
-- `POST /api/v1/change/update-requirement-body`
-- `POST /api/v1/change/update-pull-request-body`
-- `POST /api/v1/change/update-pull-request-url`
+- `POST /api/v1/change/update-body`
+- `POST /api/v1/change/update-pr-body`
+- `POST /api/v1/change/update-pr-url`
+- `POST /api/v1/change/update-agent-edit`
 - `POST /api/v1/change/delete`
 
-Create payloads use `project_id`, `title`, `requirement_body`, `change_types`, and optional `epic_id`. Clients must not send `ref`, `slug`, `change_phase`, `pull_request_body`, or `pull_request_url` in create payloads.
+Create payloads use `project_id`, `title`, `body`, `change_types`, and optional `epic_id`. Clients must not send `ref`, `slug`, `change_phase`, `pr_body`, `pr_url`, `agent_edit`, or `open` in create payloads.
 
-Change responses include `id`, project-scoped `ref`, stable `slug`, aggregate fields such as `done_tc`, `total_tc`, and `completed`, timestamps, and rendered requirement HTML for display. Change list, get, create, and focused update responses all return `ref` and `slug` when returning a change object.
+Change responses include `id`, project-scoped `ref`, stable `slug`, aggregate fields such as `done_tc`, `total_tc`, and `completed`, timestamps where appropriate, `agent_edit`, and `open`. Change list, get, create, and focused update responses all return `ref` and `slug` when returning a change object.
 
-Change list requests require a numeric `project_id` field. Clients must not send `project_id` as a JSON string. List responses are ordered by `modified` descending.
+Change list requests require a numeric `project_id` field. Clients must not send `project_id` as a JSON string. List responses include only list item fields: identity, project ID, phase and type data, linked epic identity and `epic_name` when present, title, `agent_edit`, open state, completion counters, and modified time. They do not include detail-only fields such as `body`, rendered HTML, `pr_body`, `pr_url`, version, or created time. Clients must render the response order supplied by the backend.
 
-Change get requests identify the Change by numeric `id`. Clients that navigate from a Change list to detail should reload the selected Change through `POST /api/v1/change/get` instead of treating list row data as the detail source of truth.
+Change get requests identify the Change by numeric `id`. Detail responses include `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, linked epic data, test cases, completion counters, and timestamps. Clients that navigate from a Change list to detail should reload the selected Change through `POST /api/v1/change/get` instead of treating list row data as the detail source of truth.
 
-Focused update endpoints identify the Change by numeric `id`, mutate only the named field, and return the refreshed Change. They must preserve the existing `ref` and `slug`. Clients that update Change title, `requirement_body`, `change_types`, or `epic_id` should use the matching focused endpoint rather than submitting a broad edit payload.
+Rendered body requests render markdown from `body` and `pr_body` and return sanitized HTML fields using the same naming contract.
+
+Focused update endpoints identify the Change by numeric `id`, mutate only the named field, and return the refreshed Change. They must preserve the existing `ref` and `slug`. Boolean update payloads must explicitly include the named boolean field, such as `agent_edit` or `open`; omitted fields or old field names are invalid. PR URL updates accept an empty value or absolute `http` and `https` URLs only. Clients that update Change title, `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, `change_types`, or `epic_id` should use the matching focused endpoint rather than submitting a broad edit payload.
+
+## Options
+Reference options are managed with separate POST endpoints:
+
+- `POST /api/v1/options/change-phases-list`
+- `POST /api/v1/options/change-types-list`
+
+Change phase responses return `ChangePhase` items. Change type responses return `ChangeType` items. Clients must not depend on a combined Change references response.
+
+Reference options come from the database. Change phase and type options are ordered by `priority` and then `slug`.
 
 ## Test Cases
 Test cases are managed with POST endpoints:

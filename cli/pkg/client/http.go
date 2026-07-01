@@ -22,8 +22,9 @@ type Client interface {
 	GetChange(id int) (dto.Change, error)
 	CreateChange(input dto.ChangeCreateInput) (dto.Change, error)
 	UpdateChangeTitle(id int, title string) (dto.Change, error)
-	UpdateChangeRequirementBody(id int, requirementBody string) (dto.Change, error)
-	UpdateChangePullRequestBody(id int, pullRequestBody string) (dto.Change, error)
+	UpdateChangeBody(id int, body string) (dto.Change, error)
+	UpdateChangePRBody(id int, prBody string) (dto.Change, error)
+	UpdateChangePRUrl(id int, prURL string) (dto.Change, error)
 	UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error)
 	UpdateChangePhase(id int, changePhase string) (dto.Change, error)
 	UpdateChangeEpic(id int, epicID *int) (dto.Change, error)
@@ -119,10 +120,10 @@ func (c HTTPClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error
 		return dto.Change{}, fmt.Errorf("project ID must be a valid positive number")
 	}
 	payload := map[string]any{
-		"project_id":       input.ProjectID,
-		"title":            input.Title,
-		"requirement_body": input.RequirementBody,
-		"change_types":     input.ChangeTypes,
+		"project_id":   input.ProjectID,
+		"title":        input.Title,
+		"body":         input.Body,
+		"change_types": input.ChangeTypes,
 	}
 	if input.EpicID != nil {
 		payload["epic_id"] = *input.EpicID
@@ -138,25 +139,36 @@ func (c HTTPClient) UpdateChangeTitle(id int, title string) (dto.Change, error) 
 	return c.postChange("/api/v1/change/update-title", map[string]any{"id": id, "title": title})
 }
 
-// UpdateChangeRequirementBody updates a change requirement body.
-func (c HTTPClient) UpdateChangeRequirementBody(id int, requirementBody string) (dto.Change, error) {
+// UpdateChangeBody updates a change body.
+func (c HTTPClient) UpdateChangeBody(id int, body string) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
-	return c.postChange("/api/v1/change/update-requirement-body", map[string]any{
-		"id":               id,
-		"requirement_body": requirementBody,
+	return c.postChange("/api/v1/change/update-body", map[string]any{
+		"id":   id,
+		"body": body,
 	})
 }
 
-// UpdateChangePullRequestBody updates a change pull request body.
-func (c HTTPClient) UpdateChangePullRequestBody(id int, pullRequestBody string) (dto.Change, error) {
+// UpdateChangePRBody updates a change pull request body.
+func (c HTTPClient) UpdateChangePRBody(id int, prBody string) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
-	return c.postChange("/api/v1/change/update-pull-request-body", map[string]any{
-		"id":                id,
-		"pull_request_body": pullRequestBody,
+	return c.postChange("/api/v1/change/update-pr-body", map[string]any{
+		"id":      id,
+		"pr_body": prBody,
+	})
+}
+
+// UpdateChangePRUrl updates a change pull request URL.
+func (c HTTPClient) UpdateChangePRUrl(id int, prURL string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-pr-url", map[string]any{
+		"id":     id,
+		"pr_url": prURL,
 	})
 }
 
@@ -209,20 +221,12 @@ func (c HTTPClient) ListEpics(projectID string) ([]dto.Option, error) {
 
 // ListPhases loads change phase selector options.
 func (c HTTPClient) ListPhases() ([]dto.Option, error) {
-	options, err := c.postOptions("/api/v1/change/reference", map[string]any{}, "phases")
-	if len(options) == 0 && err == nil {
-		options, err = c.postOptions("/api/v1/change/reference", map[string]any{}, "phase")
-	}
-	return options, err
+	return c.postOptions("/api/v1/options/change-phases-list", map[string]any{}, "phases")
 }
 
 // ListTypes loads change type selector options.
 func (c HTTPClient) ListTypes() ([]dto.Option, error) {
-	options, err := c.postOptions("/api/v1/change/reference", map[string]any{}, "types")
-	if len(options) == 0 && err == nil {
-		options, err = c.postOptions("/api/v1/change/reference", map[string]any{}, "type")
-	}
-	return options, err
+	return c.postOptions("/api/v1/options/change-types-list", map[string]any{}, "types")
 }
 
 func (c HTTPClient) postOptions(path string, payload any, group string) ([]dto.Option, error) {
@@ -505,24 +509,25 @@ func projectFromMap(values map[string]any) dto.Project {
 
 func changeFromMap(values map[string]any) dto.Change {
 	return dto.Change{
-		ID:              firstString(values, "id", "change_id"),
-		Ref:             firstString(values, "ref"),
-		Slug:            firstString(values, "slug"),
-		ProjectID:       firstString(values, "project_id"),
-		EpicID:          firstString(values, "epic_id"),
-		EpicName:        firstString(values, "epic_name", "epic_title", "epic"),
-		ChangePhase:     firstString(values, "change_phase", "phase"),
-		ChangeTypes:     firstStringSlice(values, "change_types", "types"),
-		Title:           firstString(values, "title", "name"),
-		RequirementBody: firstString(values, "requirement_body", "requirement"),
-		PullRequestBody: firstString(values, "pull_request_body", "pull_request"),
-		PullRequestURL:  firstString(values, "pull_request_url", "pr_url"),
-		Closed:          firstBool(values, "closed"),
-		Done:            firstInt(values, "done_tc", "done"),
-		Total:           firstInt(values, "total_tc", "total"),
-		Completed:       firstInt(values, "completed", "completed_pct"),
-		Created:         firstString(values, "created", "created_at"),
-		Modified:        firstString(values, "modified", "updated", "updated_at"),
+		ID:          firstString(values, "id", "change_id"),
+		Ref:         firstString(values, "ref"),
+		Slug:        firstString(values, "slug"),
+		ProjectID:   firstString(values, "project_id"),
+		EpicID:      firstString(values, "epic_id"),
+		EpicName:    firstString(values, "epic_name", "epic_title", "epic"),
+		ChangePhase: firstString(values, "change_phase", "phase"),
+		ChangeTypes: firstStringSlice(values, "change_types", "types"),
+		Title:       firstString(values, "title", "name"),
+		Body:        firstString(values, "body"),
+		PRBody:      firstString(values, "pr_body"),
+		PRUrl:       firstString(values, "pr_url"),
+		AgentEdit:   firstBool(values, "agent_edit"),
+		Open:        firstBool(values, "open"),
+		Done:        firstInt(values, "done_tc", "done"),
+		Total:       firstInt(values, "total_tc", "total"),
+		Completed:   firstInt(values, "completed", "completed_pct"),
+		Created:     firstString(values, "created", "created_at"),
+		Modified:    firstString(values, "modified", "updated", "updated_at"),
 	}
 }
 

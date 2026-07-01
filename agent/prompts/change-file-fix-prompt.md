@@ -1,6 +1,6 @@
 Implement all the review findings like a 10x senior engineer.
 
-Change contract: `agent/changes/108-cli-improve-changes-and-agentic-workflow.md`
+Change contract: `agent/changes/109-db-alters-and-views.md`
 
 Before coding:
 1. Read and use Change contract as the source of truth and implementation contract.

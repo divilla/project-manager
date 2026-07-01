@@ -37,11 +37,11 @@ type DetailRow struct {
 
 // ParsedRequirement stores metadata extracted from requirement markdown.
 type ParsedRequirement struct {
-	Title           string
-	RequirementBody string
-	ChangeTypes     []string
-	EpicID          *int
-	EpicName        string
+	Title       string
+	Body        string
+	ChangeTypes []string
+	EpicID      *int
+	EpicName    string
 }
 
 // StartLoading returns a changes model in loading state.
@@ -196,11 +196,12 @@ func DetailRows(change dto.Change) []DetailRow {
 		{Label: "Epic", Text: epicLabel(change), Selectable: true},
 		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true},
 		{Label: "Title", Text: change.Title, Selectable: true},
-		{Label: "Requirement", Text: change.RequirementBody, Selectable: true},
-		{Label: "Pull Request", Text: change.PullRequestBody, Selectable: true},
-		{Label: "PR URL", Text: change.PullRequestURL, Selectable: true},
+		{Label: "Requirement", Text: change.Body, Selectable: true},
+		{Label: "Pull Request", Text: change.PRBody, Selectable: true},
+		{Label: "PR URL", Text: change.PRUrl, Selectable: true},
+		{Label: "Agent Edit", Text: fmt.Sprintf("%t", change.AgentEdit), Selectable: true},
 		{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
-		{Label: "Closed", Text: fmt.Sprintf("%t", change.Closed), Selectable: true},
+		{Label: "Open", Text: fmt.Sprintf("%t", change.Open), Selectable: true},
 		{Label: "Created", Text: formatListTimestamp(change.Created), Selectable: true},
 		{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
 	}
@@ -421,9 +422,9 @@ func FilteredRows(rows []dto.Change, filters Filters) []dto.Change {
 	return filtered
 }
 
-// ParseRequirementBody extracts backend fields while preserving the full body.
-func ParseRequirementBody(body string, validTypes, epics []dto.Option) (ParsedRequirement, error) {
-	parsed, err := ParseRequirementBodyStructure(body)
+// ParseBody extracts backend fields while preserving the full body.
+func ParseBody(body string, validTypes, epics []dto.Option) (ParsedRequirement, error) {
+	parsed, err := ParseBodyStructure(body)
 	if err != nil {
 		return ParsedRequirement{}, err
 	}
@@ -444,8 +445,8 @@ func ParseRequirementBody(body string, validTypes, epics []dto.Option) (ParsedRe
 	return parsed, nil
 }
 
-// ParseRequirementBodyStructure extracts locally validated metadata before reference lookups.
-func ParseRequirementBodyStructure(body string) (ParsedRequirement, error) {
+// ParseBodyStructure extracts locally validated metadata before reference lookups.
+func ParseBodyStructure(body string) (ParsedRequirement, error) {
 	normalized := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
@@ -477,9 +478,9 @@ func ParseRequirementBodyStructure(body string) (ParsedRequirement, error) {
 	}
 
 	parsed := ParsedRequirement{
-		Title:           title,
-		RequirementBody: normalized,
-		ChangeTypes:     types,
+		Title:       title,
+		Body:        normalized,
+		ChangeTypes: types,
 	}
 	epicIndex := firstNonBlankLine(lines, typeIndex+1)
 	if epicIndex < 0 {
@@ -522,9 +523,9 @@ func RequirementEpicName(body string) string {
 
 // RequirementMarkdown returns editable requirement markdown for a change.
 func RequirementMarkdown(change dto.Change) string {
-	body := strings.TrimSpace(change.RequirementBody)
+	body := strings.TrimSpace(change.Body)
 	if body != "" && hasRequirementMetadata(body) {
-		return requirementMarkdownWithBackendEpic(change.RequirementBody, change.EpicName)
+		return requirementMarkdownWithBackendEpic(change.Body, change.EpicName)
 	}
 	var lines []string
 	if strings.TrimSpace(change.Title) != "" {
@@ -537,7 +538,7 @@ func RequirementMarkdown(change dto.Change) string {
 		lines = append(lines, "Epic: "+strings.TrimSpace(change.EpicName), "")
 	}
 	if body != "" {
-		lines = append(lines, change.RequirementBody)
+		lines = append(lines, change.Body)
 	}
 	return strings.TrimRight(strings.Join(lines, "\n"), "\n")
 }
@@ -678,7 +679,7 @@ func matchesFind(change dto.Change, query string) bool {
 		change.ChangePhase,
 		change.EpicID,
 		change.EpicName,
-		change.RequirementBody,
+		change.Body,
 	}
 	values = append(values, change.ChangeTypes...)
 	for _, value := range values {

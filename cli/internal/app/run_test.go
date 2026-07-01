@@ -165,22 +165,29 @@ func (f *fakeClient) UpdateChangeTitle(id int, title string) (dto.Change, error)
 	return dto.Change{ID: fmt.Sprint(id), Title: title}, nil
 }
 
-func (f *fakeClient) UpdateChangeRequirementBody(id int, requirementBody string) (dto.Change, error) {
+func (f *fakeClient) UpdateChangeBody(id int, body string) (dto.Change, error) {
 	f.changeBodyUpdateCalls++
-	f.changeBodyUpdates = append(f.changeBodyUpdates, requirementBody)
+	f.changeBodyUpdates = append(f.changeBodyUpdates, body)
 	if f.changeUpdateErr != nil {
 		return dto.Change{}, f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), RequirementBody: requirementBody}, nil
+	return dto.Change{ID: fmt.Sprint(id), Body: body}, nil
 }
 
-func (f *fakeClient) UpdateChangePullRequestBody(id int, pullRequestBody string) (dto.Change, error) {
+func (f *fakeClient) UpdateChangePRBody(id int, prBody string) (dto.Change, error) {
 	f.changePRUpdateCalls++
-	f.changePRUpdates = append(f.changePRUpdates, pullRequestBody)
+	f.changePRUpdates = append(f.changePRUpdates, prBody)
 	if f.changeUpdateErr != nil {
 		return dto.Change{}, f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), PullRequestBody: pullRequestBody}, nil
+	return dto.Change{ID: fmt.Sprint(id), PRBody: prBody}, nil
+}
+
+func (f *fakeClient) UpdateChangePRUrl(id int, prURL string) (dto.Change, error) {
+	if f.changeUpdateErr != nil {
+		return dto.Change{}, f.changeUpdateErr
+	}
+	return dto.Change{ID: fmt.Sprint(id), PRUrl: prURL}, nil
 }
 
 func (f *fakeClient) UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error) {
@@ -515,10 +522,10 @@ func TestChangeEditorPreservesEditedMarkdownAfterFailedSave(t *testing.T) {
 			m.state = tt.source
 			m.input.SetValue(tt.original)
 			m.changeList.Detail = dto.Change{
-				ID:              "12",
-				Title:           "Original Change",
-				RequirementBody: tt.original,
-				ChangeTypes:     []string{"feature"},
+				ID:          "12",
+				Title:       "Original Change",
+				Body:        tt.original,
+				ChangeTypes: []string{"feature"},
 			}
 
 			updated, cmd := m.Update(editorFinishedMsg{source: tt.source, content: tt.edited})
@@ -1065,35 +1072,37 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	client := &fakeClient{
 		changeRows: []dto.Change{
 			{
-				ID:              "11",
-				Ref:             "3",
-				Slug:            "change-three",
-				Title:           "Backend Change",
-				ChangePhase:     "backlog",
-				ChangeTypes:     []string{"feature", "test"},
-				EpicID:          "5",
-				EpicName:        "Epic Five",
-				RequirementBody: "Backend requirement body",
-				Done:            2,
-				Total:           5,
-				Completed:       40,
-				Modified:        "2026-06-29T10:45:00Z",
+				ID:          "11",
+				Ref:         "3",
+				Slug:        "change-three",
+				Title:       "Backend Change",
+				ChangePhase: "backlog",
+				ChangeTypes: []string{"feature", "test"},
+				EpicID:      "5",
+				EpicName:    "Epic Five",
+				Body:        "Backend requirement body",
+				Done:        2,
+				Total:       5,
+				Completed:   40,
+				Modified:    "2026-06-29T10:45:00Z",
 			},
 		},
 		gotChange: dto.Change{
-			ID:              "11",
-			Ref:             "3",
-			Slug:            "change-three",
-			Title:           "Backend Change",
-			ChangePhase:     "backlog",
-			ChangeTypes:     []string{"feature", "test"},
-			EpicID:          "5",
-			EpicName:        "Epic Five",
-			RequirementBody: "# Backend Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nBody.",
-			PullRequestBody: "Pull request summary.",
-			PullRequestURL:  "https://github.com/divilla/project-manager/pull/107",
-			Created:         "2026-06-29T08:15:00Z",
-			Modified:        "2026-06-29T10:45:00Z",
+			ID:          "11",
+			Ref:         "3",
+			Slug:        "change-three",
+			Title:       "Backend Change",
+			ChangePhase: "backlog",
+			ChangeTypes: []string{"feature", "test"},
+			EpicID:      "5",
+			EpicName:    "Epic Five",
+			Body:        "# Backend Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nBody.",
+			PRBody:      "Pull request summary.",
+			PRUrl:       "https://github.com/divilla/project-manager/pull/107",
+			AgentEdit:   true,
+			Open:        true,
+			Created:     "2026-06-29T08:15:00Z",
+			Modified:    "2026-06-29T10:45:00Z",
 		},
 	}
 	m := NewModelWithClient(client)
@@ -1160,14 +1169,18 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	view = stripANSI(got.View())
 	assert.Contains(t, view, "Pull Request │ Pull request summary.")
 	assert.Contains(t, view, "PR URL │ https://github.com/divilla/project-manager/pull/107")
+	assert.Contains(t, view, "Agent Edit │ true")
 	assert.Contains(t, view, "Complete │ 0/0 - 0%")
-	assert.Contains(t, view, "Closed │ false")
+	assert.Contains(t, view, "Open │ true")
 	assert.Contains(t, view, "Created │ 2026-06-29 08.15")
+	assert.Less(t, strings.Index(view, "PR URL │ https://github.com/divilla/project-manager/pull/107"), strings.Index(view, "Agent Edit │ true"))
+	assert.Less(t, strings.Index(view, "Agent Edit │ true"), strings.Index(view, "Complete │ 0/0 - 0%"))
+	assert.Less(t, strings.Index(view, "Complete │ 0/0 - 0%"), strings.Index(view, "Open │ true"))
+	assert.Less(t, strings.Index(view, "Open │ true"), strings.Index(view, "Created │ 2026-06-29 08.15"))
+
+	got, _ = sendKey(got, tea.KeyPgDown)
+	view = stripANSI(got.View())
 	assert.Contains(t, view, "Modified │ 2026-06-29 10.45")
-	assert.Less(t, strings.Index(view, "PR URL │ https://github.com/divilla/project-manager/pull/107"), strings.Index(view, "Complete │ 0/0 - 0%"))
-	assert.Less(t, strings.Index(view, "Complete │ 0/0 - 0%"), strings.Index(view, "Closed │ false"))
-	assert.Less(t, strings.Index(view, "Closed │ false"), strings.Index(view, "Created │ 2026-06-29 08.15"))
-	assert.Less(t, strings.Index(view, "Created │ 2026-06-29 08.15"), strings.Index(view, "Modified │ 2026-06-29 10.45"))
 }
 
 func TestChangesTableTruncatesEpicAndTitleAtMaxWidth(t *testing.T) {
@@ -1326,14 +1339,14 @@ func TestChangesEnterWithNoSelectableRowErrors(t *testing.T) {
 	assert.NotEmpty(t, got.err)
 }
 
-func TestChangeCreateSaveExtractsMetadataAndPreservesRequirementBody(t *testing.T) {
+func TestChangeCreateSaveExtractsMetadataAndPreservesBody(t *testing.T) {
 	epicID := 5
 	body := "# New Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nKeep every section."
 	client := &fakeClient{
 		types:         []dto.Option{{ID: "feature", Label: "feature"}, {ID: "test", Label: "test"}},
 		epics:         []dto.Option{{ID: "5", Label: "Epic Five"}},
 		createdChange: dto.Change{ID: "12"},
-		gotChange:     dto.Change{ID: "12", Title: "New Change", RequirementBody: body, ChangeTypes: []string{"feature", "test"}, EpicID: "5", EpicName: "Epic Five"},
+		gotChange:     dto.Change{ID: "12", Title: "New Change", Body: body, ChangeTypes: []string{"feature", "test"}, EpicID: "5", EpicName: "Epic Five"},
 	}
 	m := NewModelWithClient(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
@@ -1348,7 +1361,7 @@ func TestChangeCreateSaveExtractsMetadataAndPreservesRequirementBody(t *testing.
 	require.Len(t, client.changeCreateInputs, 1)
 	assert.Equal(t, 7, client.changeCreateInputs[0].ProjectID)
 	assert.Equal(t, "New Change", client.changeCreateInputs[0].Title)
-	assert.Equal(t, body, client.changeCreateInputs[0].RequirementBody)
+	assert.Equal(t, body, client.changeCreateInputs[0].Body)
 	assert.Equal(t, []string{"feature", "test"}, client.changeCreateInputs[0].ChangeTypes)
 	require.NotNil(t, client.changeCreateInputs[0].EpicID)
 	assert.Equal(t, epicID, *client.changeCreateInputs[0].EpicID)
@@ -1361,7 +1374,7 @@ func TestChangeCreateSuccessWithReloadFailureOpensCreatedDetails(t *testing.T) {
 	body := "# New Change\n\nTypes: feature\n\n## Problem Statement\nKeep every section."
 	client := &fakeClient{
 		types:         []dto.Option{{ID: "feature", Label: "feature"}},
-		createdChange: dto.Change{ID: "12", Title: "New Change", RequirementBody: body, ChangeTypes: []string{"feature"}},
+		createdChange: dto.Change{ID: "12", Title: "New Change", Body: body, ChangeTypes: []string{"feature"}},
 		changeGetErr:  errors.New("temporary reload failure"),
 	}
 	m := NewModelWithClient(client)
@@ -1388,7 +1401,7 @@ func TestStandaloneChangeSaveDoesNotRequireEpicLookup(t *testing.T) {
 		types:         []dto.Option{{ID: "feature", Label: "feature"}},
 		epicErr:       errors.New("epics unavailable"),
 		createdChange: dto.Change{ID: "12"},
-		gotChange:     dto.Change{ID: "12", Title: "Standalone Change", RequirementBody: body, ChangeTypes: []string{"feature"}},
+		gotChange:     dto.Change{ID: "12", Title: "Standalone Change", Body: body, ChangeTypes: []string{"feature"}},
 	}
 	m := NewModelWithClient(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
@@ -1407,15 +1420,15 @@ func TestStandaloneChangeSaveDoesNotRequireEpicLookup(t *testing.T) {
 
 	updateBody := "# Standalone Change\n\nTypes: feature\n\nEpic: \n\n## Problem Statement\nNo epic."
 	original := dto.Change{
-		ID:              "12",
-		Title:           "Standalone Change",
-		RequirementBody: body,
-		ChangeTypes:     []string{"feature"},
+		ID:          "12",
+		Title:       "Standalone Change",
+		Body:        body,
+		ChangeTypes: []string{"feature"},
 	}
 	client = &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
 		epicErr:   errors.New("epics unavailable"),
-		gotChange: dto.Change{ID: "12", Title: "Standalone Change", RequirementBody: updateBody, ChangeTypes: []string{"feature"}},
+		gotChange: dto.Change{ID: "12", Title: "Standalone Change", Body: updateBody, ChangeTypes: []string{"feature"}},
 	}
 	m = NewModelWithClient(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
@@ -1508,10 +1521,10 @@ func TestChangeUpdateStructuralValidationDoesNotFetchReferences(t *testing.T) {
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = dto.Change{
-		ID:              "12",
-		Title:           "Existing Change",
-		RequirementBody: "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nBody.",
-		ChangeTypes:     []string{"feature"},
+		ID:          "12",
+		Title:       "Existing Change",
+		Body:        "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nBody.",
+		ChangeTypes: []string{"feature"},
 	}
 	m.input.SetValue("Types: feature\n\n## Problem Statement\nBody.")
 
@@ -1532,18 +1545,18 @@ func TestChangeUpdateStructuralValidationDoesNotFetchReferences(t *testing.T) {
 
 func TestChangeUpdateSaveUpdatesChangedExtractedFieldsAndReloads(t *testing.T) {
 	original := dto.Change{
-		ID:              "12",
-		Title:           "Old Change",
-		RequirementBody: "# Old Change\n\nTypes: feature\n\nEpic: Epic Five\n\n## Problem Statement\nOld body.",
-		ChangeTypes:     []string{"feature"},
-		EpicID:          "5",
-		EpicName:        "Epic Five",
+		ID:          "12",
+		Title:       "Old Change",
+		Body:        "# Old Change\n\nTypes: feature\n\nEpic: Epic Five\n\n## Problem Statement\nOld body.",
+		ChangeTypes: []string{"feature"},
+		EpicID:      "5",
+		EpicName:    "Epic Five",
 	}
 	body := "# New Change\n\nTypes: test\n\nEpic: \n\n## Problem Statement\nNew body."
 	client := &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}, {ID: "test", Label: "test"}},
 		epics:     []dto.Option{{ID: "5", Label: "Epic Five"}},
-		gotChange: dto.Change{ID: "12", Title: "New Change", RequirementBody: body, ChangeTypes: []string{"test"}},
+		gotChange: dto.Change{ID: "12", Title: "New Change", Body: body, ChangeTypes: []string{"test"}},
 	}
 	m := NewModelWithClient(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
@@ -1567,15 +1580,15 @@ func TestChangeUpdateSaveUpdatesChangedExtractedFieldsAndReloads(t *testing.T) {
 
 func TestChangeUpdateOnlyCallsChangedFieldEndpoints(t *testing.T) {
 	original := dto.Change{
-		ID:              "12",
-		Title:           "Old Change",
-		RequirementBody: "# Old Change\n\nTypes: feature\n\n## Problem Statement\nOld body.",
-		ChangeTypes:     []string{"feature"},
+		ID:          "12",
+		Title:       "Old Change",
+		Body:        "# Old Change\n\nTypes: feature\n\n## Problem Statement\nOld body.",
+		ChangeTypes: []string{"feature"},
 	}
 	body := "# Old Change\n\nTypes: feature\n\n## Problem Statement\nNew body."
 	client := &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
-		gotChange: dto.Change{ID: "12", Title: "Old Change", RequirementBody: body, ChangeTypes: []string{"feature"}},
+		gotChange: dto.Change{ID: "12", Title: "Old Change", Body: body, ChangeTypes: []string{"feature"}},
 	}
 	m := NewModelWithClient(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
@@ -1595,15 +1608,15 @@ func TestChangeUpdateOnlyCallsChangedFieldEndpoints(t *testing.T) {
 	assert.Equal(t, ChangeDetailsState, got.state)
 }
 
-func TestChangeEditSynthesizesMetadataForLegacyRequirementBody(t *testing.T) {
+func TestChangeEditSynthesizesMetadataForLegacyBody(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangeDetailsState
 	m.changeList.Detail = dto.Change{
-		ID:              "12",
-		Title:           "Legacy Change",
-		RequirementBody: "## Problem Statement\nLegacy body.",
-		ChangeTypes:     []string{"feature", "test"},
-		EpicName:        "Epic Five",
+		ID:          "12",
+		Title:       "Legacy Change",
+		Body:        "## Problem Statement\nLegacy body.",
+		ChangeTypes: []string{"feature", "test"},
+		EpicName:    "Epic Five",
 	}
 
 	got, _ := sendCommand(m, "/edit")
@@ -1616,12 +1629,12 @@ func TestChangeEditAddsBackendEpicWhenStoredMetadataOmitsEpic(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangeDetailsState
 	m.changeList.Detail = dto.Change{
-		ID:              "12",
-		Title:           "Existing Change",
-		RequirementBody: "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nExisting body.",
-		ChangeTypes:     []string{"feature"},
-		EpicID:          "5",
-		EpicName:        "Epic Five",
+		ID:          "12",
+		Title:       "Existing Change",
+		Body:        "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nExisting body.",
+		ChangeTypes: []string{"feature"},
+		EpicID:      "5",
+		EpicName:    "Epic Five",
 	}
 
 	got, _ := sendCommand(m, "/edit")
@@ -1638,10 +1651,10 @@ func TestChangeEditPreservesLongMarkdownOutsidePromptLimit(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangeDetailsState
 	m.changeList.Detail = dto.Change{
-		ID:              "12",
-		Title:           "Long Change",
-		RequirementBody: body,
-		ChangeTypes:     []string{"feature"},
+		ID:          "12",
+		Title:       "Long Change",
+		Body:        body,
+		ChangeTypes: []string{"feature"},
 	}
 
 	got, _ := sendCommand(m, "/edit")
@@ -1653,11 +1666,11 @@ func TestChangeEditPreservesLongMarkdownOutsidePromptLimit(t *testing.T) {
 
 func TestChangeUpdateOmittedEpicClearsBackendOnlyEpicID(t *testing.T) {
 	original := dto.Change{
-		ID:              "12",
-		Title:           "Existing Change",
-		RequirementBody: "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nExisting body.",
-		ChangeTypes:     []string{"feature"},
-		EpicID:          "5",
+		ID:          "12",
+		Title:       "Existing Change",
+		Body:        "# Existing Change\n\nTypes: feature\n\n## Problem Statement\nExisting body.",
+		ChangeTypes: []string{"feature"},
+		EpicID:      "5",
 	}
 	client := &fakeClient{
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
@@ -1686,8 +1699,8 @@ func TestChangeFindFilterNarrowsVisibleRowsAndClearRestoresList(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
 	m.changeList = m.changeList.WithRows([]dto.Change{
-		{ID: "1", Ref: "1", Title: "Alpha", ChangePhase: "backlog", ChangeTypes: []string{"feature"}, RequirementBody: "first"},
-		{ID: "2", Ref: "2", Title: "Beta", ChangePhase: "done", ChangeTypes: []string{"test"}, RequirementBody: "second"},
+		{ID: "1", Ref: "1", Title: "Alpha", ChangePhase: "backlog", ChangeTypes: []string{"feature"}, Body: "first"},
+		{ID: "2", Ref: "2", Title: "Beta", ChangePhase: "done", ChangeTypes: []string{"test"}, Body: "second"},
 	})
 
 	got, _ := sendCommand(m, "/find-filter")
@@ -1803,16 +1816,16 @@ func TestChangeDetailsTableSelectionMovesAcrossAllRows(t *testing.T) {
 	m := NewModel()
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
-		ID:              "11",
-		Ref:             "3",
-		Slug:            "change-three",
-		Title:           "Backend Change",
-		ChangePhase:     "backlog",
-		ChangeTypes:     []string{"feature", "test"},
-		EpicName:        "Epic Five",
-		RequirementBody: "Requirement body",
-		PullRequestBody: "Pull request body",
-		PullRequestURL:  "https://example.test/pr",
+		ID:          "11",
+		Ref:         "3",
+		Slug:        "change-three",
+		Title:       "Backend Change",
+		ChangePhase: "backlog",
+		ChangeTypes: []string{"feature", "test"},
+		EpicName:    "Epic Five",
+		Body:        "Requirement body",
+		PRBody:      "Pull request body",
+		PRUrl:       "https://example.test/pr",
 	})
 
 	assert.Equal(t, 0, m.changeList.DetailSelected)
@@ -2017,19 +2030,19 @@ func TestChangeDetailsRequirementSelectionOpensEditorAndSavesResult(t *testing.T
 	longBody := strings.Repeat("requirement line\n", 40)
 	client := &fakeClient{
 		gotChange: dto.Change{
-			ID:              "12",
-			Ref:             "3",
-			Title:           "Backend Change",
-			RequirementBody: "Edited requirement body",
+			ID:    "12",
+			Ref:   "3",
+			Title: "Backend Change",
+			Body:  "Edited requirement body",
 		},
 	}
 	m := NewModelWithClient(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
-		ID:              "12",
-		Ref:             "3",
-		Title:           "Backend Change",
-		RequirementBody: longBody,
+		ID:    "12",
+		Ref:   "3",
+		Title: "Backend Change",
+		Body:  longBody,
 	})
 	m.changeList.DetailSelected = 6
 
@@ -2049,7 +2062,7 @@ func TestChangeDetailsRequirementSelectionOpensEditorAndSavesResult(t *testing.T
 
 	assert.Equal(t, []string{"Edited requirement body"}, client.changeBodyUpdates)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Equal(t, "Edited requirement body", got.changeList.Detail.RequirementBody)
+	assert.Equal(t, "Edited requirement body", got.changeList.Detail.Body)
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 6, got.changeList.DetailSelected)
 	assert.Empty(t, got.detailEditField)
@@ -2059,19 +2072,19 @@ func TestChangeDetailsRequirementSelectionOpensEditorAndSavesResult(t *testing.T
 func TestChangeDetailsPullRequestSelectionOpensEditorAndSavesResult(t *testing.T) {
 	client := &fakeClient{
 		gotChange: dto.Change{
-			ID:              "12",
-			Ref:             "3",
-			Title:           "Backend Change",
-			PullRequestBody: "Edited pull request body",
+			ID:     "12",
+			Ref:    "3",
+			Title:  "Backend Change",
+			PRBody: "Edited pull request body",
 		},
 	}
 	m := NewModelWithClient(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
-		ID:              "12",
-		Ref:             "3",
-		Title:           "Backend Change",
-		PullRequestBody: "Original pull request body",
+		ID:     "12",
+		Ref:    "3",
+		Title:  "Backend Change",
+		PRBody: "Original pull request body",
 	})
 	m.changeList.DetailSelected = 7
 
@@ -2090,7 +2103,7 @@ func TestChangeDetailsPullRequestSelectionOpensEditorAndSavesResult(t *testing.T
 
 	assert.Equal(t, []string{"Edited pull request body"}, client.changePRUpdates)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Equal(t, "Edited pull request body", got.changeList.Detail.PullRequestBody)
+	assert.Equal(t, "Edited pull request body", got.changeList.Detail.PRBody)
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 7, got.changeList.DetailSelected)
 	assert.Empty(t, got.detailEditField)
@@ -2189,15 +2202,15 @@ func TestChangeDetailsTableTruncatesLongRequirementAndPullRequestRows(t *testing
 	m.width = 120
 	m.height = 40
 	m.changeList = m.changeList.WithDetail(dto.Change{
-		ID:              "11",
-		Ref:             "3",
-		Slug:            "change-three",
-		Title:           "Backend Change",
-		ChangePhase:     "backlog",
-		EpicName:        "Epic Five",
-		RequirementBody: strings.Repeat("requirement content ", 120),
-		PullRequestBody: "pull request start\n" + strings.Repeat("pull request middle ", 120) + "\npull request end",
-		PullRequestURL:  "https://example.test/pr",
+		ID:          "11",
+		Ref:         "3",
+		Slug:        "change-three",
+		Title:       "Backend Change",
+		ChangePhase: "backlog",
+		EpicName:    "Epic Five",
+		Body:        strings.Repeat("requirement content ", 120),
+		PRBody:      "pull request start\n" + strings.Repeat("pull request middle ", 120) + "\npull request end",
+		PRUrl:       "https://example.test/pr",
 	})
 
 	firstView := stripANSI(m.View())

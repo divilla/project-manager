@@ -48,10 +48,10 @@
       />
 
       <q-input
-        v-model="requirementBody"
+        v-model="body"
         outlined
         type="textarea"
-        label="Requirement body"
+        label="Body"
         input-style="min-height: 240px"
         :disable="loading || saving"
       />
@@ -68,7 +68,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
-import { createChange, getChangeReferences } from '@/features/changes/api/changeApi';
+import { createChange, getChangeTypes } from '@/features/changes/api/changeApi';
 import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
 import type { ChangeCreateInput, SelectOption } from '@/features/changes/model/change.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
@@ -80,7 +80,7 @@ const { currentProjectId } = storeToRefs(projectSelection);
 const { epics } = storeToRefs(changeCache);
 
 const title = ref('');
-const requirementBody = ref('');
+const body = ref('');
 const changeTypes = ref<string[]>([]);
 const epicId = ref<number | null>(null);
 const typeOptions = ref<SelectOption[]>([]);
@@ -103,12 +103,12 @@ async function loadCreateContext() {
   error.value = '';
 
   try {
-    const [references] = await Promise.all([
-      getChangeReferences(),
+    const [types] = await Promise.all([
+      getChangeTypes(),
       projectSelection.hasLoaded ? Promise.resolve() : projectSelection.loadProjects(),
     ]);
-    typeOptions.value = references.types.map((type) => ({ label: type.slug, value: type.slug }));
-    if (!changeTypes.value.length && references.types[0]) changeTypes.value = [references.types[0].slug];
+    typeOptions.value = types.map((type) => ({ label: type.slug, value: type.slug }));
+    if (!changeTypes.value.length && types[0]) changeTypes.value = [types[0].slug];
     if (currentProjectId.value) await changeCache.loadProjectChanges(currentProjectId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to load change creation context.';
@@ -136,7 +136,7 @@ async function createChangeFromPage() {
       project_id: projectId,
       epic_id: epicId.value || null,
       title: changeTitle,
-      requirement_body: requirementBody.value.trim(),
+      body: body.value.trim(),
       change_types: changeTypes.value,
     };
 

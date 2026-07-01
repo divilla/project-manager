@@ -25,7 +25,7 @@
             <th class="text-left">Title</th>
             <th class="text-center">Epic</th>
             <th class="text-center">Phase</th>
-            <th class="text-center">Closed</th>
+            <th class="text-center">Open</th>
             <th class="text-center">Complete</th>
             <th class="text-center">Modified</th>
             <th class="text-center">Version</th>
@@ -40,9 +40,9 @@
               <div>{{ currentChange.title }}</div>
               <div class="text-caption text-white">{{ currentChange.slug }}</div>
             </td>
-            <td class="text-center">{{ epicName(currentChange.epic_id) }}</td>
+            <td class="text-center">{{ epicName(currentChange) }}</td>
             <td class="text-center">{{ currentChange.change_phase }}</td>
-            <td class="text-center">{{ currentChange.closed ? 'Yes' : 'No' }}</td>
+            <td class="text-center">{{ currentChange.open ? 'Yes' : 'No' }}</td>
             <td class="text-center">{{ completionLabel(currentChange) }}</td>
             <td class="text-center">{{ formatModified(currentChange.modified) }}</td>
             <td class="text-center">{{ currentChange.version }}</td>
@@ -56,7 +56,12 @@
                 @click.stop
               >
                 <q-list>
-                  <q-item clickable v-close-popup data-action="edit-change" @click.stop="openChangeEdit(currentChange.id)">
+                  <q-item
+                    clickable
+                    v-close-popup
+                    data-action="edit-change"
+                    @click.stop="openChangeEdit(currentChange.id)"
+                  >
                     <q-item-section>
                       <q-item-label>Edit</q-item-label>
                     </q-item-section>
@@ -160,8 +165,26 @@
       <q-markup-table flat bordered class="change-detail-table">
         <tbody>
           <tr>
-            <td class="change-detail-requirement-body-cell" style="padding-top: 32px; padding-bottom: 32px;">
-              <div class="apply-markdown" v-html="currentChange.requirement_html" />
+            <td class="text-right text-weight-bold">Agent Edit</td>
+            <td>{{ currentChange.agent_edit ? 'Yes' : 'No' }}</td>
+          </tr>
+          <tr v-if="currentChange.pr_url">
+            <td class="text-right text-weight-bold">PR URL</td>
+            <td>
+              <a v-if="safePRUrl" :href="safePRUrl" target="_blank" rel="noreferrer">
+                {{ currentChange.pr_url }}
+              </a>
+              <span v-else>{{ currentChange.pr_url }}</span>
+            </td>
+          </tr>
+          <tr>
+            <td class="change-detail-body-cell" style="padding-top: 32px; padding-bottom: 32px">
+              <div class="apply-markdown" v-html="currentChange.html" />
+            </td>
+          </tr>
+          <tr v-if="currentChange.pr_html">
+            <td class="change-detail-body-cell" style="padding-top: 32px; padding-bottom: 32px">
+              <div class="apply-markdown" v-html="currentChange.pr_html" />
             </td>
           </tr>
         </tbody>
@@ -196,7 +219,13 @@
           </q-card-section>
 
           <q-card-actions align="right">
-            <q-btn flat icon="close" label="Cancel" :disable="savingTestCase" @click="closeTestCaseEdit" />
+            <q-btn
+              flat
+              icon="close"
+              label="Cancel"
+              :disable="savingTestCase"
+              @click="closeTestCaseEdit"
+            />
             <q-btn
               color="secondary"
               icon="save"
@@ -324,13 +353,25 @@ const testCaseError = ref('');
 const error = computed(() => projectSelection.error || testCaseError.value);
 const loading = computed(() => detailLoading.value || changeCache.loading);
 const changeId = computed(() => Number(route.params.id));
-const changeMap = computed(() => new Map(changes.value.map((change) => [change.id, change])));
 const currentChange = computed(() =>
-  detailChange.value?.id === changeId.value ? detailChange.value : changeMap.value.get(changeId.value) || null,
+  detailChange.value?.id === changeId.value ? detailChange.value : null,
 );
+const safePRUrl = computed(() => normalizeHTTPURL(currentChange.value?.pr_url || ''));
 const changeOptions = computed(() =>
   changes.value.map((change) => ({ label: `#${change.id} ${change.title}`, value: change.id })),
 );
+
+function normalizeHTTPURL(value: string) {
+  try {
+    const parsed = new URL(value);
+    if (!parsed.hostname || (parsed.protocol !== 'https:' && parsed.protocol !== 'http:')) {
+      return '';
+    }
+    return parsed.href;
+  } catch {
+    return '';
+  }
+}
 
 async function ensureProjectsLoaded() {
   if (!projectSelection.hasLoaded) {
@@ -361,12 +402,18 @@ async function loadChangeDetail() {
 }
 
 function projectName(projectId: number) {
-  return projectSelection.projects.find((project) => project.id === projectId)?.name || `#${projectId}`;
+  return (
+    projectSelection.projects.find((project) => project.id === projectId)?.name || `#${projectId}`
+  );
 }
 
 function detectProjectMismatch(change: Change) {
   const currentProjectId = projectSelection.currentProjectId;
-  if (!currentProjectId || currentProjectId === change.project_id || projectSelection.isSwitchingProject) {
+  if (
+    !currentProjectId ||
+    currentProjectId === change.project_id ||
+    projectSelection.isSwitchingProject
+  ) {
     projectMismatchOpen.value = false;
     projectMismatch.value = null;
     return;
@@ -560,8 +607,14 @@ async function saveTestCaseEdit() {
       id: editingTestCase.value.id,
       scenario,
     });
-    if (editingTestCaseChangeId.value && editingTestCaseChangeId.value !== editingTestCase.value.change_id) {
-      mutation = await updateTestCaseChange(editingTestCase.value.id, editingTestCaseChangeId.value);
+    if (
+      editingTestCaseChangeId.value &&
+      editingTestCaseChangeId.value !== editingTestCase.value.change_id
+    ) {
+      mutation = await updateTestCaseChange(
+        editingTestCase.value.id,
+        editingTestCaseChangeId.value,
+      );
     }
     applyTestCaseMutation(mutation.test_cases, mutation.change);
     testCaseEditOpen.value = false;
@@ -598,9 +651,13 @@ function completionLabel(change: Change) {
   return `${change.done_tc}/${change.total_tc} - ${change.completed}%`;
 }
 
-function epicName(id: number | null | undefined) {
-  if (!id) return 'Standalone';
-  return epics.value.find((epic) => epic.id === id)?.name || `#${id}`;
+function epicName(change: Change) {
+  if (!change.epic_id) return 'Standalone';
+  return (
+    change.epic_name ||
+    epics.value.find((epic) => epic.id === change.epic_id)?.name ||
+    `#${change.epic_id}`
+  );
 }
 
 onMounted(() => {
@@ -636,7 +693,7 @@ watch(changeId, () => {
   width: 64px;
 }
 
-.change-detail-requirement-body-cell {
+.change-detail-body-cell {
   min-height: 160px;
 }
 </style>

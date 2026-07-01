@@ -55,6 +55,7 @@ const (
 	detailEditTypes       detailEditField = "types"
 	detailEditRequirement detailEditField = "requirement"
 	detailEditPullRequest detailEditField = "pull request"
+	detailEditPRUrl       detailEditField = "pr url"
 )
 
 type changesFilters struct {
