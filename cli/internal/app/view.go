@@ -31,7 +31,7 @@ func (m Model) View() string {
 		lines = append(lines, "", changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows()))
 	}
 	if m.state == ChangeDetailsState {
-		details := changes.DetailsView(m.changeList.Detail, width)
+		details := changes.DetailsView(m.changeList, width, m.changeTableRows())
 		if details != "" {
 			lines = append(lines, "", details)
 		}

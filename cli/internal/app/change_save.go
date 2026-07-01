@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -121,6 +122,75 @@ func changeGetCommand(client appClient, id int) tea.Cmd {
 	}
 }
 
+func changeDeleteCommand(client appClient, change dto.Change, target State) tea.Cmd {
+	return func() tea.Msg {
+		id, err := changeNumericID(change)
+		if err != nil {
+			return changeDeletedMsg{target: target, err: err}
+		}
+		return changeDeletedMsg{target: target, err: client.DeleteChange(id)}
+	}
+}
+
+func changeDetailFieldUpdateCommand(client appClient, change dto.Change, field detailEditField, selected dto.Option) tea.Cmd {
+	return func() tea.Msg {
+		id, err := changeNumericID(change)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		switch field {
+		case detailEditPhase:
+			if _, err := client.UpdateChangePhase(id, selected.ID); err != nil {
+				return changeSavedMsg{source: ChangeDetailsState, err: err}
+			}
+		case detailEditTypes:
+			changeTypes := toggleChangeType(change.ChangeTypes, selected)
+			if _, err := client.UpdateChangeTypes(id, changeTypes); err != nil {
+				return changeSavedMsg{source: ChangeDetailsState, err: err}
+			}
+		case detailEditEpic:
+			epicID, err := selectedEpicID(selected)
+			if err != nil {
+				return changeSavedMsg{source: ChangeDetailsState, err: err}
+			}
+			if _, err := client.UpdateChangeEpic(id, epicID); err != nil {
+				return changeSavedMsg{source: ChangeDetailsState, err: err}
+			}
+		default:
+			return changeSavedMsg{source: ChangeDetailsState, err: fmt.Errorf("unsupported change detail field: %s", field)}
+		}
+		change, err := client.GetChange(id)
+		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
+	}
+}
+
+func changeDetailTextUpdateCommand(client appClient, source State, change dto.Change, field detailEditField, value string) tea.Cmd {
+	return func() tea.Msg {
+		id, err := changeNumericID(change)
+		if err != nil {
+			return changeSavedMsg{source: source, err: err}
+		}
+		switch field {
+		case detailEditTitle:
+			if _, err := client.UpdateChangeTitle(id, value); err != nil {
+				return changeSavedMsg{source: source, err: err}
+			}
+		case detailEditRequirement:
+			if _, err := client.UpdateChangeRequirementBody(id, value); err != nil {
+				return changeSavedMsg{source: source, err: err}
+			}
+		case detailEditPullRequest:
+			if _, err := client.UpdateChangePullRequestBody(id, value); err != nil {
+				return changeSavedMsg{source: source, err: err}
+			}
+		default:
+			return changeSavedMsg{source: source, err: fmt.Errorf("unsupported change detail text field: %s", field)}
+		}
+		change, err := client.GetChange(id)
+		return changeSavedMsg{source: source, change: change, err: err}
+	}
+}
+
 func changeReferenceData(client appClient, projectID string, body string) ([]dto.Option, []dto.Option, error) {
 	types, err := client.ListTypes()
 	if err != nil {
@@ -158,4 +228,36 @@ func sameEpicID(parsed *int, original string) bool {
 		return original == ""
 	}
 	return original == strconv.Itoa(*parsed)
+}
+
+func toggleChangeType(current []string, selected dto.Option) []string {
+	selectedID := strings.TrimSpace(selected.ID)
+	if selectedID == "" {
+		selectedID = strings.TrimSpace(selected.Label)
+	}
+	next := make([]string, 0, len(current)+1)
+	removed := false
+	for _, changeType := range current {
+		if changeType == selectedID || changeType == selected.Label {
+			removed = true
+			continue
+		}
+		next = append(next, changeType)
+	}
+	if !removed && selectedID != "" {
+		next = append(next, selectedID)
+	}
+	sort.Strings(next)
+	return next
+}
+
+func selectedEpicID(selected dto.Option) (*int, error) {
+	if selected.ID == "@none" {
+		return nil, nil
+	}
+	epicID, err := strconv.Atoi(strings.TrimSpace(selected.ID))
+	if err != nil || epicID <= 0 {
+		return nil, fmt.Errorf("epic ID must be numeric")
+	}
+	return &epicID, nil
 }

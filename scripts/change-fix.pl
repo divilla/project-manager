@@ -7,7 +7,7 @@ sub fail {
     die "$message\n";
 }
 
-@ARGV == 0 or fail("usage: scripts/change-update.pl");
+@ARGV == 0 or fail("usage: scripts/change-fix.pl");
 
 my $branch = qx{git branch --show-current};
 chomp $branch;
@@ -21,7 +21,7 @@ $change_name =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/
     or fail("invalid change name from current branch: $change_name");
 
 run_checked(qw(git add -A));
-run_checked("git", "commit", "-m", "Implement review comments for $change_name by agent");
+run_checked("git", "commit", "-m", "Fix review findings for $change_name by agent");
 run_checked("git", "push", "origin", "changes/$change_name");
 
 sub run_checked {

@@ -114,7 +114,13 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		switch selected.ID {
 		case "/yes":
 			target := m.dropdown.onSelect
+			previous := m.dropdown.previous
 			m.dropdown = dropdownModel{}
+			if previous == ChangeDetailsState && target == ChangesListState {
+				m.state = ChangeDetailsState
+				m.status = "deleting change"
+				return m, changeDeleteCommand(m.client, m.changeList.Detail, target)
+			}
 			return m.arrive(target, "confirmed")
 		case "/cancel":
 			return m.cancelDropdown()
@@ -137,6 +143,14 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 	if selected.Label == "" {
 		m.err = "no matching option"
 		return m, nil
+	}
+	if m.dropdown.editField != "" {
+		field := m.dropdown.editField
+		change := m.changeList.Detail
+		m.state = m.dropdown.onSelect
+		m.status = "saving " + string(field)
+		m.dropdown = dropdownModel{}
+		return m, changeDetailFieldUpdateCommand(m.client, change, field, selected)
 	}
 	if m.dropdown.filterField != "" {
 		if selected.ID == "/clear" {
@@ -177,7 +191,7 @@ func (m Model) dropdownView(width int) string {
 	}
 	lines := []string{m.dropdown.label + " " + m.dropdown.filter}
 	for i, option := range options {
-		line := m.dropdownLine(option.Label)
+		line := m.dropdownLine(option)
 		if i == m.dropdown.highlighted {
 			line = styles.Default.Selection.Render(line)
 		}
@@ -190,11 +204,31 @@ func (m Model) dropdownView(width int) string {
 	return rendered
 }
 
-func (m Model) dropdownLine(label string) string {
-	if m.dropdown.filterField != "" && label != "/clear" {
-		label = "-" + strings.TrimPrefix(label, "-")
+func (m Model) dropdownLine(option dto.Option) string {
+	label := option.Label
+	if m.dropdown.editField == detailEditTypes {
+		prefix := "+"
+		if selectedChangeType(m.changeList.Detail.ChangeTypes, option) {
+			prefix = "-"
+		}
+		return "    " + prefix + strings.TrimLeft(label, "+-")
+	}
+	if option.ID == "/clear" {
+		return "    " + label
+	}
+	if m.dropdown.filterField != "" {
+		return "    -" + strings.TrimPrefix(label, "-")
 	}
 	return "    " + label
+}
+
+func selectedChangeType(current []string, option dto.Option) bool {
+	for _, changeType := range current {
+		if changeType != "" && (changeType == option.ID || changeType == option.Label) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) isDropdownState() bool {

@@ -35,11 +35,11 @@ AGENTS.md file must never be altered unless there is an explicit prompt to overr
 ### Changes
 
 - A Change is the basic unit of work in this workflow.
-- Change files are stored as `agent/changes/001-change-name.md`.
+- Change files are stored as `agent/changes/<change-name>.md`.
 - Change files must use the standard structure from the Change workflow:
   Goal, Scope, Requirements, Acceptance Criteria, Non-Goals, Design Notes,
-  Relevant Specs, Verification, Review Focus, and Follow-Ups.
-- Change branches use `changes/001-change-name`.
+  Relevant Specs, Verification, QA Test Cases, Review Focus, and Follow-Ups.
+- Change branches use `changes/<change-name>`.
 - If implementation or PR work starts on a branch other than `changes/<change-name>`, stop and alert the user.
 - Change lifecycle: backlog -> branch/rejected -> pull-request -> stage/rejected -> master/rejected.
 - The Change file is the PR contract. Do not implement before the user says `make-change implement`.

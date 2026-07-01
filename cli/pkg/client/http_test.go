@@ -195,19 +195,21 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		switch r.URL.Path {
 		case "/api/v1/change/list":
 			writeJSON(t, w, []map[string]any{{
-				"id":               12,
-				"ref":              3,
-				"slug":             "new-change",
-				"title":            "New Change",
-				"change_phase":     "backlog",
-				"change_types":     []string{"feature", "test"},
-				"epic_id":          5,
-				"epic_name":        "Epic Five",
-				"requirement_body": "body",
-				"done_tc":          2,
-				"total_tc":         5,
-				"completed":        40,
-				"modified":         "2026-06-29T10:45:00Z",
+				"id":                12,
+				"ref":               3,
+				"slug":              "new-change",
+				"title":             "New Change",
+				"change_phase":      "backlog",
+				"change_types":      []string{"feature", "test"},
+				"epic_id":           5,
+				"epic_name":         "Epic Five",
+				"requirement_body":  "body",
+				"pull_request_body": "pr body",
+				"pull_request_url":  "https://example.test/pr/12",
+				"done_tc":           2,
+				"total_tc":          5,
+				"completed":         40,
+				"modified":          "2026-06-29T10:45:00Z",
 			}})
 		case "/api/v1/change/create":
 			writeJSON(t, w, map[string]any{"id": 12, "title": payload["title"], "requirement_body": payload["requirement_body"]})
@@ -215,19 +217,27 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 			writeJSON(t, w, map[string]any{"id": payload["id"], "title": payload["title"]})
 		case "/api/v1/change/update-requirement-body":
 			writeJSON(t, w, map[string]any{"id": payload["id"], "requirement_body": payload["requirement_body"]})
+		case "/api/v1/change/update-pull-request-body":
+			writeJSON(t, w, map[string]any{"id": payload["id"], "pull_request_body": payload["pull_request_body"]})
 		case "/api/v1/change/update-change-types":
 			writeJSON(t, w, map[string]any{"id": payload["id"], "change_types": payload["change_types"]})
+		case "/api/v1/change/update-phase":
+			writeJSON(t, w, map[string]any{"id": payload["id"], "change_phase": payload["change_phase"]})
 		case "/api/v1/change/update-epic":
 			writeJSON(t, w, map[string]any{"id": payload["id"], "epic_id": payload["epic_id"]})
+		case "/api/v1/change/delete":
+			w.WriteHeader(http.StatusNoContent)
 		case "/api/v1/change/get":
 			writeJSON(t, w, map[string]any{"change": map[string]any{
-				"id":               payload["id"],
-				"ref":              3,
-				"slug":             "new-change",
-				"title":            "Fetched Change",
-				"change_phase":     "backlog",
-				"change_types":     []any{"feature"},
-				"requirement_body": "fetched body",
+				"id":                payload["id"],
+				"ref":               3,
+				"slug":              "new-change",
+				"title":             "Fetched Change",
+				"change_phase":      "backlog",
+				"change_types":      []any{"feature"},
+				"requirement_body":  "fetched body",
+				"pull_request_body": "fetched pr body",
+				"pull_request_url":  "https://example.test/pr/12",
 			}})
 		default:
 			require.Failf(t, "unexpected path", "path: %s", r.URL.Path)
@@ -250,6 +260,8 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		ChangeTypes:     []string{"feature", "test"},
 		Title:           "New Change",
 		RequirementBody: "body",
+		PullRequestBody: "pr body",
+		PullRequestURL:  "https://example.test/pr/12",
 		Done:            2,
 		Total:           5,
 		Completed:       40,
@@ -271,10 +283,15 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 	require.NoError(t, err)
 	_, err = client.UpdateChangeRequirementBody(12, "Full body")
 	require.NoError(t, err)
+	_, err = client.UpdateChangePullRequestBody(12, "Full PR body")
+	require.NoError(t, err)
 	_, err = client.UpdateChangeTypes(12, []string{"docs"})
+	require.NoError(t, err)
+	_, err = client.UpdateChangePhase(12, "stage")
 	require.NoError(t, err)
 	_, err = client.UpdateChangeEpic(12, nil)
 	require.NoError(t, err)
+	require.NoError(t, client.DeleteChange(12))
 	fetched, err := client.GetChange(12)
 	require.NoError(t, err)
 	assert.Equal(t, dto.Change{
@@ -285,6 +302,8 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		ChangeTypes:     []string{"feature"},
 		Title:           "Fetched Change",
 		RequirementBody: "fetched body",
+		PullRequestBody: "fetched pr body",
+		PullRequestURL:  "https://example.test/pr/12",
 	}, fetched)
 
 	assert.Equal(t, []string{
@@ -292,8 +311,11 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		"/api/v1/change/create",
 		"/api/v1/change/update-title",
 		"/api/v1/change/update-requirement-body",
+		"/api/v1/change/update-pull-request-body",
 		"/api/v1/change/update-change-types",
+		"/api/v1/change/update-phase",
 		"/api/v1/change/update-epic",
+		"/api/v1/change/delete",
 		"/api/v1/change/get",
 	}, paths)
 	assert.Equal(t, map[string]any{"project_id": float64(7)}, payloads[0])
@@ -306,9 +328,12 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 	}, payloads[1])
 	assert.Equal(t, map[string]any{"id": float64(12), "title": "Renamed"}, payloads[2])
 	assert.Equal(t, map[string]any{"id": float64(12), "requirement_body": "Full body"}, payloads[3])
-	assert.Equal(t, map[string]any{"id": float64(12), "change_types": []any{"docs"}}, payloads[4])
-	assert.Equal(t, map[string]any{"id": float64(12), "epic_id": nil}, payloads[5])
-	assert.Equal(t, map[string]any{"id": float64(12)}, payloads[6])
+	assert.Equal(t, map[string]any{"id": float64(12), "pull_request_body": "Full PR body"}, payloads[4])
+	assert.Equal(t, map[string]any{"id": float64(12), "change_types": []any{"docs"}}, payloads[5])
+	assert.Equal(t, map[string]any{"id": float64(12), "change_phase": "stage"}, payloads[6])
+	assert.Equal(t, map[string]any{"id": float64(12), "epic_id": nil}, payloads[7])
+	assert.Equal(t, map[string]any{"id": float64(12)}, payloads[8])
+	assert.Equal(t, map[string]any{"id": float64(12)}, payloads[9])
 }
 
 func TestListEpicsRequiresCurrentProject(t *testing.T) {

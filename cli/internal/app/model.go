@@ -46,6 +46,17 @@ const (
 	filterType  filterField = "type"
 )
 
+type detailEditField string
+
+const (
+	detailEditTitle       detailEditField = "title"
+	detailEditPhase       detailEditField = "phase"
+	detailEditEpic        detailEditField = "epic"
+	detailEditTypes       detailEditField = "types"
+	detailEditRequirement detailEditField = "requirement"
+	detailEditPullRequest detailEditField = "pull request"
+)
+
 type changesFilters struct {
 	phase dto.Option
 	epic  dto.Option
@@ -60,6 +71,7 @@ type dropdownModel struct {
 	onSelect    State
 	source      selectorSource
 	filterField filterField
+	editField   detailEditField
 	label       string
 	options     []dto.Option
 	filter      string
@@ -108,6 +120,11 @@ type changeSavedMsg struct {
 	reloadErr error
 }
 
+type changeDeletedMsg struct {
+	target State
+	err    error
+}
+
 type currentProjectLoadedMsg struct {
 	id      int
 	project dto.Project
@@ -150,6 +167,7 @@ type Model struct {
 	appConfig       appConfig
 	configPath      string
 	dropdown        dropdownModel
+	detailEditField detailEditField
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.

@@ -17,6 +17,45 @@ func filterOptions(options []dto.Option) []dto.Option {
 	return filtered
 }
 
+func (m Model) dropdownCurrentValueIndex(options []dto.Option) int {
+	if len(options) == 0 {
+		return 0
+	}
+	if m.dropdown.editField != "" {
+		switch m.dropdown.editField {
+		case detailEditPhase:
+			return optionIndex(options, m.changeList.Detail.ChangePhase, m.changeList.Detail.ChangePhase)
+		case detailEditEpic:
+			if m.changeList.Detail.EpicID == "" && m.changeList.Detail.EpicName == "" {
+				return optionIndex(options, "@none", "@none")
+			}
+			return optionIndex(options, m.changeList.Detail.EpicID, m.changeList.Detail.EpicName)
+		case detailEditTypes:
+			for i, option := range options {
+				if selectedChangeType(m.changeList.Detail.ChangeTypes, option) {
+					return i
+				}
+			}
+		}
+	}
+	if m.state == SelectProjectDropDown {
+		return optionIndex(options, m.currentProject.ID, m.currentProject.Label)
+	}
+	return 0
+}
+
+func optionIndex(options []dto.Option, id string, label string) int {
+	for i, option := range options {
+		if id != "" && option.ID == id {
+			return i
+		}
+		if label != "" && option.Label == label {
+			return i
+		}
+	}
+	return 0
+}
+
 func (m *Model) setChangesFilter(field filterField, option dto.Option) {
 	switch field {
 	case filterPhase:

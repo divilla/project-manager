@@ -23,8 +23,11 @@ type Client interface {
 	CreateChange(input dto.ChangeCreateInput) (dto.Change, error)
 	UpdateChangeTitle(id int, title string) (dto.Change, error)
 	UpdateChangeRequirementBody(id int, requirementBody string) (dto.Change, error)
+	UpdateChangePullRequestBody(id int, pullRequestBody string) (dto.Change, error)
 	UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error)
+	UpdateChangePhase(id int, changePhase string) (dto.Change, error)
 	UpdateChangeEpic(id int, epicID *int) (dto.Change, error)
+	DeleteChange(id int) error
 	ListEpics(projectID string) ([]dto.Option, error)
 	ListPhases() ([]dto.Option, error)
 	ListTypes() ([]dto.Option, error)
@@ -146,6 +149,17 @@ func (c HTTPClient) UpdateChangeRequirementBody(id int, requirementBody string) 
 	})
 }
 
+// UpdateChangePullRequestBody updates a change pull request body.
+func (c HTTPClient) UpdateChangePullRequestBody(id int, pullRequestBody string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-pull-request-body", map[string]any{
+		"id":                id,
+		"pull_request_body": pullRequestBody,
+	})
+}
+
 // UpdateChangeTypes updates change type slugs.
 func (c HTTPClient) UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error) {
 	if id <= 0 {
@@ -157,12 +171,31 @@ func (c HTTPClient) UpdateChangeTypes(id int, changeTypes []string) (dto.Change,
 	})
 }
 
+// UpdateChangePhase updates the change phase slug.
+func (c HTTPClient) UpdateChangePhase(id int, changePhase string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-phase", map[string]any{
+		"id":           id,
+		"change_phase": changePhase,
+	})
+}
+
 // UpdateChangeEpic updates or clears the change epic.
 func (c HTTPClient) UpdateChangeEpic(id int, epicID *int) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
 	return c.postChange("/api/v1/change/update-epic", map[string]any{"id": id, "epic_id": epicID})
+}
+
+// DeleteChange deletes a change by numeric ID.
+func (c HTTPClient) DeleteChange(id int) error {
+	if id <= 0 {
+		return fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postNoContent("/api/v1/change/delete", map[string]any{"id": id})
 }
 
 // ListEpics loads epic selector options for a project.
@@ -240,6 +273,11 @@ func (c HTTPClient) postChange(path string, payload any) (dto.Change, error) {
 	return change, nil
 }
 
+func (c HTTPClient) postNoContent(path string, payload any) error {
+	_, err := c.postJSON(path, payload)
+	return err
+}
+
 func (c HTTPClient) postJSON(path string, payload any) (any, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -268,6 +306,9 @@ func (c HTTPClient) postJSON(path string, payload any) (any, error) {
 			}
 		}
 		return nil, fmt.Errorf("backend returned %s", resp.Status)
+	}
+	if resp.StatusCode == http.StatusNoContent {
+		return nil, nil
 	}
 
 	var data any
@@ -474,6 +515,8 @@ func changeFromMap(values map[string]any) dto.Change {
 		ChangeTypes:     firstStringSlice(values, "change_types", "types"),
 		Title:           firstString(values, "title", "name"),
 		RequirementBody: firstString(values, "requirement_body", "requirement"),
+		PullRequestBody: firstString(values, "pull_request_body", "pull_request"),
+		PullRequestURL:  firstString(values, "pull_request_url", "pr_url"),
 		Closed:          firstBool(values, "closed"),
 		Done:            firstInt(values, "done_tc", "done"),
 		Total:           firstInt(values, "total_tc", "total"),

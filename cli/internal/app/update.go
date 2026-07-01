@@ -51,8 +51,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			options = msg.options
 		}
+		if m.dropdown.editField == detailEditEpic {
+			options = append(options, dto.Option{ID: "@none", Label: "@none"})
+		}
 		m.dropdown.options = options
-		m.dropdown.highlighted = 0
+		m.dropdown.highlighted = m.dropdownCurrentValueIndex(options)
 		if len(options) == 0 {
 			if m.dropdown.source == selectorProjects && m.needsProjectSelection() {
 				m.state = MainState
@@ -103,7 +106,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "load failed"
 			return m, nil
 		}
-		m.changeList.Detail = msg.change
+		m.changeList = m.changeList.WithDetail(msg.change)
 		m.status = "loaded change"
 		return m, nil
 	case changeSavedMsg:
@@ -115,15 +118,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "save failed"
 			return m, nil
 		}
-		m.changeList.Detail = msg.change
+		detailSelected := m.changeList.DetailSelected
+		detailOffset := m.changeList.DetailOffset
+		preserveDetailSelection := msg.source == ChangeDetailsState || m.detailEditField != ""
+		m.changeList = m.changeList.WithDetail(msg.change)
+		if preserveDetailSelection {
+			m.changeList.DetailSelected = detailSelected
+			m.changeList.DetailOffset = detailOffset
+			m.changeList = m.changeList.ClampDetailSelection(m.changeTableRows(), terminalWidth(m.width))
+		}
 		m.state = ChangeDetailsState
 		m.status = "save"
 		if msg.reloadErr != nil {
 			m.err = msg.reloadErr.Error()
 			m.status = "load failed"
 		}
+		m.detailEditField = ""
 		m = m.setPromptValue("")
 		return m, nil
+	case changeDeletedMsg:
+		if msg.err != nil {
+			m.state = ChangeDetailsState
+			m.err = msg.err.Error()
+			m.status = "delete failed"
+			return m, nil
+		}
+		return m.arrive(msg.target, "deleted")
 	case projectSavedMsg:
 		if m.state != msg.source {
 			return m, nil
@@ -173,13 +193,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "editor failed"
 			return m, tea.ClearScreen
 		}
-		if msg.source == ChangeCreateState || msg.source == ChangeUpdateState {
+		if msg.source == ChangeCreateState || msg.source == ChangeUpdateState ||
+			(msg.source == ChangeDetailsState && m.detailEditField != "") {
 			m = m.setPromptValue(msg.content)
 		}
 		next, cmd := m.submitPromptValue(msg.content)
 		m = next.(Model)
 		if cmd == nil {
 			return m, tea.ClearScreen
+		}
+		if msg.source == ChangeDetailsState && m.detailEditField != "" {
+			return m, tea.Batch(tea.ClearScreen, cmd)
 		}
 		return m, tea.Sequence(tea.ClearScreen, cmd)
 	case tea.WindowSizeMsg:
@@ -229,6 +253,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+e":
 		return m.openPromptEditor(m.state)
 	case "esc":
+		if m.state == ChangeDetailsState && m.detailEditField != "" {
+			return m.handlePromptCancel()
+		}
 		return m.handleEsc()
 	case "up":
 	case "down":
@@ -262,6 +289,24 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 			return m, nil, true
 		case key == "pgdown":
 			m.changeList = m.changeList.MoveSelection(m.changeTableRows(), m.changeFilters(), m.changeTableRows())
+			return m, nil, true
+		case key == "enter" || msg.Type == tea.KeyCtrlJ:
+			updated, cmd := m.handleListSelection()
+			return updated.(Model), cmd, true
+		}
+	case ChangeDetailsState:
+		switch {
+		case key == "up":
+			m.changeList = m.changeList.MoveDetailSelection(-1, m.changeTableRows(), terminalWidth(m.width))
+			return m, nil, true
+		case key == "down":
+			m.changeList = m.changeList.MoveDetailSelection(1, m.changeTableRows(), terminalWidth(m.width))
+			return m, nil, true
+		case key == "pgup":
+			m.changeList = m.changeList.ScrollDetailViewport(-m.changeTableRows(), m.changeTableRows(), terminalWidth(m.width))
+			return m, nil, true
+		case key == "pgdown":
+			m.changeList = m.changeList.ScrollDetailViewport(m.changeTableRows(), m.changeTableRows(), terminalWidth(m.width))
 			return m, nil, true
 		case key == "enter" || msg.Type == tea.KeyCtrlJ:
 			updated, cmd := m.handleListSelection()
@@ -326,6 +371,12 @@ func (m Model) submitPrompt() (tea.Model, tea.Cmd) {
 
 func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
 	trimmed := strings.TrimSpace(value)
+	if m.detailEditField == detailEditTitle && strings.HasPrefix(trimmed, "/") {
+		return m.executeCommand(trimmed)
+	}
+	if m.detailEditField != "" && (m.state == ChangeDetailsState || m.state == ChangeUpdateState) {
+		return m.saveChangeDetailTextValue(value)
+	}
 	if commandAllowed(m.state, "/save") {
 		if m.state == ChangeCreateState {
 			return m.saveChangeCreateValue(value)
@@ -375,7 +426,8 @@ func (m Model) submitFindValue(value string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handlePromptCancel() (tea.Model, tea.Cmd) {
-	if m.input.Value() != "" {
+	if m.input.Value() != "" || m.detailEditField != "" {
+		m.detailEditField = ""
 		m = m.setPromptValue("")
 		m.status = "prompt cleared"
 		return m, nil
@@ -398,7 +450,14 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 		m.state = DoneState
 		m.quitting = true
 		return m, tea.Quit
-	case ChangeCreateState, ChangeUpdateState, TestCaseCreateState, TestCaseUpdateState,
+	case ChangeUpdateState:
+		if m.detailEditField != "" {
+			m.detailEditField = ""
+			m = m.setPromptValue("")
+			return m.arrive(ChangeDetailsState, "cancel")
+		}
+		return m.arrive(navigation.CancelTarget(m.state), "cancel")
+	case ChangeCreateState, TestCaseCreateState, TestCaseUpdateState,
 		EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
 		return m.arrive(navigation.CancelTarget(m.state), "cancel")
 	default:
@@ -428,7 +487,27 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 		}
 		return m, changeGetCommand(m.client, id)
 	case ChangeDetailsState:
-		m.openDropdown(ListSelectionDropDownState, dropdownList, m.state, TestCaseDetailsState, "Test Cases", []dto.Option{{ID: "test-case-1", Label: "Example Test Case"}}, false)
+		next, row, ok := m.changeList.SelectDetailRow(m.changeTableRows(), terminalWidth(m.width))
+		m.changeList = next
+		if !ok {
+			m.err = "no change details selectable"
+			return m, nil
+		}
+		switch row.Label {
+		case "Phase":
+			return m.beginDetailFieldSelector(detailEditPhase)
+		case "Epic":
+			return m.beginDetailFieldSelector(detailEditEpic)
+		case "Types":
+			return m.beginDetailFieldSelector(detailEditTypes)
+		case "Title":
+			return m.beginDetailTitleEdit()
+		case "Requirement":
+			return m.beginDetailTextEditor(detailEditRequirement)
+		case "Pull Request":
+			return m.beginDetailTextEditor(detailEditPullRequest)
+		}
+		m.status = "selected " + row.Label
 	case EpicsListState:
 		m.openDropdown(ListSelectionDropDownState, dropdownList, m.state, EpicDetailsState, "Epics", []dto.Option{{ID: "epic-1", Label: "Example Epic"}}, false)
 	case ProjectsListState:
@@ -540,14 +619,27 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/editor":
 		return m.openPromptEditor(source)
 	case "/cancel":
+		if source == ChangeUpdateState && m.detailEditField != "" {
+			m.detailEditField = ""
+			m = m.setPromptValue("")
+		}
 		return m.arrive(navigation.CancelTarget(source), "cancel")
 	case "/delete":
 		m.openConfirmation(navigation.DeleteConfirmationState(source), source, navigation.DeleteReturnState(source))
 	case "/phase":
+		if source == ChangeDetailsState {
+			return m.beginDetailFieldSelector(detailEditPhase)
+		}
 		return m.beginSelector(SelectPhaseDropDown)
 	case "/epic":
+		if source == ChangeDetailsState {
+			return m.beginDetailFieldSelector(detailEditEpic)
+		}
 		return m.beginSelector(SelectEpicDropDown)
 	case "/types":
+		if source == ChangeDetailsState {
+			return m.beginDetailFieldSelector(detailEditTypes)
+		}
 		return m.beginSelector(SelectTypesDropDown)
 	case "/phase-filter":
 		return m.beginFilter("Phase Filter", selectorPhases, filterPhase)
@@ -615,6 +707,53 @@ func (m Model) beginSelector(state State) (tea.Model, tea.Cmd) {
 func (m Model) beginFilter(label string, source selectorSource, field filterField) (tea.Model, tea.Cmd) {
 	m.openFilterDropdown(label, source, field)
 	return m, selectorCommand(m.client, source, m.currentProject.ID)
+}
+
+func (m Model) beginDetailTitleEdit() (tea.Model, tea.Cmd) {
+	m.previousState = ChangeDetailsState
+	m.state = ChangeUpdateState
+	m.detailEditField = detailEditTitle
+	m.input.Placeholder = "Write a Title"
+	m = m.setPromptValue(m.changeList.Detail.Title)
+	m.status = "editing title"
+	return m, nil
+}
+
+func (m Model) beginDetailTextEditor(field detailEditField) (tea.Model, tea.Cmd) {
+	m.detailEditField = field
+	switch field {
+	case detailEditRequirement:
+		m = m.setPromptValue(m.changeList.Detail.RequirementBody)
+	case detailEditPullRequest:
+		m = m.setPromptValue(m.changeList.Detail.PullRequestBody)
+	default:
+		m.err = "unsupported editable detail text field"
+		return m, nil
+	}
+	return m.openPromptEditor(ChangeDetailsState)
+}
+
+func (m Model) beginDetailFieldSelector(field detailEditField) (tea.Model, tea.Cmd) {
+	m.detailEditField = ""
+	switch field {
+	case detailEditPhase:
+		m.openSelectorDropdown(SelectPhaseDropDown, ChangeDetailsState, ChangeDetailsState, "Phase", selectorPhases)
+	case detailEditEpic:
+		m.openSelectorDropdown(SelectEpicDropDown, ChangeDetailsState, ChangeDetailsState, "Epic", selectorEpics)
+	case detailEditTypes:
+		m.openSelectorDropdown(SelectTypesDropDown, ChangeDetailsState, ChangeDetailsState, "Types", selectorTypes)
+	default:
+		m.err = "unsupported editable detail field"
+		return m, nil
+	}
+	m.dropdown.editField = field
+	return m, selectorCommand(m.client, m.dropdown.source, m.currentProject.ID)
+}
+
+func (m Model) saveChangeDetailTextValue(value string) (tea.Model, tea.Cmd) {
+	field := m.detailEditField
+	m.status = "saving " + string(field)
+	return m, changeDetailTextUpdateCommand(m.client, m.state, m.changeList.Detail, field, value)
 }
 
 func (m Model) needsProjectSelection() bool {

@@ -7,7 +7,7 @@ sub fail {
     die "$message\n";
 }
 
-@ARGV == 0 or fail("usage: scripts/change-update.pl");
+@ARGV == 0 or fail("usage: scripts/change-docs.pl");
 
 my $branch = qx{git branch --show-current};
 chomp $branch;

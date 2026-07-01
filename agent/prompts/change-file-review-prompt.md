@@ -1,30 +1,40 @@
-Continue the code review for the current repository.
+# Review Request
 
-Review the current branch against `origin/stage`.
+Review the current branch against `origin/stage` as a 10x senior engineer.
 
-Before writing findings:
-1. Read `agent/changes/107-cli-implement-changes.md`.
-2. Read the relevant docs under `docs/`.
+Change contract: `agent/changes/108-cli-improve-changes-and-agentic-workflow.md`
+
+## Review Steps
+
+1. Read and use the Change contract as the source of truth and implementation contract.
+2. Read and use the relevant branch documentation under `docs/` as the behavioral reference.
 3. Inspect the full diff against `origin/stage`.
-4. Verify the implementation against the Change file and docs, not against assumptions.
-5. Focus especially on regressions introduced by the latest fixes.
+4. Verify behavior against the Change file and current docs, not assumptions.
+5. Pay close attention to regressions from the latest fixes.
 
-Review rules:
-- Report only actionable findings.
-- Prioritize correctness, data loss, duplicate writes, broken state transitions, contract violations, missing required tests, and user-visible regressions.
-- Do not report style nits, preferences, or unrelated cleanup.
-- Do not broaden the Change scope.
-- If behavior is ambiguous, identify the ambiguity as a question instead of inventing a requirement.
+## Review Rules
+
 - Treat the Change file as the PR contract.
-- Treat current `docs/` changes as behavioral reference.
-- Verify create/update/list/detail/filter flows against the documented `mch` behavior.
+- Treat current `docs/` changes as the behavioral reference.
+- Report only actionable findings.
+- Prioritize correctness bugs, data loss risks, duplicate writes, broken state transitions, contract violations, missing required tests, and user-visible regressions.
+- Do not report style nits, preferences, unrelated cleanup, or scope expansions.
+- Do not broaden the Change scope.
+- If behavior is ambiguous, ask a question instead of inventing a requirement.
+
+## Findings Format
 
 For each finding, include:
+
 - Severity: `P0`, `P1`, `P2`, or `P3`
 - File and line
 - Concrete impact
 - Specific fix direction
 
-If no blocking issues exist, say exactly:
+Do not add blank lines between bullet points within a finding. Add one blank line between separate findings.
 
-No blocking issues found.
+## No Blocking Issues
+
+If there are no blocking issues, say exactly:
+
+`No blocking issues found.`

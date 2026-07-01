@@ -12,6 +12,8 @@ type Change struct {
 	ChangeTypes     []string
 	Title           string
 	RequirementBody string
+	PullRequestBody string
+	PullRequestURL  string
 	Closed          bool
 	Done            int
 	Total           int

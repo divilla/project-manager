@@ -1,4 +1,4 @@
-Using `agent/changes/106-db-changes-ref-slug-insert-seed.md` as the source of truth, update or create the documentation needed to precisely describe the desired external behavior for this Change.
+Using `agent/changes/108-cli-improve-changes-and-agentic-workflow.md` as the source of truth, update or create the documentation needed to precisely describe the desired external behavior for this Change.
 
 Before editing docs:
 1. Read the Change file.

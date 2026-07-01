@@ -1,4 +1,4 @@
-Implement the code described in Change file `agent/changes/107-cli-implement-changes.md` with senior-level discipline.
+Implement the code described in Change file `agent/changes/108-cli-improve-changes-and-agentic-workflow.md` with senior-level discipline.
 
 Before coding:
 1. Read the full Change file and use it as the source of truth and implementation contract.

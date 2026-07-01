@@ -1,6 +1,6 @@
 Draft a concise, senior-level PR title and body for the current branch. Do not create the PR.
 
-Use `agent/changes/107-cli-implement-changes.md` as the PR contract and inspect the full current branch diff before writing. The PR draft must reflect both the Change file and all actual changes currently contained in this branch.
+Use `agent/changes/108-cli-improve-changes-and-agentic-workflow.md` as the PR contract and inspect the full current branch diff before writing. The PR draft must reflect both the Change file and all actual changes currently contained in this branch.
 
 Requirements:
 - The first line of the PR body must be the title, formatted exactly as # <Title>, followed by exactly one blank line.

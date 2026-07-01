@@ -218,24 +218,41 @@ func shrinkColumns(available, typesWidth, epicWidth, titleWidth int) (int, int, 
 	return typesWidth, epicWidth, titleWidth
 }
 
-// DetailsView renders selected change details.
-func DetailsView(change dto.Change, width int) string {
-	if change.ID == "" && change.Title == "" {
+// DetailsView renders selected change details as a two-column selectable table.
+func DetailsView(m Model, width int, pageSize int) string {
+	if m.Detail.ID == "" && m.Detail.Title == "" {
 		return ""
 	}
-	lines := []string{
-		detailLine("Ref", displayRef(change)),
-		detailLine("Slug", change.Slug),
-		detailLine("Title", change.Title),
-		detailLine("Phase", change.ChangePhase),
-		detailLine("Types", strings.Join(change.ChangeTypes, "|")),
-		detailLine("Epic", epicLabel(change)),
-		detailLine("Closed", fmt.Sprintf("%t", change.Closed)),
+	if pageSize < 1 {
+		pageSize = 1
 	}
-	if strings.TrimSpace(change.RequirementBody) != "" {
-		lines = append(lines, detailWrappedLines("Body", change.RequirementBody, 88)...)
+	m = m.ClampDetailSelection(pageSize, width)
+	rows := DetailRows(m.Detail)
+	if len(rows) == 0 {
+		return ""
 	}
-	return ui.TruncateBlock(strings.Join(lines, "\n"), width)
+	tableWidth := innerTableWidth(width)
+	contentWidth := max(20, tableWidth)
+	labelWidth, textWidth := DetailColumnWidths(m.Detail, width)
+
+	allLines := make([]string, 0, len(rows))
+	for rowIndex, row := range rows {
+		allLines = append(allLines, detailTableRowLines(row, labelWidth, textWidth, rowIndex == m.DetailSelected)...)
+		if detailDividerAfter(row) {
+			allLines = append(allLines, detailDividerLine(labelWidth, textWidth))
+		}
+	}
+	offset := clampLineOffset(m.DetailOffset, len(allLines), pageSize)
+	end := offset + pageSize
+	if end > len(allLines) {
+		end = len(allLines)
+	}
+	lines := append([]string(nil), allLines[offset:end]...)
+	for len(lines) < pageSize {
+		lines = append(lines, detailBlankLine(labelWidth, textWidth))
+	}
+	content := ui.TruncateBlock(strings.Join(lines, "\n"), contentWidth)
+	return boxedTable(content, contentWidth)
 }
 
 func tableText(value string, limit int) string {
@@ -266,34 +283,52 @@ func innerTableWidth(width int) int {
 	return width - 2
 }
 
-func detailLine(label, value string) string {
-	if strings.TrimSpace(value) == "" {
-		value = "-"
-	}
-	return styles.Default.Muted.Render(fmt.Sprintf("    %8s: ", label)) + styles.Default.Foreground.Render(value)
-}
-
-func detailWrappedLines(label, value string, limit int) []string {
-	value = strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
-	parts := strings.Split(value, "\n")
-	lines := make([]string, 0, len(parts))
-	prefix := styles.Default.Muted.Render(fmt.Sprintf("    %8s: ", label))
-	indent := styles.Default.Muted.Render(strings.Repeat(" ", 14))
-	for i, part := range parts {
-		wrapped := wrapWords(part, limit)
-		if len(wrapped) == 0 {
-			wrapped = []string{""}
+func detailTableRowLines(row DetailRow, labelWidth int, textWidth int, selected bool) []string {
+	textLines := detailRowTextLines(row, textWidth)
+	lines := make([]string, 0, len(textLines))
+	for i, text := range textLines {
+		label := ""
+		if i == 0 {
+			label = row.Label
 		}
-		for j, line := range wrapped {
-			switch {
-			case i == 0 && j == 0:
-				lines = append(lines, prefix+styles.Default.Foreground.Render(line))
-			default:
-				lines = append(lines, indent+styles.Default.Foreground.Render(line))
-			}
+		line := fmt.Sprintf("%*s │ %-*s", labelWidth, tableText(label, labelWidth), textWidth, tableText(text, textWidth))
+		if selected && row.Selectable {
+			lines = append(lines, detailSelectedStyle(row).Render(line))
+			continue
 		}
+		lines = append(lines, styles.Default.Muted.Render(fmt.Sprintf("%*s │ ", labelWidth, tableText(label, labelWidth)))+detailValueStyle(row).Render(fmt.Sprintf("%-*s", textWidth, tableText(text, textWidth))))
 	}
 	return lines
+}
+
+func detailDividerLine(labelWidth int, textWidth int) string {
+	return styles.Default.Muted.Render(strings.Repeat("─", labelWidth) + "─┼─" + strings.Repeat("─", textWidth))
+}
+
+func detailBlankLine(labelWidth int, textWidth int) string {
+	return styles.Default.Muted.Render(fmt.Sprintf("%*s │ %-*s", labelWidth, "", textWidth, ""))
+}
+
+func detailValueStyle(row DetailRow) lipgloss.Style {
+	switch row.Label {
+	case "Phase":
+		return phaseStyle(row.Text)
+	case "Title":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	default:
+		return styles.Default.Foreground
+	}
+}
+
+func detailSelectedStyle(row DetailRow) lipgloss.Style {
+	switch row.Label {
+	case "Phase":
+		return phaseStyle(row.Text).Background(lipgloss.Color("60"))
+	case "Title":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("60"))
+	default:
+		return styles.Default.Selection
+	}
 }
 
 func wrapWords(value string, limit int) []string {
@@ -313,6 +348,20 @@ func wrapWords(value string, limit int) []string {
 	}
 	lines = append(lines, current)
 	return lines
+}
+
+func detailLabelWidth(rows []DetailRow) int {
+	width := 5
+	for _, row := range rows {
+		if rowWidth := lipgloss.Width(row.Label); rowWidth > width {
+			width = rowWidth
+		}
+	}
+	return width
+}
+
+func normalizeNewlines(value string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(value, "\r\n", "\n"), "\r", "\n")
 }
 
 func displayRef(change dto.Change) string {

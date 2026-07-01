@@ -19,11 +19,20 @@ type Filters struct {
 
 // Model stores changes list and detail state.
 type Model struct {
-	Rows     []dto.Change
-	Selected int
-	Offset   int
-	Detail   dto.Change
-	Loading  bool
+	Rows           []dto.Change
+	Selected       int
+	Offset         int
+	Detail         dto.Change
+	DetailSelected int
+	DetailOffset   int
+	Loading        bool
+}
+
+// DetailRow is one row in the Change details table.
+type DetailRow struct {
+	Label      string
+	Text       string
+	Selectable bool
 }
 
 // ParsedRequirement stores metadata extracted from requirement markdown.
@@ -104,8 +113,231 @@ func (m Model) SelectDetail(filters Filters) (Model, dto.Change, bool) {
 	m = m.ClampSelection(filters, 1)
 	m.Offset = clampOffset(m.Offset, m.Selected, len(visible), 1)
 	selected := visible[m.Selected]
-	m.Detail = selected
+	m = m.WithDetail(selected)
 	return m, selected, true
+}
+
+// WithDetail stores the selected Change and resets detail-table selection.
+func (m Model) WithDetail(change dto.Change) Model {
+	m.Detail = change
+	m.DetailSelected = firstSelectableDetailRow(DetailRows(change))
+	m.DetailOffset = 0
+	return m
+}
+
+// MoveDetailSelection moves within editable detail rows and keeps the row visible.
+func (m Model) MoveDetailSelection(delta int, pageSize int, width int) Model {
+	rows := DetailRows(m.Detail)
+	if len(rows) == 0 {
+		m.DetailSelected = 0
+		m.DetailOffset = 0
+		return m
+	}
+	m = m.ClampDetailSelection(pageSize, width)
+	next := nextSelectableDetailRow(rows, m.DetailSelected, delta)
+	if next >= 0 {
+		m.DetailSelected = next
+	}
+	_, textWidth := DetailColumnWidths(m.Detail, width)
+	m.DetailOffset = detailRowLineStart(rows, m.DetailSelected, textWidth)
+	m.DetailOffset = clampLineOffset(m.DetailOffset, detailLineCount(rows, textWidth), pageSize)
+	return m
+}
+
+// ClampDetailSelection keeps the selected detail row and scroll offset in bounds.
+func (m Model) ClampDetailSelection(pageSize int, width int) Model {
+	rows := DetailRows(m.Detail)
+	if len(rows) == 0 {
+		m.DetailSelected = 0
+		m.DetailOffset = 0
+		return m
+	}
+	if m.DetailSelected < 0 || m.DetailSelected >= len(rows) || !rows[m.DetailSelected].Selectable {
+		m.DetailSelected = firstSelectableDetailRow(rows)
+	}
+	_, textWidth := DetailColumnWidths(m.Detail, width)
+	m.DetailOffset = clampLineOffset(m.DetailOffset, detailLineCount(rows, textWidth), pageSize)
+	return m
+}
+
+// ScrollDetailViewport moves the detail table viewport by rendered lines.
+func (m Model) ScrollDetailViewport(delta int, pageSize int, width int) Model {
+	rows := DetailRows(m.Detail)
+	if len(rows) == 0 {
+		m.DetailSelected = 0
+		m.DetailOffset = 0
+		return m
+	}
+	_, textWidth := DetailColumnWidths(m.Detail, width)
+	m.DetailOffset = clampLineOffset(m.DetailOffset+delta, detailLineCount(rows, textWidth), pageSize)
+	m.DetailSelected = selectableDetailRowAtOffset(rows, m.DetailOffset, textWidth)
+	return m
+}
+
+// SelectDetailRow returns the currently selected editable detail row.
+func (m Model) SelectDetailRow(pageSize int, width int) (Model, DetailRow, bool) {
+	m = m.ClampDetailSelection(pageSize, width)
+	rows := DetailRows(m.Detail)
+	if len(rows) == 0 || m.DetailSelected < 0 || m.DetailSelected >= len(rows) || !rows[m.DetailSelected].Selectable {
+		return m, DetailRow{}, false
+	}
+	return m, rows[m.DetailSelected], true
+}
+
+// DetailRows returns Change details as label/text table rows.
+func DetailRows(change dto.Change) []DetailRow {
+	if change.ID == "" && change.Title == "" {
+		return nil
+	}
+	return []DetailRow{
+		{Label: "Ref", Text: displayRef(change), Selectable: true},
+		{Label: "Slug", Text: change.Slug, Selectable: true},
+		{Label: "Phase", Text: change.ChangePhase, Selectable: true},
+		{Label: "Epic", Text: epicLabel(change), Selectable: true},
+		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true},
+		{Label: "Title", Text: change.Title, Selectable: true},
+		{Label: "Requirement", Text: change.RequirementBody, Selectable: true},
+		{Label: "Pull Request", Text: change.PullRequestBody, Selectable: true},
+		{Label: "PR URL", Text: change.PullRequestURL, Selectable: true},
+		{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
+		{Label: "Closed", Text: fmt.Sprintf("%t", change.Closed), Selectable: true},
+		{Label: "Created", Text: formatListTimestamp(change.Created), Selectable: true},
+		{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
+	}
+}
+
+// DetailColumnWidths returns label and text widths for the rendered details table.
+func DetailColumnWidths(change dto.Change, width int) (int, int) {
+	contentWidth := width - 2
+	if width <= 4 {
+		contentWidth = 20
+	}
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+	labelWidth := detailLabelWidth(DetailRows(change))
+	textWidth := contentWidth - labelWidth - 3
+	if textWidth < 10 {
+		textWidth = 10
+		labelWidth = max(1, contentWidth-textWidth-3)
+	}
+	return labelWidth, textWidth
+}
+
+func firstSelectableDetailRow(rows []DetailRow) int {
+	for i, row := range rows {
+		if row.Selectable {
+			return i
+		}
+	}
+	return 0
+}
+
+func nextSelectableDetailRow(rows []DetailRow, selected int, delta int) int {
+	if len(rows) == 0 || delta == 0 {
+		return selected
+	}
+	step := 1
+	if delta < 0 {
+		step = -1
+	}
+	next := selected
+	for remaining := abs(delta); remaining > 0; remaining-- {
+		candidate := next
+		for {
+			candidate += step
+			if candidate < 0 || candidate >= len(rows) {
+				return next
+			}
+			if rows[candidate].Selectable {
+				next = candidate
+				break
+			}
+		}
+	}
+	return next
+}
+
+func detailLineCount(rows []DetailRow, textWidth int) int {
+	total := 0
+	for _, row := range rows {
+		total += detailRowLineCount(row, textWidth)
+		if detailDividerAfter(row) {
+			total++
+		}
+	}
+	return total
+}
+
+func detailRowLineStart(rows []DetailRow, rowIndex int, textWidth int) int {
+	start := 0
+	for i, row := range rows {
+		if i == rowIndex {
+			return start
+		}
+		start += detailRowLineCount(row, textWidth)
+		if detailDividerAfter(row) {
+			start++
+		}
+	}
+	return start
+}
+
+func detailRowLineCount(row DetailRow, textWidth int) int {
+	return len(detailRowTextLines(row, textWidth))
+}
+
+func selectableDetailRowAtOffset(rows []DetailRow, offset int, textWidth int) int {
+	line := 0
+	for i, row := range rows {
+		count := detailRowLineCount(row, textWidth)
+		if row.Selectable && line+count > offset {
+			return i
+		}
+		line += count
+		if detailDividerAfter(row) {
+			line++
+		}
+	}
+	for i := len(rows) - 1; i >= 0; i-- {
+		if rows[i].Selectable {
+			return i
+		}
+	}
+	return 0
+}
+
+func detailRowTextLines(row DetailRow, textWidth int) []string {
+	value := strings.TrimSpace(row.Text)
+	if value == "" {
+		value = "-"
+	}
+	parts := strings.Split(normalizeNewlines(value), "\n")
+	textLines := make([]string, 0, len(parts))
+	for _, part := range parts {
+		wrapped := wrapWords(part, textWidth)
+		if len(wrapped) == 0 {
+			wrapped = []string{""}
+		}
+		textLines = append(textLines, wrapped...)
+	}
+	if detailRowShouldTruncate(row) && len(textLines) > 15 {
+		textLines = append(append([]string(nil), textLines[:15]...), "...")
+	}
+	return textLines
+}
+
+func detailRowShouldTruncate(row DetailRow) bool {
+	return row.Label == "Requirement" || row.Label == "Pull Request"
+}
+
+func detailDividerAfter(row DetailRow) bool {
+	switch row.Label {
+	case "Types", "Title", "Requirement", "Pull Request":
+		return true
+	default:
+		return false
+	}
 }
 
 func clampOffset(offset, selected, total, pageSize int) int {
@@ -138,6 +370,33 @@ func clampOffset(offset, selected, total, pageSize int) int {
 		return 0
 	}
 	return offset
+}
+
+func clampLineOffset(offset, total, pageSize int) int {
+	if total <= 0 {
+		return 0
+	}
+	if pageSize < 1 {
+		pageSize = 1
+	}
+	maxOffset := total - pageSize
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if offset > maxOffset {
+		return maxOffset
+	}
+	if offset < 0 {
+		return 0
+	}
+	return offset
+}
+
+func abs(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
 
 // FilteredRows returns changes matching active filters.

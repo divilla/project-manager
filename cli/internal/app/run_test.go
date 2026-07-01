@@ -39,6 +39,7 @@ type fakeClient struct {
 	changeCreateErr        error
 	changeUpdateErr        error
 	changeGetErr           error
+	changeDeleteErr        error
 	epicErr                error
 	projectID              string
 	listCalls              int
@@ -47,8 +48,11 @@ type fakeClient struct {
 	changeCreateCalls      int
 	changeTitleUpdateCalls int
 	changeBodyUpdateCalls  int
+	changePRUpdateCalls    int
 	changeTypesUpdateCalls int
+	changePhaseUpdateCalls int
 	changeEpicUpdateCalls  int
+	changeDeleteCalls      int
 	changeGetCalls         int
 	createCalls            int
 	updateCalls            int
@@ -64,8 +68,11 @@ type fakeClient struct {
 	changeCreateInputs     []dto.ChangeCreateInput
 	changeTitleUpdates     []string
 	changeBodyUpdates      []string
+	changePRUpdates        []string
 	changeTypesUpdates     [][]string
+	changePhaseUpdates     []string
 	changeEpicUpdates      []*int
+	changeDeleteIDs        []int
 	changeGetIDs           []int
 }
 
@@ -167,6 +174,15 @@ func (f *fakeClient) UpdateChangeRequirementBody(id int, requirementBody string)
 	return dto.Change{ID: fmt.Sprint(id), RequirementBody: requirementBody}, nil
 }
 
+func (f *fakeClient) UpdateChangePullRequestBody(id int, pullRequestBody string) (dto.Change, error) {
+	f.changePRUpdateCalls++
+	f.changePRUpdates = append(f.changePRUpdates, pullRequestBody)
+	if f.changeUpdateErr != nil {
+		return dto.Change{}, f.changeUpdateErr
+	}
+	return dto.Change{ID: fmt.Sprint(id), PullRequestBody: pullRequestBody}, nil
+}
+
 func (f *fakeClient) UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error) {
 	f.changeTypesUpdateCalls++
 	f.changeTypesUpdates = append(f.changeTypesUpdates, append([]string(nil), changeTypes...))
@@ -176,6 +192,15 @@ func (f *fakeClient) UpdateChangeTypes(id int, changeTypes []string) (dto.Change
 	return dto.Change{ID: fmt.Sprint(id), ChangeTypes: changeTypes}, nil
 }
 
+func (f *fakeClient) UpdateChangePhase(id int, changePhase string) (dto.Change, error) {
+	f.changePhaseUpdateCalls++
+	f.changePhaseUpdates = append(f.changePhaseUpdates, changePhase)
+	if f.changeUpdateErr != nil {
+		return dto.Change{}, f.changeUpdateErr
+	}
+	return dto.Change{ID: fmt.Sprint(id), ChangePhase: changePhase}, nil
+}
+
 func (f *fakeClient) UpdateChangeEpic(id int, epicID *int) (dto.Change, error) {
 	f.changeEpicUpdateCalls++
 	f.changeEpicUpdates = append(f.changeEpicUpdates, epicID)
@@ -183,6 +208,18 @@ func (f *fakeClient) UpdateChangeEpic(id int, epicID *int) (dto.Change, error) {
 		return dto.Change{}, f.changeUpdateErr
 	}
 	return dto.Change{ID: fmt.Sprint(id)}, nil
+}
+
+func (f *fakeClient) DeleteChange(id int) error {
+	f.changeDeleteCalls++
+	f.changeDeleteIDs = append(f.changeDeleteIDs, id)
+	if f.changeDeleteErr != nil {
+		return f.changeDeleteErr
+	}
+	if f.err != nil {
+		return f.err
+	}
+	return nil
 }
 
 func (f *fakeClient) ListEpics(projectID string) ([]dto.Option, error) {
@@ -1053,6 +1090,10 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 			EpicID:          "5",
 			EpicName:        "Epic Five",
 			RequirementBody: "# Backend Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nBody.",
+			PullRequestBody: "Pull request summary.",
+			PullRequestURL:  "https://github.com/divilla/project-manager/pull/107",
+			Created:         "2026-06-29T08:15:00Z",
+			Modified:        "2026-06-29T10:45:00Z",
 		},
 	}
 	m := NewModelWithClient(client)
@@ -1094,12 +1135,39 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	got = applyMsg(got, cmd())
 
 	assert.Equal(t, []int{11}, client.changeGetIDs)
-	view = stripANSI(got.View())
+	rawView := got.View()
+	view = stripANSI(rawView)
 	assert.Contains(t, view, "ChangeDetailsScreen - Title: Change Details")
-	assert.Contains(t, view, "Ref: 000003")
-	assert.Contains(t, view, "Slug: change-three")
-	assert.Contains(t, view, "Title: Backend Change")
-	assert.Contains(t, view, "Body: # Backend Change")
+	assert.Contains(t, view, "Ref │ 000003")
+	assert.Contains(t, view, "Slug │ change-three")
+	assert.Contains(t, view, "Phase │ backlog")
+	assert.Contains(t, view, "Epic │ Epic Five")
+	assert.Contains(t, view, "Types │ feature|test")
+	assert.Contains(t, view, "Title │ Backend Change")
+	assert.Contains(t, view, "Requirement │ # Backend Change")
+	assert.Contains(t, view, "─────────────┼")
+	assert.NotContains(t, view, "Epic Five                                                                                              \n─────────────┼")
+	assert.Less(t, strings.Index(view, "Slug │ change-three"), strings.Index(view, "Phase │ backlog"))
+	assert.Less(t, strings.Index(view, "Phase │ backlog"), strings.Index(view, "Epic │ Epic Five"))
+	assert.Less(t, strings.Index(view, "Epic │ Epic Five"), strings.Index(view, "Types │ feature|test"))
+	assert.Less(t, strings.Index(view, "Types │ feature|test"), strings.Index(view, "Title │ Backend Change"))
+	assert.NotContains(t, view, "Body │")
+	assert.NotContains(t, view, "Body:")
+	assert.NotContains(t, view, "Rows 1-")
+	assert.Contains(t, rawView, lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render("Backend Change"))
+
+	got, _ = sendKey(got, tea.KeyPgDown)
+	view = stripANSI(got.View())
+	assert.Contains(t, view, "Pull Request │ Pull request summary.")
+	assert.Contains(t, view, "PR URL │ https://github.com/divilla/project-manager/pull/107")
+	assert.Contains(t, view, "Complete │ 0/0 - 0%")
+	assert.Contains(t, view, "Closed │ false")
+	assert.Contains(t, view, "Created │ 2026-06-29 08.15")
+	assert.Contains(t, view, "Modified │ 2026-06-29 10.45")
+	assert.Less(t, strings.Index(view, "PR URL │ https://github.com/divilla/project-manager/pull/107"), strings.Index(view, "Complete │ 0/0 - 0%"))
+	assert.Less(t, strings.Index(view, "Complete │ 0/0 - 0%"), strings.Index(view, "Closed │ false"))
+	assert.Less(t, strings.Index(view, "Closed │ false"), strings.Index(view, "Created │ 2026-06-29 08.15"))
+	assert.Less(t, strings.Index(view, "Created │ 2026-06-29 08.15"), strings.Index(view, "Modified │ 2026-06-29 10.45"))
 }
 
 func TestChangesTableTruncatesEpicAndTitleAtMaxWidth(t *testing.T) {
@@ -1731,27 +1799,434 @@ func TestUnknownCommandLeavesStateUnchanged(t *testing.T) {
 	assert.NotEmpty(t, got.err)
 }
 
+func TestChangeDetailsTableSelectionMovesAcrossAllRows(t *testing.T) {
+	m := NewModel()
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:              "11",
+		Ref:             "3",
+		Slug:            "change-three",
+		Title:           "Backend Change",
+		ChangePhase:     "backlog",
+		ChangeTypes:     []string{"feature", "test"},
+		EpicName:        "Epic Five",
+		RequirementBody: "Requirement body",
+		PullRequestBody: "Pull request body",
+		PullRequestURL:  "https://example.test/pr",
+	})
+
+	assert.Equal(t, 0, m.changeList.DetailSelected)
+
+	got, _ := sendKey(m, tea.KeyUp)
+	assert.Equal(t, 0, got.changeList.DetailSelected)
+
+	got, _ = sendKey(got, tea.KeyDown)
+	assert.Equal(t, 1, got.changeList.DetailSelected)
+
+	got, _ = sendKey(got, tea.KeyEnter)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, "selected Slug", got.status)
+
+	got, _ = sendKey(got, tea.KeyDown)
+	assert.Equal(t, 2, got.changeList.DetailSelected)
+
+	got, _ = sendKey(got, tea.KeyDown)
+	assert.Equal(t, 3, got.changeList.DetailSelected)
+
+	got, _ = sendKey(got, tea.KeyDown)
+	assert.Equal(t, 4, got.changeList.DetailSelected)
+}
+
+func TestChangeDetailsPhaseSelectionSavesAndReloads(t *testing.T) {
+	client := &fakeClient{
+		phases: []dto.Option{{ID: "stage", Label: "stage"}, {ID: "backlog", Label: "backlog"}},
+		gotChange: dto.Change{
+			ID:          "12",
+			Ref:         "3",
+			Title:       "Backend Change",
+			ChangePhase: "stage",
+		},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:          "12",
+		Ref:         "3",
+		Title:       "Backend Change",
+		ChangePhase: "backlog",
+	})
+	m.changeList.DetailSelected = 2
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	assert.Equal(t, SelectPhaseDropDown, got.state)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, 1, got.dropdown.highlighted)
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "    stage")
+
+	got, _ = sendKey(got, tea.KeyUp)
+	got, cmd = sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, []string{"stage"}, client.changePhaseUpdates)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Equal(t, "stage", got.changeList.Detail.ChangePhase)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, 2, got.changeList.DetailSelected)
+}
+
+func TestChangeDetailsFieldSelectionEscapeCancelsWithoutSaving(t *testing.T) {
+	client := &fakeClient{
+		phases: []dto.Option{{ID: "stage", Label: "stage"}},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:          "12",
+		Ref:         "3",
+		Title:       "Backend Change",
+		ChangePhase: "backlog",
+	})
+	m.changeList.DetailSelected = 2
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	got, cmd = sendKey(got, tea.KeyEsc)
+	require.Nil(t, cmd)
+
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Empty(t, got.dropdown.kind)
+	assert.Zero(t, client.changePhaseUpdateCalls)
+	assert.Zero(t, client.changeGetCalls)
+	assert.Equal(t, "backlog", got.changeList.Detail.ChangePhase)
+}
+
+func TestChangeDetailsEpicNoneSelectionClearsEpic(t *testing.T) {
+	client := &fakeClient{
+		epics: []dto.Option{{ID: "4", Label: "Epic Four"}, {ID: "5", Label: "Epic Five"}},
+		gotChange: dto.Change{
+			ID:    "12",
+			Ref:   "3",
+			Title: "Backend Change",
+		},
+	}
+	m := NewModelWithClient(client)
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:       "12",
+		Ref:      "3",
+		Title:    "Backend Change",
+		EpicID:   "5",
+		EpicName: "Epic Five",
+	})
+	m.changeList.DetailSelected = 3
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	assert.Equal(t, SelectEpicDropDown, got.state)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, 1, got.dropdown.highlighted)
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "    @none")
+
+	got, _ = sendKey(got, tea.KeyDown)
+	got, cmd = sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	require.Len(t, client.changeEpicUpdates, 1)
+	assert.Nil(t, client.changeEpicUpdates[0])
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Empty(t, got.changeList.Detail.EpicID)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, 3, got.changeList.DetailSelected)
+}
+
+func TestChangeDetailsTitleSelectionOpensPromptAndSaves(t *testing.T) {
+	client := &fakeClient{
+		gotChange: dto.Change{
+			ID:    "12",
+			Ref:   "3",
+			Title: "New Title",
+		},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:    "12",
+		Ref:   "3",
+		Title: "Old Title",
+	})
+	m.changeList.DetailSelected = 5
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.Nil(t, cmd)
+	assert.Equal(t, ChangeUpdateState, got.state)
+	assert.Equal(t, detailEditTitle, got.detailEditField)
+	assert.Equal(t, "Old Title", got.input.Value())
+	assert.Equal(t, "Write a Title", got.input.Placeholder)
+	assert.Contains(t, got.View(), "ChangeUpdateScreen - Title: Edit Change")
+
+	got = got.setPromptValue("New Title")
+	got, cmd = sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, []string{"New Title"}, client.changeTitleUpdates)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Equal(t, "New Title", got.changeList.Detail.Title)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, 5, got.changeList.DetailSelected)
+	assert.Empty(t, got.detailEditField)
+	assert.Empty(t, got.input.Value())
+}
+
+func TestChangeDetailsTitleCancelDoesNotSave(t *testing.T) {
+	client := &fakeClient{gotChange: dto.Change{ID: "12", Ref: "3", Title: "Old Title"}}
+	m := NewModelWithClient(client)
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:    "12",
+		Ref:   "3",
+		Title: "Old Title",
+	})
+	m.changeList.DetailSelected = 5
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.Nil(t, cmd)
+	require.Equal(t, ChangeUpdateState, got.state)
+	assert.Equal(t, detailEditTitle, got.detailEditField)
+
+	got = got.setPromptValue("/cancel")
+	got, cmd = sendKey(got, tea.KeyEnter)
+
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Empty(t, got.detailEditField)
+	assert.Empty(t, got.input.Value())
+	assert.Zero(t, client.changeTitleUpdateCalls)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+}
+
+func TestChangeDetailsRequirementSelectionOpensEditorAndSavesResult(t *testing.T) {
+	longBody := strings.Repeat("requirement line\n", 40)
+	client := &fakeClient{
+		gotChange: dto.Change{
+			ID:              "12",
+			Ref:             "3",
+			Title:           "Backend Change",
+			RequirementBody: "Edited requirement body",
+		},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:              "12",
+		Ref:             "3",
+		Title:           "Backend Change",
+		RequirementBody: longBody,
+	})
+	m.changeList.DetailSelected = 6
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, detailEditRequirement, got.detailEditField)
+	assert.Equal(t, longBody, got.input.Value())
+	assert.Zero(t, got.input.CharLimit)
+	assert.Equal(t, "editor", got.status)
+
+	updated, saveCmd := got.Update(editorFinishedMsg{source: ChangeDetailsState, content: "Edited requirement body"})
+	got = updated.(Model)
+	require.NotNil(t, saveCmd)
+	assert.Equal(t, "Edited requirement body", got.input.Value())
+	got = applyCommand(got, saveCmd)
+
+	assert.Equal(t, []string{"Edited requirement body"}, client.changeBodyUpdates)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Equal(t, "Edited requirement body", got.changeList.Detail.RequirementBody)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, 6, got.changeList.DetailSelected)
+	assert.Empty(t, got.detailEditField)
+	assert.Empty(t, got.input.Value())
+}
+
+func TestChangeDetailsPullRequestSelectionOpensEditorAndSavesResult(t *testing.T) {
+	client := &fakeClient{
+		gotChange: dto.Change{
+			ID:              "12",
+			Ref:             "3",
+			Title:           "Backend Change",
+			PullRequestBody: "Edited pull request body",
+		},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:              "12",
+		Ref:             "3",
+		Title:           "Backend Change",
+		PullRequestBody: "Original pull request body",
+	})
+	m.changeList.DetailSelected = 7
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, detailEditPullRequest, got.detailEditField)
+	assert.Equal(t, "Original pull request body", got.input.Value())
+	assert.Zero(t, got.input.CharLimit)
+	assert.Equal(t, "editor", got.status)
+
+	updated, saveCmd := got.Update(editorFinishedMsg{source: ChangeDetailsState, content: "Edited pull request body"})
+	got = updated.(Model)
+	require.NotNil(t, saveCmd)
+	got = applyCommand(got, saveCmd)
+
+	assert.Equal(t, []string{"Edited pull request body"}, client.changePRUpdates)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Equal(t, "Edited pull request body", got.changeList.Detail.PullRequestBody)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, 7, got.changeList.DetailSelected)
+	assert.Empty(t, got.detailEditField)
+	assert.Empty(t, got.input.Value())
+}
+
+func TestChangeDetailsTypesSelectionAddsUnselectedType(t *testing.T) {
+	client := &fakeClient{
+		types: []dto.Option{
+			{ID: "docs", Label: "docs"},
+			{ID: "feature", Label: "feature"},
+			{ID: "test", Label: "test"},
+		},
+		gotChange: dto.Change{
+			ID:          "12",
+			Ref:         "3",
+			Title:       "Backend Change",
+			ChangeTypes: []string{"docs", "feature"},
+		},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:          "12",
+		Ref:         "3",
+		Title:       "Backend Change",
+		ChangeTypes: []string{"feature"},
+	})
+	m.changeList.DetailSelected = 4
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	assert.Equal(t, SelectTypesDropDown, got.state)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, 1, got.dropdown.highlighted)
+	view := stripANSI(got.dropdownView(80))
+	assert.Less(t, strings.Index(view, "    +docs"), strings.Index(view, "    -feature"))
+	assert.Less(t, strings.Index(view, "    -feature"), strings.Index(view, "    +test"))
+
+	got, _ = sendKey(got, tea.KeyUp)
+	got, cmd = sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, [][]string{{"docs", "feature"}}, client.changeTypesUpdates)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Equal(t, []string{"docs", "feature"}, got.changeList.Detail.ChangeTypes)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, 4, got.changeList.DetailSelected)
+}
+
+func TestChangeDetailsTypesSelectionRemovesSelectedType(t *testing.T) {
+	client := &fakeClient{
+		types: []dto.Option{
+			{ID: "docs", Label: "docs"},
+			{ID: "feature", Label: "feature"},
+			{ID: "test", Label: "test"},
+		},
+		gotChange: dto.Change{
+			ID:          "12",
+			Ref:         "3",
+			Title:       "Backend Change",
+			ChangeTypes: []string{"test"},
+		},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:          "12",
+		Ref:         "3",
+		Title:       "Backend Change",
+		ChangeTypes: []string{"feature", "test"},
+	})
+	m.changeList.DetailSelected = 4
+
+	got, cmd := sendKey(m, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+	assert.Equal(t, 1, got.dropdown.highlighted)
+	assert.Contains(t, stripANSI(got.dropdownView(80)), "    -feature")
+
+	got, cmd = sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, [][]string{{"test"}}, client.changeTypesUpdates)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Equal(t, []string{"test"}, got.changeList.Detail.ChangeTypes)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, 4, got.changeList.DetailSelected)
+}
+
+func TestChangeDetailsTableTruncatesLongRequirementAndPullRequestRows(t *testing.T) {
+	m := NewModel()
+	m.state = ChangeDetailsState
+	m.width = 120
+	m.height = 40
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:              "11",
+		Ref:             "3",
+		Slug:            "change-three",
+		Title:           "Backend Change",
+		ChangePhase:     "backlog",
+		EpicName:        "Epic Five",
+		RequirementBody: strings.Repeat("requirement content ", 120),
+		PullRequestBody: "pull request start\n" + strings.Repeat("pull request middle ", 120) + "\npull request end",
+		PullRequestURL:  "https://example.test/pr",
+	})
+
+	firstView := stripANSI(m.View())
+	assert.Contains(t, firstView, "Ref │ 000003")
+	assert.Contains(t, firstView, "Requirement │ requirement content")
+	assert.Contains(t, firstView, "...")
+	assert.NotContains(t, firstView, "pull request end")
+	assert.Contains(t, firstView, "─────────────┼")
+
+	got, _ := sendKey(m, tea.KeyPgDown)
+	scrolledView := stripANSI(got.View())
+	assert.Contains(t, scrolledView, "Pull Request │ pull request start")
+	assert.Contains(t, scrolledView, "...")
+	assert.NotContains(t, firstView, "pull request end")
+
+	got, _ = sendKey(got, tea.KeyPgUp)
+	backView := stripANSI(got.View())
+	assert.Contains(t, backView, "Ref │ 000003")
+}
+
 func TestListSelectionDropdownTransitionsToDetails(t *testing.T) {
-	tests := []struct {
-		start State
-		want  State
-	}{
-		{start: ChangeDetailsState, want: TestCaseDetailsState},
-		{start: EpicsListState, want: EpicDetailsState},
-	}
+	m := NewModel()
+	m.state = EpicsListState
 
-	for _, tt := range tests {
-		t.Run(string(tt.start), func(t *testing.T) {
-			m := NewModel()
-			m.state = tt.start
+	dropdown, _ := sendKey(m, tea.KeyEnter)
+	require.Equal(t, ListSelectionDropDownState, dropdown.state)
 
-			dropdown, _ := sendKey(m, tea.KeyEnter)
-			require.Equal(t, ListSelectionDropDownState, dropdown.state)
-
-			got, _ := sendKey(dropdown, tea.KeyEnter)
-			assert.Equal(t, tt.want, got.state)
-		})
-	}
+	got, _ := sendKey(dropdown, tea.KeyEnter)
+	assert.Equal(t, EpicDetailsState, got.state)
 }
 
 func TestCreateUpdateSaveCancelTransitions(t *testing.T) {
@@ -1931,10 +2406,11 @@ func TestReturnAndEscapeTransitions(t *testing.T) {
 
 func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	client := &fakeClient{
-		projects: []dto.Option{{ID: "7", Label: "Project Seven"}},
-		phases:   []dto.Option{{ID: "backlog", Label: "backlog"}},
-		types:    []dto.Option{{ID: "feature", Label: "feature"}},
-		epics:    []dto.Option{{ID: "3", Label: "Epic Three"}},
+		projects:  []dto.Option{{ID: "7", Label: "Project Seven"}},
+		phases:    []dto.Option{{ID: "backlog", Label: "backlog"}},
+		types:     []dto.Option{{ID: "feature", Label: "feature"}},
+		epics:     []dto.Option{{ID: "3", Label: "Epic Three"}},
+		gotChange: dto.Change{ID: "12", Ref: "3", Title: "Backend Change"},
 	}
 
 	m := NewModelWithClient(client)
@@ -1947,24 +2423,37 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	assert.Equal(t, "7", got.currentProject.ID)
 
 	got.state = ChangeDetailsState
+	got.changeList = got.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
 	got, cmd = sendCommand(got, "/phase")
 	got = applyMsg(got, cmd())
-	got, _ = sendKey(got, tea.KeyEnter)
+	got, cmd = sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 1, client.phaseCalls)
+	assert.Equal(t, []string{"backlog"}, client.changePhaseUpdates)
 
 	got, cmd = sendCommand(got, "/types")
 	got = applyMsg(got, cmd())
-	got, _ = sendKey(got, tea.KeyEnter)
+	got, cmd = sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 1, client.typeCalls)
+	assert.Equal(t, [][]string{{"feature"}}, client.changeTypesUpdates)
 
 	got, cmd = sendCommand(got, "/epic")
 	got = applyMsg(got, cmd())
-	got, _ = sendKey(got, tea.KeyEnter)
+	got, _ = sendKey(got, tea.KeyUp)
+	got, cmd = sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 1, client.epicCalls)
 	assert.Equal(t, "7", client.projectID)
+	require.Len(t, client.changeEpicUpdates, 1)
+	require.NotNil(t, client.changeEpicUpdates[0])
+	assert.Equal(t, 3, *client.changeEpicUpdates[0])
 }
 
 func TestSelectProjectPersistsProjectIDToConfig(t *testing.T) {
@@ -2086,8 +2575,9 @@ func TestFindInputHighlightsAndEmptyFindErrors(t *testing.T) {
 }
 
 func TestConfirmationRequiresYesOrCancel(t *testing.T) {
-	m := NewModel()
+	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Title: "Backend Change"})
 
 	got, _ := sendCommand(m, "/delete")
 	assert.Equal(t, ChangeDeleteConfirmation, got.state)
@@ -2100,11 +2590,57 @@ func TestConfirmationRequiresYesOrCancel(t *testing.T) {
 	got.dropdown.filter = "/cancel"
 	got, _ = sendKey(got, tea.KeyEnter)
 	assert.Equal(t, ChangeDetailsState, got.state)
+}
 
-	got, _ = sendCommand(got, "/delete")
+func TestChangeDeleteConfirmationDeletesAndReloadsList(t *testing.T) {
+	client := &fakeClient{
+		changeRows: []dto.Change{{ID: "13", Ref: "4", Title: "Remaining Change"}},
+	}
+	m := NewModelWithClient(client)
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
+
+	got, _ := sendCommand(m, "/delete")
+	require.Equal(t, ChangeDeleteConfirmation, got.state)
+
 	got.dropdown.filter = "/yes"
-	got, _ = sendKey(got, tea.KeyEnter)
+	got, cmd := sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, "deleting change", got.status)
+
+	updated, reload := got.Update(cmd())
+	got = updated.(Model)
+	require.Equal(t, ChangesListState, got.state)
+	assert.True(t, got.changeList.Loading)
+	assert.Equal(t, []int{12}, client.changeDeleteIDs)
+
+	require.NotNil(t, reload)
+	got = applyMsg(got, reload())
+
 	assert.Equal(t, ChangesListState, got.state)
+	assert.Equal(t, []string{"7"}, client.changeListProjectIDs)
+	assert.Equal(t, []dto.Change{{ID: "13", Ref: "4", Title: "Remaining Change"}}, got.changeList.Rows)
+}
+
+func TestChangeDeleteFailurePreservesDetail(t *testing.T) {
+	client := &fakeClient{changeDeleteErr: errors.New("delete failed")}
+	m := NewModelWithClient(client)
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Ref: "3", Title: "Backend Change"})
+
+	got, _ := sendCommand(m, "/delete")
+	got.dropdown.filter = "/yes"
+	got, cmd := sendKey(got, tea.KeyEnter)
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, "delete failed", got.err)
+	assert.Equal(t, []int{12}, client.changeDeleteIDs)
+	assert.Zero(t, client.changeListCalls)
 }
 
 func TestCommandDropdownFiltersAndExecutesSelection(t *testing.T) {
