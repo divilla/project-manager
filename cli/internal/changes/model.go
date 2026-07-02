@@ -30,9 +30,13 @@ type Model struct {
 
 // DetailRow is one row in the Change details table.
 type DetailRow struct {
-	Label      string
-	Text       string
-	Selectable bool
+	Label        string
+	Text         string
+	Selectable   bool
+	DividerAfter bool
+	TestCaseID   string
+	TestCaseText string
+	TestCaseDone bool
 }
 
 // ParsedRequirement stores metadata extracted from requirement markdown.
@@ -189,22 +193,50 @@ func DetailRows(change dto.Change) []DetailRow {
 	if change.ID == "" && change.Title == "" {
 		return nil
 	}
-	return []DetailRow{
+	rows := []DetailRow{
 		{Label: "Ref", Text: displayRef(change), Selectable: true},
 		{Label: "Slug", Text: change.Slug, Selectable: true},
 		{Label: "Phase", Text: change.ChangePhase, Selectable: true},
 		{Label: "Epic", Text: epicLabel(change), Selectable: true},
-		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true},
-		{Label: "Title", Text: change.Title, Selectable: true},
-		{Label: "Requirement", Text: change.Body, Selectable: true},
-		{Label: "Pull Request", Text: change.PRBody, Selectable: true},
-		{Label: "PR URL", Text: change.PRUrl, Selectable: true},
-		{Label: "Agent Edit", Text: fmt.Sprintf("%t", change.AgentEdit), Selectable: true},
-		{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
-		{Label: "Open", Text: fmt.Sprintf("%t", change.Open), Selectable: true},
-		{Label: "Created", Text: formatListTimestamp(change.Created), Selectable: true},
-		{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
+		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true, DividerAfter: true},
+		{Label: "Title", Text: change.Title, Selectable: true, DividerAfter: true},
+		{Label: "Body", Text: change.Body, Selectable: true, DividerAfter: true},
 	}
+	for i, testCase := range change.TestCases {
+		rows = append(rows, DetailRow{
+			Label:        testCaseDoneIcon(testCase.Done),
+			Text:         fmt.Sprintf("%s (#%s)", testCase.Scenario, testCase.ID),
+			Selectable:   true,
+			DividerAfter: i == len(change.TestCases)-1,
+			TestCaseID:   testCase.ID,
+			TestCaseText: testCase.Scenario,
+			TestCaseDone: testCase.Done,
+		})
+	}
+	rows = append(rows,
+		DetailRow{Label: "PR", Text: change.PRBody, Selectable: true, DividerAfter: true},
+		DetailRow{Label: "PR URL", Text: change.PRUrl, Selectable: true},
+		DetailRow{Label: "Agent Edit", Text: agentEditIcon(change.AgentEdit), Selectable: true},
+		DetailRow{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
+		DetailRow{Label: "Open", Text: testCaseDoneIcon(change.Open), Selectable: true},
+		DetailRow{Label: "Created", Text: formatListTimestamp(change.Created), Selectable: true},
+		DetailRow{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
+	)
+	return rows
+}
+
+func agentEditIcon(value bool) string {
+	if value {
+		return "\u2714"
+	}
+	return "\u2718"
+}
+
+func testCaseDoneIcon(value bool) string {
+	if value {
+		return "\u2705"
+	}
+	return "\u274c"
 }
 
 // DetailColumnWidths returns label and text widths for the rendered details table.
@@ -329,16 +361,11 @@ func detailRowTextLines(row DetailRow, textWidth int) []string {
 }
 
 func detailRowShouldTruncate(row DetailRow) bool {
-	return row.Label == "Requirement" || row.Label == "Pull Request"
+	return row.Label == "Body" || row.Label == "PR"
 }
 
 func detailDividerAfter(row DetailRow) bool {
-	switch row.Label {
-	case "Types", "Title", "Requirement", "Pull Request":
-		return true
-	default:
-		return false
-	}
+	return row.DividerAfter
 }
 
 func clampOffset(offset, selected, total, pageSize int) int {

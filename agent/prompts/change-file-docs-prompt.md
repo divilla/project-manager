@@ -1,7 +1,7 @@
-Using `agent/changes/109-db-alters-and-views.md` as the source of truth, update or create only the documentation needed to precisely describe the desired external behavior for this Change.
+Using Change file `agent/changes/110-cli-improve-changes-and-agentic-workflow.md` as the source of truth, update or create only the documentation needed to precisely describe the desired external behavior for this Change.
 
 Before editing anything:
-1. Read `agent/changes/109-db-alters-and-views.md`.
+1. Read the Change file.
 2. Read `docs/docs-rules.md`.
 3. Read every existing `docs/` file that describes affected behavior, including Change fields, backend API payloads, frontend behavior, history behavior, local development, and verification.
 

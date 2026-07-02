@@ -56,6 +56,7 @@ const (
 	detailEditRequirement detailEditField = "requirement"
 	detailEditPullRequest detailEditField = "pull request"
 	detailEditPRUrl       detailEditField = "pr url"
+	detailEditTestCase    detailEditField = "test case"
 )
 
 type changesFilters struct {
@@ -66,18 +67,20 @@ type changesFilters struct {
 }
 
 type dropdownModel struct {
-	kind        dropdownKind
-	state       State
-	previous    State
-	onSelect    State
-	source      selectorSource
-	filterField filterField
-	editField   detailEditField
-	label       string
-	options     []dto.Option
-	filter      string
-	highlighted int
-	loading     bool
+	kind         dropdownKind
+	state        State
+	previous     State
+	onSelect     State
+	source       selectorSource
+	filterField  filterField
+	editField    detailEditField
+	label        string
+	options      []dto.Option
+	filter       string
+	highlighted  int
+	loading      bool
+	pendingTypes []string
+	typesChanged bool
 }
 
 type selectorLoadedMsg struct {
@@ -169,6 +172,7 @@ type Model struct {
 	configPath      string
 	dropdown        dropdownModel
 	detailEditField detailEditField
+	activeTestCase  dto.TestCase
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.

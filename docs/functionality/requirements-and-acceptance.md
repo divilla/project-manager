@@ -20,8 +20,8 @@ completed test cases / total test cases * 100
 
 If a change has no test cases, it should not appear complete unless explicit product rules say otherwise.
 
-## Mutation Behavior
-Test case create, update, done toggle, reassignment, and delete actions run through the backend. Responses should provide enough current data for the frontend to refresh visible completeness without guessing.
+## Display And Mutation Behavior
+Change detail views show linked test cases in numeric ID order. Test case create, update, done toggle, reassignment, and delete actions run through the backend. Responses should provide enough current data for clients to refresh visible completeness and done state without guessing.
 
 ## Acceptance Criteria
 Acceptance criteria define the user-visible or system-visible outcomes required for a change to be considered done. They should be written as testable statements, not vague goals.

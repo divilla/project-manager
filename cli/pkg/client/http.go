@@ -27,7 +27,12 @@ type Client interface {
 	UpdateChangePRUrl(id int, prURL string) (dto.Change, error)
 	UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error)
 	UpdateChangePhase(id int, changePhase string) (dto.Change, error)
+	UpdateChangeOpen(id int, open bool) (dto.Change, error)
 	UpdateChangeEpic(id int, epicID *int) (dto.Change, error)
+	CreateTestCase(changeID int, scenario string) (dto.Change, error)
+	UpdateTestCase(id int, scenario string) (dto.Change, error)
+	UpdateTestCaseDone(id int, done bool) (dto.Change, error)
+	DeleteTestCase(id int) (dto.Change, error)
 	DeleteChange(id int) error
 	ListEpics(projectID string) ([]dto.Option, error)
 	ListPhases() ([]dto.Option, error)
@@ -194,12 +199,64 @@ func (c HTTPClient) UpdateChangePhase(id int, changePhase string) (dto.Change, e
 	})
 }
 
+// UpdateChangeOpen updates the change open flag.
+func (c HTTPClient) UpdateChangeOpen(id int, open bool) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-open", map[string]any{
+		"id":   id,
+		"open": open,
+	})
+}
+
 // UpdateChangeEpic updates or clears the change epic.
 func (c HTTPClient) UpdateChangeEpic(id int, epicID *int) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
 	return c.postChange("/api/v1/change/update-epic", map[string]any{"id": id, "epic_id": epicID})
+}
+
+// CreateTestCase creates a test case for a change and returns refreshed change data.
+func (c HTTPClient) CreateTestCase(changeID int, scenario string) (dto.Change, error) {
+	if changeID <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/test-case/create", map[string]any{
+		"change_id": changeID,
+		"scenario":  scenario,
+	})
+}
+
+// UpdateTestCase updates a test case scenario and returns refreshed change data.
+func (c HTTPClient) UpdateTestCase(id int, scenario string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("test case ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/test-case/update", map[string]any{
+		"id":       id,
+		"scenario": scenario,
+	})
+}
+
+// UpdateTestCaseDone updates the test case done flag and returns refreshed change data.
+func (c HTTPClient) UpdateTestCaseDone(id int, done bool) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("test case ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/test-case/update-done", map[string]any{
+		"id":   id,
+		"done": done,
+	})
+}
+
+// DeleteTestCase deletes a test case and returns refreshed change data.
+func (c HTTPClient) DeleteTestCase(id int) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("test case ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/test-case/delete", map[string]any{"id": id})
 }
 
 // DeleteChange deletes a change by numeric ID.
@@ -396,12 +453,18 @@ func findChange(value any) (dto.Change, bool) {
 		for _, key := range []string{"change", "data", "result"} {
 			if candidate, ok := typed[key]; ok {
 				if change, found := findChange(candidate); found {
+					if testCases := findTestCases(typed); len(testCases) > 0 {
+						change.TestCases = testCases
+					}
 					return change, true
 				}
 			}
 		}
 		change := changeFromMap(typed)
 		if change.ID != "" || change.Title != "" {
+			if testCases := findTestCases(typed); len(testCases) > 0 {
+				change.TestCases = testCases
+			}
 			return change, true
 		}
 		for _, candidate := range typed {
@@ -411,6 +474,22 @@ func findChange(value any) (dto.Change, bool) {
 		}
 	}
 	return dto.Change{}, false
+}
+
+func findTestCases(value any) []dto.TestCase {
+	switch typed := value.(type) {
+	case []any:
+		return testCasesFromArray(typed)
+	case map[string]any:
+		for key, candidate := range typed {
+			if key == "test_cases" {
+				if list, ok := candidate.([]any); ok {
+					return testCasesFromArray(list)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func findProject(value any) (dto.Project, bool) {
@@ -494,6 +573,27 @@ func changesFromArray(values []any) []dto.Change {
 		changes = append(changes, change)
 	}
 	return changes
+}
+
+func testCasesFromArray(values []any) []dto.TestCase {
+	testCases := make([]dto.TestCase, 0, len(values))
+	for _, value := range values {
+		typed, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		testCase := dto.TestCase{
+			ID:       firstString(typed, "id", "test_case_id"),
+			Scenario: firstString(typed, "scenario"),
+			Done:     firstBool(typed, "done"),
+			ChangeID: firstString(typed, "change_id"),
+		}
+		if testCase.ID == "" && testCase.Scenario == "" {
+			continue
+		}
+		testCases = append(testCases, testCase)
+	}
+	return testCases
 }
 
 func projectFromMap(values map[string]any) dto.Project {

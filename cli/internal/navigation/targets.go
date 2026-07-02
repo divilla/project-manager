@@ -55,7 +55,7 @@ func SaveTarget(state State) State {
 	case ChangeCreateState, ChangeUpdateState:
 		return ChangeDetailsState
 	case TestCaseCreateState, TestCaseUpdateState:
-		return TestCaseDetailsState
+		return ChangeDetailsState
 	case EpicCreateState, EpicUpdateState:
 		return EpicDetailsState
 	case ProjectCreateState, ProjectUpdateState:
@@ -73,7 +73,7 @@ func CancelTarget(state State) State {
 	case ChangeUpdateState:
 		return ChangeDetailsState
 	case TestCaseCreateState, TestCaseUpdateState:
-		return TestCaseDetailsState
+		return ChangeDetailsState
 	case EpicCreateState:
 		return EpicsListState
 	case EpicUpdateState:

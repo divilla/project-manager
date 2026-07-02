@@ -7,5 +7,5 @@ func ListCommands() []string {
 
 // DetailCommands returns slash commands for change details.
 func DetailCommands() []string {
-	return []string{"/new-test-case", "/phase", "/epic", "/types", "/edit", "/delete", "/return"}
+	return []string{"/new-testcase", "/phase", "/epic", "/types", "/edit", "/delete", "/return"}
 }

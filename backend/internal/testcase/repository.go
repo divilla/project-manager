@@ -243,7 +243,7 @@ func listTestCases(ctx context.Context, q queryer, changeID int) ([]dto.TestCase
 		select id, version, scenario, done, change_id, created, modified
 		from public.test_case
 		where change_id = $1
-		order by created, scenario
+		order by id
 	`, changeID)
 	if err != nil {
 		return nil, err
