@@ -134,6 +134,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "load failed"
 		}
 		m.detailEditField = ""
+		m.activeTestCase = dto.TestCase{}
 		m = m.setPromptValue("")
 		return m, nil
 	case changeDeletedMsg:
@@ -293,6 +294,12 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 		case key == "enter" || msg.Type == tea.KeyCtrlJ:
 			updated, cmd := m.handleListSelection()
 			return updated.(Model), cmd, true
+		case key == "ctrl+n":
+			updated, cmd := m.executeCommandFrom(ChangesListState, "/new-change")
+			return updated.(Model), cmd, true
+		case key == "ctrl+f" || msg.Type == tea.KeyCtrlF:
+			updated, cmd := m.executeCommandFrom(ChangesListState, "/find-filter")
+			return updated.(Model), cmd, true
 		}
 	case ChangeDetailsState:
 		switch {
@@ -310,6 +317,15 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 			return m, nil, true
 		case key == "enter" || msg.Type == tea.KeyCtrlJ:
 			updated, cmd := m.handleListSelection()
+			return updated.(Model), cmd, true
+		case key == "ctrl+n":
+			updated, cmd := m.executeCommandFrom(ChangeDetailsState, "/new-testcase")
+			return updated.(Model), cmd, true
+		case key == " " || key == "space":
+			updated, cmd := m.handleDetailSpaceToggle()
+			return updated.(Model), cmd, true
+		case key == "delete" || key == "del":
+			updated, cmd := m.handleDetailDelete()
 			return updated.(Model), cmd, true
 		}
 	case ProjectsListState:
@@ -383,6 +399,12 @@ func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
 		}
 		if m.state == ChangeUpdateState {
 			return m.saveChangeUpdateValue(value)
+		}
+		if m.state == TestCaseCreateState {
+			return m.saveTestCaseCreateValue(value)
+		}
+		if m.state == TestCaseUpdateState {
+			return m.saveTestCaseUpdateValue(value)
 		}
 		if m.state == ProjectCreateState {
 			return m.saveProjectCreateValue(value)
@@ -459,6 +481,11 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 		return m.arrive(navigation.CancelTarget(m.state), "cancel")
 	case ChangeCreateState, TestCaseCreateState, TestCaseUpdateState,
 		EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
+		if m.state == TestCaseCreateState || m.state == TestCaseUpdateState {
+			m.detailEditField = ""
+			m.activeTestCase = dto.TestCase{}
+			m = m.setPromptValue("")
+		}
 		return m.arrive(navigation.CancelTarget(m.state), "cancel")
 	default:
 		if target, ok := navigation.ReturnTargets()[m.state]; ok {
@@ -493,6 +520,9 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 			m.err = "no change details selectable"
 			return m, nil
 		}
+		if row.TestCaseID != "" {
+			return m.beginTestCaseScenarioEdit(row)
+		}
 		switch row.Label {
 		case "Phase":
 			return m.beginDetailFieldSelector(detailEditPhase)
@@ -502,9 +532,9 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 			return m.beginDetailFieldSelector(detailEditTypes)
 		case "Title":
 			return m.beginDetailTitleEdit()
-		case "Requirement":
+		case "Requirement", "Body":
 			return m.beginDetailTextEditor(detailEditRequirement)
-		case "Pull Request":
+		case "Pull Request", "PR":
 			return m.beginDetailTextEditor(detailEditPullRequest)
 		case "PR URL":
 			return m.beginDetailTextEditor(detailEditPRUrl)
@@ -571,7 +601,7 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/find-filter":
 		m.previousState = ChangesListState
 		m.state = FindInputState
-		m = m.setPromptValue("")
+		m = m.setPromptValue(m.changesFilters.find)
 		m.input.Placeholder = "Find changes"
 	case "/clear-filters":
 		m.changesFilters = changesFilters{}
@@ -579,12 +609,19 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		m.status = "filters cleared"
 	case "/return":
 		return m.arrive(navigation.ReturnTargets()[source], "return")
-	case "/new-change", "/new-test-case", "/new-epic", "/new-project":
+	case "/new-change", "/new-testcase", "/new-test-case", "/new-epic", "/new-project":
 		m.state = navigation.CreateTarget(source)
 		if m.state == ChangeCreateState {
 			m = m.setPromptValue("")
 			m.input.Placeholder = defaultInputPlaceholder
 			return m.openPromptEditor(ChangeCreateState)
+		}
+		if m.state == TestCaseCreateState {
+			m.activeTestCase = dto.TestCase{}
+			m.input.Placeholder = "Write a Scenario"
+			m = m.setPromptValue("")
+			m.status = "new test case"
+			return m, nil
 		}
 		if m.state == ProjectCreateState {
 			m = m.setPromptValue("")
@@ -610,6 +647,12 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		if source == ChangeUpdateState {
 			return m.saveChangeUpdate()
 		}
+		if source == TestCaseCreateState {
+			return m.saveTestCaseCreateValue(m.input.Value())
+		}
+		if source == TestCaseUpdateState {
+			return m.saveTestCaseUpdateValue(m.input.Value())
+		}
 		if source == ProjectCreateState {
 			return m.saveProjectCreate()
 		}
@@ -621,9 +664,12 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/editor":
 		return m.openPromptEditor(source)
 	case "/cancel":
-		if source == ChangeUpdateState && m.detailEditField != "" {
+		if (source == ChangeUpdateState || source == TestCaseUpdateState) && m.detailEditField != "" {
 			m.detailEditField = ""
 			m = m.setPromptValue("")
+		}
+		if source == TestCaseCreateState || source == TestCaseUpdateState {
+			m.activeTestCase = dto.TestCase{}
 		}
 		return m.arrive(navigation.CancelTarget(source), "cancel")
 	case "/delete":
@@ -737,6 +783,17 @@ func (m Model) beginDetailTextEditor(field detailEditField) (tea.Model, tea.Cmd)
 	return m.openPromptEditor(ChangeDetailsState)
 }
 
+func (m Model) beginTestCaseScenarioEdit(row changes.DetailRow) (tea.Model, tea.Cmd) {
+	m.previousState = ChangeDetailsState
+	m.state = TestCaseUpdateState
+	m.detailEditField = detailEditTestCase
+	m.activeTestCase = dto.TestCase{ID: row.TestCaseID, Scenario: row.TestCaseText}
+	m.input.Placeholder = "Write a Scenario"
+	m = m.setPromptValue(row.TestCaseText)
+	m.status = "editing test case"
+	return m, nil
+}
+
 func (m Model) beginDetailFieldSelector(field detailEditField) (tea.Model, tea.Cmd) {
 	m.detailEditField = ""
 	switch field {
@@ -751,7 +808,44 @@ func (m Model) beginDetailFieldSelector(field detailEditField) (tea.Model, tea.C
 		return m, nil
 	}
 	m.dropdown.editField = field
+	if field == detailEditTypes {
+		m.dropdown.pendingTypes = normalizeTypeSet(m.changeList.Detail.ChangeTypes)
+	}
 	return m, selectorCommand(m.client, m.dropdown.source, m.currentProject.ID)
+}
+
+func (m Model) handleDetailSpaceToggle() (tea.Model, tea.Cmd) {
+	next, row, ok := m.changeList.SelectDetailRow(m.changeTableRows(), terminalWidth(m.width))
+	m.changeList = next
+	if !ok {
+		m.err = "no change details selectable"
+		return m, nil
+	}
+	switch {
+	case row.Label == "Open":
+		m.status = "saving open"
+		return m, changeDetailOpenUpdateCommand(m.client, m.changeList.Detail)
+	case row.TestCaseID != "":
+		m.status = "saving test case"
+		return m, changeDetailTestCaseDoneUpdateCommand(m.client, m.changeList.Detail, row)
+	default:
+		return m, nil
+	}
+}
+
+func (m Model) handleDetailDelete() (tea.Model, tea.Cmd) {
+	next, row, ok := m.changeList.SelectDetailRow(m.changeTableRows(), terminalWidth(m.width))
+	m.changeList = next
+	if !ok {
+		m.err = "no change details selectable"
+		return m, nil
+	}
+	if row.TestCaseID == "" {
+		return m, nil
+	}
+	m.activeTestCase = dto.TestCase{ID: row.TestCaseID, Scenario: row.TestCaseText}
+	m.openConfirmation(TestCaseDeleteConfirmation, ChangeDetailsState, ChangeDetailsState)
+	return m, nil
 }
 
 func (m Model) saveChangeDetailTextValue(value string) (tea.Model, tea.Cmd) {

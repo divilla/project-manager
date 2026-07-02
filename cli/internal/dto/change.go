@@ -19,8 +19,17 @@ type Change struct {
 	Done        int
 	Total       int
 	Completed   int
+	TestCases   []TestCase
 	Created     string
 	Modified    string
+}
+
+// TestCase is the test case row data shown on Change details.
+type TestCase struct {
+	ID       string
+	Scenario string
+	Done     bool
+	ChangeID string
 }
 
 // ChangeCreateInput is the backend payload for creating a change.

@@ -11,6 +11,11 @@ import (
 
 func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key {
+	case "ctrl+c":
+		if m.dropdown.kind == dropdownConfirm {
+			return m.cancelDropdown()
+		}
+		return m, nil
 	case "esc":
 		return m.cancelDropdown()
 	case "up":
@@ -30,6 +35,14 @@ func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd
 			return m, nil
 		}
 		return m.confirmDropdown()
+	case " ", "space":
+		if m.dropdown.loading {
+			return m, nil
+		}
+		if m.dropdown.editField == detailEditTypes {
+			return m.togglePendingChangeType()
+		}
+		return m, nil
 	}
 	if len(msg.Runes) > 0 {
 		m.dropdown.filter += string(msg.Runes)
@@ -108,7 +121,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 	if m.dropdown.kind == dropdownConfirm {
 		selected := m.selectedOption()
 		if selected.Label == "" {
-			m.err = "confirmation requires /yes or /cancel"
+			m.err = "confirmation requires /yes or /no"
 			return m, nil
 		}
 		switch selected.ID {
@@ -121,11 +134,16 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 				m.status = "deleting change"
 				return m, changeDeleteCommand(m.client, m.changeList.Detail, target)
 			}
+			if previous == ChangeDetailsState && target == ChangeDetailsState {
+				m.state = ChangeDetailsState
+				m.status = "deleting test case"
+				return m, testCaseDeleteCommand(m.client, m.activeTestCase)
+			}
 			return m.arrive(target, "confirmed")
-		case "/cancel":
+		case "/no", "/cancel":
 			return m.cancelDropdown()
 		default:
-			m.err = "confirmation requires /yes or /cancel"
+			m.err = "confirmation requires /yes or /no"
 			return m, nil
 		}
 	}
@@ -143,6 +161,18 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 	if selected.Label == "" {
 		m.err = "no matching option"
 		return m, nil
+	}
+	if m.dropdown.editField == detailEditTypes {
+		change := m.changeList.Detail
+		m.state = m.dropdown.onSelect
+		m.status = "selected Types"
+		if !m.dropdown.typesChanged {
+			m.dropdown = dropdownModel{}
+			return m, nil
+		}
+		pending := append([]string(nil), m.dropdown.pendingTypes...)
+		m.dropdown = dropdownModel{}
+		return m, changeDetailTypesUpdateCommand(m.client, change, pending)
 	}
 	if m.dropdown.editField != "" {
 		field := m.dropdown.editField
@@ -175,9 +205,9 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) openConfirmation(state, previous, onYes State) {
-	m.openDropdown(state, dropdownConfirm, previous, onYes, "Confirm", []dto.Option{
+	m.openDropdown(state, dropdownConfirm, previous, onYes, "Are you sure?", []dto.Option{
 		{ID: "/yes", Label: "/yes"},
-		{ID: "/cancel", Label: "/cancel"},
+		{ID: "/no", Label: "/no"},
 	}, false)
 }
 
@@ -190,6 +220,9 @@ func (m Model) dropdownView(width int) string {
 		return styles.Default.InputBand.Width(width).Render(m.dropdown.label + ": no options")
 	}
 	lines := []string{m.dropdown.label + " " + m.dropdown.filter}
+	if m.dropdown.editField == detailEditTypes {
+		lines = append(lines, "press <space> to change")
+	}
 	for i, option := range options {
 		line := m.dropdownLine(option)
 		if i == m.dropdown.highlighted {
@@ -208,10 +241,13 @@ func (m Model) dropdownLine(option dto.Option) string {
 	label := option.Label
 	if m.dropdown.editField == detailEditTypes {
 		prefix := "+"
-		if selectedChangeType(m.changeList.Detail.ChangeTypes, option) {
+		if selectedChangeType(m.dropdown.pendingTypes, option) {
 			prefix = "-"
 		}
 		return "    " + prefix + strings.TrimLeft(label, "+-")
+	}
+	if m.dropdown.editField == detailEditPhase {
+		return "    -" + strings.TrimPrefix(label, "-")
 	}
 	if option.ID == "/clear" {
 		return "    " + label
@@ -220,6 +256,31 @@ func (m Model) dropdownLine(option dto.Option) string {
 		return "    -" + strings.TrimPrefix(label, "-")
 	}
 	return "    " + label
+}
+
+func (m Model) togglePendingChangeType() (tea.Model, tea.Cmd) {
+	selected := m.selectedOption()
+	if selected.Label == "" {
+		m.err = "no matching option"
+		return m, nil
+	}
+	m.dropdown.pendingTypes = toggleChangeType(m.dropdown.pendingTypes, selected)
+	m.dropdown.typesChanged = !sameTypeSet(m.dropdown.pendingTypes, m.changeList.Detail.ChangeTypes)
+	return m, nil
+}
+
+func sameTypeSet(a, b []string) bool {
+	normalizedA := normalizeTypeSet(a)
+	normalizedB := normalizeTypeSet(b)
+	if len(normalizedA) != len(normalizedB) {
+		return false
+	}
+	for i := range normalizedA {
+		if normalizedA[i] != normalizedB[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func selectedChangeType(current []string, option dto.Option) bool {

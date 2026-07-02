@@ -62,7 +62,7 @@ Change responses include `id`, project-scoped `ref`, stable `slug`, aggregate fi
 
 Change list requests require a numeric `project_id` field. Clients must not send `project_id` as a JSON string. List responses include only list item fields: identity, project ID, phase and type data, linked epic identity and `epic_name` when present, title, `agent_edit`, open state, completion counters, and modified time. They do not include detail-only fields such as `body`, rendered HTML, `pr_body`, `pr_url`, version, or created time. Clients must render the response order supplied by the backend.
 
-Change get requests identify the Change by numeric `id`. Detail responses include `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, linked epic data, test cases, completion counters, and timestamps. Clients that navigate from a Change list to detail should reload the selected Change through `POST /api/v1/change/get` instead of treating list row data as the detail source of truth.
+Change get requests identify the Change by numeric `id`. Detail responses include `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, linked epic data, test cases, completion counters, and timestamps. Linked test cases in Change detail responses are ordered by numeric test case ID. Clients that navigate from a Change list to detail should reload the selected Change through `POST /api/v1/change/get` instead of treating list row data as the detail source of truth.
 
 Rendered body requests render markdown from `body` and `pr_body` and return sanitized HTML fields using the same naming contract.
 
@@ -88,7 +88,7 @@ Test cases are managed with POST endpoints:
 - `POST /api/v1/test-case/update-change`
 - `POST /api/v1/test-case/delete`
 
-Test case payloads use `scenario` for the verifiable condition. Mutation responses include the recalculated change and current test case list when useful.
+Test case payloads use `scenario` for the verifiable condition. `POST /api/v1/test-case/update-done` identifies the test case and explicitly sends the desired `done` boolean. Mutation responses include the recalculated change and current test case list when useful, so clients can refresh visible completeness and done state from backend data instead of local guesses.
 
 ## Planning
 Planning endpoints are backend-mediated LLM workflows:

@@ -42,6 +42,38 @@ func (m Model) saveChangeUpdateValue(body string) (tea.Model, tea.Cmd) {
 	return m, changeUpdateCommand(m.client, id, m.currentProject.ID, m.changeList.Detail, body)
 }
 
+func (m Model) saveTestCaseCreateValue(scenario string) (tea.Model, tea.Cmd) {
+	changeID, err := changeNumericID(m.changeList.Detail)
+	if err != nil {
+		m.err = err.Error()
+		m.status = "validation failed"
+		return m, nil
+	}
+	if strings.TrimSpace(scenario) == "" {
+		m.err = "test case scenario is required"
+		m.status = "validation failed"
+		return m, nil
+	}
+	m.status = "saving test case"
+	return m, testCaseCreateCommand(m.client, changeID, scenario)
+}
+
+func (m Model) saveTestCaseUpdateValue(scenario string) (tea.Model, tea.Cmd) {
+	testCaseID, err := testCaseNumericID(m.activeTestCase.ID)
+	if err != nil {
+		m.err = err.Error()
+		m.status = "validation failed"
+		return m, nil
+	}
+	if strings.TrimSpace(scenario) == "" {
+		m.err = "test case scenario is required"
+		m.status = "validation failed"
+		return m, nil
+	}
+	m.status = "saving test case"
+	return m, testCaseUpdateCommand(m.client, testCaseID, scenario)
+}
+
 func changeCreateCommand(client appClient, projectID int, projectIDValue string, body string) tea.Cmd {
 	return func() tea.Msg {
 		if _, err := changes.ParseBodyStructure(body); err != nil {
@@ -132,6 +164,31 @@ func changeDeleteCommand(client appClient, change dto.Change, target State) tea.
 	}
 }
 
+func testCaseCreateCommand(client appClient, changeID int, scenario string) tea.Cmd {
+	return func() tea.Msg {
+		change, err := client.CreateTestCase(changeID, scenario)
+		return changeSavedMsg{source: TestCaseCreateState, change: change, err: err}
+	}
+}
+
+func testCaseUpdateCommand(client appClient, testCaseID int, scenario string) tea.Cmd {
+	return func() tea.Msg {
+		change, err := client.UpdateTestCase(testCaseID, scenario)
+		return changeSavedMsg{source: TestCaseUpdateState, change: change, err: err}
+	}
+}
+
+func testCaseDeleteCommand(client appClient, testCase dto.TestCase) tea.Cmd {
+	return func() tea.Msg {
+		testCaseID, err := testCaseNumericID(testCase.ID)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		change, err := client.DeleteTestCase(testCaseID)
+		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
+	}
+}
+
 func changeDetailFieldUpdateCommand(client appClient, change dto.Change, field detailEditField, selected dto.Option) tea.Cmd {
 	return func() tea.Msg {
 		id, err := changeNumericID(change)
@@ -160,6 +217,52 @@ func changeDetailFieldUpdateCommand(client appClient, change dto.Change, field d
 			return changeSavedMsg{source: ChangeDetailsState, err: fmt.Errorf("unsupported change detail field: %s", field)}
 		}
 		change, err := client.GetChange(id)
+		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
+	}
+}
+
+func changeDetailTypesUpdateCommand(client appClient, change dto.Change, changeTypes []string) tea.Cmd {
+	return func() tea.Msg {
+		id, err := changeNumericID(change)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		if _, err := client.UpdateChangeTypes(id, normalizeTypeSet(changeTypes)); err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		change, err := client.GetChange(id)
+		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
+	}
+}
+
+func changeDetailOpenUpdateCommand(client appClient, change dto.Change) tea.Cmd {
+	return func() tea.Msg {
+		id, err := changeNumericID(change)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		if _, err := client.UpdateChangeOpen(id, !change.Open); err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		change, err := client.GetChange(id)
+		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
+	}
+}
+
+func changeDetailTestCaseDoneUpdateCommand(client appClient, change dto.Change, row changes.DetailRow) tea.Cmd {
+	return func() tea.Msg {
+		changeID, err := changeNumericID(change)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		testCaseID, err := testCaseNumericID(row.TestCaseID)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		if _, err := client.UpdateTestCaseDone(testCaseID, !row.TestCaseDone); err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		change, err := client.GetChange(changeID)
 		return changeSavedMsg{source: ChangeDetailsState, change: change, err: err}
 	}
 }
@@ -218,6 +321,14 @@ func changeNumericID(change dto.Change) (int, error) {
 	return id, nil
 }
 
+func testCaseNumericID(idValue string) (int, error) {
+	id, err := strconv.Atoi(strings.TrimSpace(idValue))
+	if err != nil || id <= 0 {
+		return 0, fmt.Errorf("test case ID must be a valid positive number")
+	}
+	return id, nil
+}
+
 func currentProjectNumericID(projectID string) (int, error) {
 	id, err := strconv.Atoi(strings.TrimSpace(projectID))
 	if err != nil || id <= 0 {
@@ -250,6 +361,24 @@ func toggleChangeType(current []string, selected dto.Option) []string {
 	}
 	if !removed && selectedID != "" {
 		next = append(next, selectedID)
+	}
+	sort.Strings(next)
+	return next
+}
+
+func normalizeTypeSet(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	next := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		next = append(next, value)
 	}
 	sort.Strings(next)
 	return next

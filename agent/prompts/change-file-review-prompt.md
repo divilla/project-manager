@@ -2,7 +2,7 @@
 
 Review the current branch against `origin/stage` as a 10x senior engineer.
 
-Change contract: `agent/changes/109-db-alters-and-views.md`
+Change contract: `agent/changes/110-cli-improve-changes-and-agentic-workflow.md`
 
 ## Review Steps
 

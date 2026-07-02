@@ -19,35 +19,38 @@ import (
 // View renders the root application shell and active screen.
 func (m Model) View() string {
 	width := terminalWidth(m.width)
-	lines := []string{
-		appTitle(),
-		"",
-		styles.Default.Foreground.Render(screenTitle(m.state)),
-	}
+	lines := []string{m.headerLine(width)}
 	if m.state == ProjectsListState && !m.hasDropdown() {
-		lines = append(lines, "", projects.TableView(m.projectList, width))
+		lines = append(lines, "")
+		lines = append(lines, projects.TableView(m.projectList, width))
 	}
 	if m.state == ChangesListState && !m.hasDropdown() {
-		lines = append(lines, "", changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows()))
+		table := changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows())
+		lines = append(lines, m.changeFiltersLine(table), table)
 	}
 	if m.state == ChangeDetailsState {
 		details := changes.DetailsView(m.changeList, width, m.changeTableRows())
 		if details != "" {
-			lines = append(lines, "", details)
+			lines = append(lines, "")
+			lines = append(lines, details)
 		}
 	}
 	if m.state == ProjectDetailsState {
 		details := projects.DetailsView(m.projectList.Detail, width)
 		if details != "" {
-			lines = append(lines, "", details)
+			lines = append(lines, "")
+			lines = append(lines, details)
 		}
 	}
 	if m.state == FindInputState {
-		lines = append(lines, "", m.inputBand(width))
+		lines = append(lines, "")
+		lines = append(lines, m.inputBand(width))
 	} else if m.hasDropdown() {
-		lines = append(lines, "", m.dropdownView(width))
+		lines = append(lines, "")
+		lines = append(lines, m.dropdownView(width))
 	} else {
-		lines = append(lines, "", m.inputBand(width))
+		lines = append(lines, "")
+		lines = append(lines, m.inputBand(width))
 	}
 	if m.err != "" {
 		lines = append(lines, styles.Default.Error.Render("Error: "+m.err))
@@ -60,6 +63,77 @@ func (m Model) View() string {
 		lines = append(lines, styles.Default.Success.Render("done"))
 	}
 	return styles.Default.Surface.Width(width).Render(strings.Join(lines, "\n"))
+}
+
+func (m Model) headerLine(width int) string {
+	left := appTitle()
+	right := m.headerRight()
+	padding := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if padding < 1 {
+		padding = 1
+	}
+	return left + strings.Repeat(" ", padding) + right
+}
+
+func (m Model) headerRight() string {
+	title := screenTitle(m.state)
+	if before, _, ok := strings.Cut(title, " - "); ok {
+		title = before
+	}
+	return styles.Default.Foreground.Render(title)
+}
+
+func (m Model) changeFiltersLine(table string) string {
+	line := changeFilterLabel("/filter-phase ") + changeFilterValue(m.changeFilters().Phase.Label) +
+		"   " + changeFilterLabel("/filter-type ") + changeFilterValue(m.changeFilters().Type.Label) +
+		"   " + changeFilterLabel("/filter-epic ") + changeFilterValue(m.changeFilters().Epic.Label) +
+		"   " + changeFilterLabel("/filter-find ") + changeFilterValue(m.changeFilters().Find)
+	tableWidth := firstLineWidth(table)
+	padding := tableWidth - lipgloss.Width(line)
+	if padding < 0 {
+		padding = 0
+	}
+	return strings.Repeat(" ", padding) + line
+}
+
+func changeFilterLabel(value string) string {
+	return styles.Default.Muted.Render(value)
+}
+
+func changeFilterValue(value string) string {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render(value)
+}
+
+func firstLineWidth(value string) int {
+	first, _, _ := strings.Cut(value, "\n")
+	return lipgloss.Width(first)
+}
+
+func (m Model) helpText() string {
+	if m.hasDropdown() {
+		if m.dropdown.kind == dropdownConfirm {
+			return "<return> select  |  <esc> or <ctrl+c> cancel"
+		}
+		return "<return> select  |  <esc> cancel"
+	}
+	switch m.state {
+	case ChangesListState:
+		return "<ctrl+n> new change  |  <return> view  |  </> command"
+	case ChangeDetailsState:
+		return "<ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  </> command"
+	case TestCaseCreateState, TestCaseUpdateState:
+		return "<return> save  |  <ctrl+c> delete prompt  |  <esc> cancel"
+	case ChangeCreateState, ChangeUpdateState, EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:
+		return "<return> save  |  <ctrl+c> delete prompt  |  <esc> cancel"
+	case FindInputState:
+		return "<return> search  |  <ctrl+c> delete prompt  |  <esc> cancel"
+	case ProjectsListState, EpicsListState:
+		return "<return> view  |  </> command"
+	case ProjectDetailsState, EpicDetailsState, TestCaseDetailsState:
+		return "<return> edit  |  </> command"
+	default:
+		return "</> command  |  <esc> cancel"
+	}
 }
 
 func (m Model) inputBand(width int) string {
@@ -125,9 +199,9 @@ func promptValueLines(value string) []string {
 func (m Model) footerText() string {
 	currentProject := "Current Project: " + m.currentProjectFooter()
 	if m.status != "" {
-		return fmt.Sprintf("/ commands  |  esc safe action  |  status %s  |  %s  |  %s", m.status, currentProject, footerColorStrip())
+		return fmt.Sprintf("%s  |  status %s  |  %s  |  %s", m.helpText(), m.status, currentProject, footerColorStrip())
 	}
-	return "/ commands  |  esc safe action  |  " + currentProject + "  |  " + footerColorStrip()
+	return m.helpText() + "  |  " + currentProject + "  |  " + footerColorStrip()
 }
 
 func footerColorStrip() string {
@@ -148,7 +222,7 @@ func footerColorStrip() string {
 }
 
 func appTitle() string {
-	return styles.Default.Title.Render("Make a Change") + styles.Default.Muted.Render(" ver. "+Version)
+	return styles.Default.Title.Render("Make a change") + styles.Default.Muted.Render(" v"+Version)
 }
 
 func (m Model) currentProjectFooter() string {
@@ -189,13 +263,13 @@ func screenTitle(state State) string {
 		CommandDropDownState:       "CommandDropDownScreen - Title: Commands",
 		ListSelectionDropDownState: "ListSelectionDropDownScreen - Title: Select Item",
 		SelectProjectDropDown:      "SelectProjectDropDownScreen - Title: Select Project",
-		SelectPhaseDropDown:        "SelectPhaseDropDownScreen - Title: Select Phase",
+		SelectPhaseDropDown:        "SelectChangePhasesDropDownScreen - Title: Select Change Phases",
 		SelectEpicDropDown:         "SelectEpicDropDownScreen - Title: Select Epic",
-		SelectTypesDropDown:        "SelectTypesDropDownScreen - Title: Select Types",
-		ChangeDeleteConfirmation:   "ChangeDeleteConfirmationScreen - Title: Confirm Delete",
-		TestCaseDeleteConfirmation: "TestCaseDeleteConfirmationScreen - Title: Confirm Delete",
-		EpicDeleteConfirmation:     "EpicDeleteConfirmationScreen - Title: Confirm Delete",
-		ProjectDeleteConfirmation:  "ProjectDeleteConfirmationScreen - Title: Confirm Delete",
+		SelectTypesDropDown:        "SelectChangeTypesDropDownScreen - Title: Select Change Types",
+		ChangeDeleteConfirmation:   "ChangeDeleteConfirmationScreen - Title: Are you sure?",
+		TestCaseDeleteConfirmation: "TestCaseDeleteConfirmationScreen - Title: Are you sure?",
+		EpicDeleteConfirmation:     "EpicDeleteConfirmationScreen - Title: Are you sure?",
+		ProjectDeleteConfirmation:  "ProjectDeleteConfirmationScreen - Title: Are you sure?",
 		DoneState:                  "DoneScreen - Title: Done",
 	}
 	if title, ok := titles[state]; ok {

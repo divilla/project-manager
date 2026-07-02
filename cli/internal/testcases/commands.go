@@ -2,7 +2,7 @@ package testcases
 
 // DetailCommands returns slash commands for test case details.
 func DetailCommands() []string {
-	return []string{"/new-test-case", "/edit", "/delete", "/save", "/cancel", "/return"}
+	return []string{"/new-testcase", "/edit", "/delete", "/save", "/cancel", "/return"}
 }
 
 // EditCommands returns slash commands for test case edit/create screens.

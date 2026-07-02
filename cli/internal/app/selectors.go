@@ -38,6 +38,16 @@ func (m Model) dropdownCurrentValueIndex(options []dto.Option) int {
 			}
 		}
 	}
+	if m.dropdown.filterField != "" {
+		switch m.dropdown.filterField {
+		case filterPhase:
+			return optionIndex(options, m.changesFilters.phase.ID, m.changesFilters.phase.Label)
+		case filterEpic:
+			return optionIndex(options, m.changesFilters.epic.ID, m.changesFilters.epic.Label)
+		case filterType:
+			return optionIndex(options, m.changesFilters.typ.ID, m.changesFilters.typ.Label)
+		}
+	}
 	if m.state == SelectProjectDropDown {
 		return optionIndex(options, m.currentProject.ID, m.currentProject.Label)
 	}

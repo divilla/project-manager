@@ -1,4 +1,4 @@
-Implement `agent/changes/109-db-alters-and-views.md` with senior-level discipline.
+Implement Change file `110-cli-improve-changes-and-agentic-workflow.md` with senior-level discipline.
 
 The Change file is the implementation contract. The current branch documentation under `docs/` is the behavioral reference. Implement the smallest coherent code, test, seed, and database-file changes needed to satisfy that contract.
 

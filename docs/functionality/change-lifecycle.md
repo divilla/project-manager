@@ -32,19 +32,19 @@ The detail view shows:
 
 - project-scoped reference and slug
 - title and body
-- PR body and PR URL when present
+- `pr_body` and `pr_url` when present
 - phase and type information
 - linked epic and `epic_name` when present
-- test case list
+- test case list ordered by test case ID
 - completion counters
 - `agent_edit`
 - open state
 - version, created time, and modified time
 
-Markdown body and PR body rendering is sanitized by the backend before display.
+Markdown `body` and `pr_body` rendering is sanitized by the backend before display.
 
 ## Update
-Editing a change can update title, body, PR body, PR URL, type classification, epic reference, phase, open state, and `agent_edit`. History-bearing fields must preserve the previous row before mutation.
+Editing a change can update title, `body`, `pr_body`, `pr_url`, type classification, epic reference, phase, open state, and `agent_edit`. History-bearing fields must preserve the previous row before mutation. Open-state updates use an explicit boolean value and return refreshed backend state.
 
 Focused updates return the refreshed change with its existing `ref` and `slug`. Updating the title does not let clients supply replacement identity values.
 

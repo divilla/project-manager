@@ -1,7 +1,7 @@
-Using `agent/changes/109-db-alters-and-views.md` as the source of truth, update or create only the documentation needed to precisely describe the desired external behavior for this Change.
+Using Change file `agent/changes/110-cli-improve-changes-and-agentic-workflow.md` as the source of truth, update or create only the documentation needed to precisely describe the desired external behavior for this Change.
 
 Before editing anything:
-1. Read `agent/changes/109-db-alters-and-views.md`.
+1. Read the Change file.
 2. Read `docs/docs-rules.md`.
 3. Read every existing `docs/` file that describes affected behavior, including Change fields, backend API payloads, frontend behavior, history behavior, local development, and verification.
 
@@ -11,7 +11,7 @@ Documentation rules:
 - Keep docs concise, product-focused, and testable.
 - Describe intended external behavior, user-visible/API-visible contracts, persistence constraints, validation behavior, and verification expectations.
 - Do not describe implementation internals unless they are part of the observable product or API contract.
-- Resolve conflicts between existing docs and the Change file in favor of `agent/changes/109-db-alters-and-views.md`.
+- Resolve conflicts between existing docs and the Change file in favor of `agent/changes/110-cli-improve-changes-and-agentic-workflow.md`.
 - Preserve established project vocabulary.
 - Keep each doc under the repository’s documented line limit.
 - Do not create duplicate documentation if an existing doc is the right home for the behavior.

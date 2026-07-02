@@ -51,7 +51,8 @@ type change struct {
 }
 
 type detail struct {
-	Change change `json:"change"`
+	Change    change     `json:"change"`
+	TestCases []testCase `json:"test_cases"`
 }
 
 type testCase struct {
@@ -269,6 +270,35 @@ func TestChangeListOrdersByModifiedDescending(t *testing.T) {
 	assert.Equal(t, newer.ID, listed[1].ID)
 }
 
+func TestChangeGetReturnsTestCasesOrderedByID(t *testing.T) {
+	client := shared.NewClient(t)
+
+	projectID := createProject(t, client)
+	defer shared.CleanupProject(t, client, projectID)
+
+	var created change
+	status := client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id":   projectID,
+		"title":        fmt.Sprintf("api-test-testcase-order-change-%d", time.Now().UnixNano()),
+		"change_types": []string{"feature"},
+	}, &created)
+	require.Equal(t, http.StatusCreated, status)
+
+	firstID := createTestCaseWithScenario(t, client, created.ID, "zzz first by id")
+	secondID := createTestCaseWithScenario(t, client, created.ID, "aaa second by id")
+	thirdID := createTestCaseWithScenario(t, client, created.ID, "mmm third by id")
+
+	var fetched detail
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	require.Len(t, fetched.TestCases, 3)
+	assert.Equal(t, []int{firstID, secondID, thirdID}, []int{
+		fetched.TestCases[0].ID,
+		fetched.TestCases[1].ID,
+		fetched.TestCases[2].ID,
+	})
+}
+
 func TestChangeBooleanUpdatesRequireExplicitFields(t *testing.T) {
 	client := shared.NewClient(t)
 
@@ -408,10 +438,16 @@ func createEpic(t *testing.T, client *shared.Client, projectID int) int {
 func createTestCase(t *testing.T, client *shared.Client, changeID int) int {
 	t.Helper()
 
+	return createTestCaseWithScenario(t, client, changeID, "Change delete removes this test case.")
+}
+
+func createTestCaseWithScenario(t *testing.T, client *shared.Client, changeID int, scenario string) int {
+	t.Helper()
+
 	var created testCaseMutation
 	status := client.Post(t, "/api/v1/test-case/create", map[string]any{
 		"change_id": changeID,
-		"scenario":  "Change delete removes this test case.",
+		"scenario":  scenario,
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotNil(t, created.TestCase)

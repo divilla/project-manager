@@ -138,12 +138,14 @@ func phaseStyle(phase string) lipgloss.Style {
 	case "backlog":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 	case "progress":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	case "review":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("13"))
 	case "staging":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	case "production", "done":
+	case "production":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+	case "done":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	case "rejected":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
@@ -257,11 +259,43 @@ func DetailsView(m Model, width int, pageSize int) string {
 
 func tableText(value string, limit int) string {
 	value = strings.Join(strings.Fields(strings.TrimSpace(value)), " ")
-	runes := []rune(value)
-	if len(runes) <= limit {
+	return truncateDisplay(value, limit)
+}
+
+func truncateDisplay(value string, limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	if lipgloss.Width(value) <= limit {
 		return value
 	}
-	return string(runes[:limit])
+	var b strings.Builder
+	for _, r := range value {
+		next := b.String() + string(r)
+		if lipgloss.Width(next) > limit {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func padLeftDisplay(value string, width int) string {
+	value = truncateDisplay(value, width)
+	padding := width - lipgloss.Width(value)
+	if padding < 0 {
+		padding = 0
+	}
+	return strings.Repeat(" ", padding) + value
+}
+
+func padRightDisplay(value string, width int) string {
+	value = truncateDisplay(value, width)
+	padding := width - lipgloss.Width(value)
+	if padding < 0 {
+		padding = 0
+	}
+	return value + strings.Repeat(" ", padding)
 }
 
 func boxedTable(content string, width int) string {
@@ -291,12 +325,14 @@ func detailTableRowLines(row DetailRow, labelWidth int, textWidth int, selected 
 		if i == 0 {
 			label = row.Label
 		}
-		line := fmt.Sprintf("%*s │ %-*s", labelWidth, tableText(label, labelWidth), textWidth, tableText(text, textWidth))
+		labelText := padLeftDisplay(tableText(label, labelWidth), labelWidth)
+		valueText := padRightDisplay(tableText(text, textWidth), textWidth)
+		line := labelText + " │ " + valueText
 		if selected && row.Selectable {
 			lines = append(lines, detailSelectedStyle(row).Render(line))
 			continue
 		}
-		lines = append(lines, styles.Default.Muted.Render(fmt.Sprintf("%*s │ ", labelWidth, tableText(label, labelWidth)))+detailValueStyle(row).Render(fmt.Sprintf("%-*s", textWidth, tableText(text, textWidth))))
+		lines = append(lines, styles.Default.Muted.Render(labelText+" │ ")+detailValueStyle(row).Render(valueText))
 	}
 	return lines
 }
@@ -306,7 +342,7 @@ func detailDividerLine(labelWidth int, textWidth int) string {
 }
 
 func detailBlankLine(labelWidth int, textWidth int) string {
-	return styles.Default.Muted.Render(fmt.Sprintf("%*s │ %-*s", labelWidth, "", textWidth, ""))
+	return styles.Default.Muted.Render(padLeftDisplay("", labelWidth) + " │ " + padRightDisplay("", textWidth))
 }
 
 func detailValueStyle(row DetailRow) lipgloss.Style {
@@ -315,6 +351,10 @@ func detailValueStyle(row DetailRow) lipgloss.Style {
 		return phaseStyle(row.Text)
 	case "Title":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	case "Agent Edit":
+		return booleanIconStyle(row.Text)
+	case "Complete":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	default:
 		return styles.Default.Foreground
 	}
@@ -326,8 +366,23 @@ func detailSelectedStyle(row DetailRow) lipgloss.Style {
 		return phaseStyle(row.Text).Background(lipgloss.Color("60"))
 	case "Title":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("60"))
+	case "Agent Edit":
+		return booleanIconStyle(row.Text).Background(lipgloss.Color("60"))
+	case "Complete":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Background(lipgloss.Color("60"))
 	default:
 		return styles.Default.Selection
+	}
+}
+
+func booleanIconStyle(value string) lipgloss.Style {
+	switch value {
+	case "\u2714":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+	case "\u2718":
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	default:
+		return styles.Default.Foreground
 	}
 }
 

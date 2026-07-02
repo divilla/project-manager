@@ -12,8 +12,11 @@ History-bearing change data includes:
 - epic ID
 - change types
 - title
-- body
-- agent edit marker
+- `body`
+- `pr_body`
+- `pr_url`
+- `agent_edit`
+- `open`
 - modified time
 - delete marker
 
@@ -25,7 +28,7 @@ Epic history supports review of planning container changes and preserves previou
 ## Test Case History
 Before updating or deleting a test case scenario, the backend records the current test case row in `test_case_history`.
 
-Done toggles may update active state without changing the test case scenario version, depending on backend contract. Test case history rows store the associated `change_id` so historical scenario changes remain tied to the change they helped define.
+Done toggles update active completion state without changing the test case scenario version. Test case history rows store the associated `change_id` so historical scenario changes remain tied to the change they helped define.
 
 ## Transaction Rule
 History insert and active-row mutation must happen in one transaction. If history capture fails, the active row must not change.

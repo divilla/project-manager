@@ -13,7 +13,12 @@ type API interface {
 	UpdateChangePRUrl(id int, prURL string) (dto.Change, error)
 	UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error)
 	UpdateChangePhase(id int, changePhase string) (dto.Change, error)
+	UpdateChangeOpen(id int, open bool) (dto.Change, error)
 	UpdateChangeEpic(id int, epicID *int) (dto.Change, error)
+	CreateTestCase(changeID int, scenario string) (dto.Change, error)
+	UpdateTestCase(id int, scenario string) (dto.Change, error)
+	UpdateTestCaseDone(id int, done bool) (dto.Change, error)
+	DeleteTestCase(id int) (dto.Change, error)
 	DeleteChange(id int) error
 	ListPhases() ([]dto.Option, error)
 	ListTypes() ([]dto.Option, error)
