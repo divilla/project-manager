@@ -4,32 +4,49 @@ import (
 	"strconv"
 	"strings"
 
+	"mch/internal/agent"
 	"mch/internal/changes"
 	"mch/internal/dto"
 	"mch/internal/navigation"
 	"mch/internal/projects"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Init starts any initial asynchronous command required by the model.
 func (m Model) Init() tea.Cmd {
-	clear := tea.ClearScreen
+	cmds := []tea.Cmd{tea.ClearScreen, optionCatalogCommand(m.client)}
 	if m.needsProjectSelection() {
 		selectProject := func() tea.Msg {
 			return startupProjectSelectionMsg{}
 		}
-		return tea.Batch(clear, selectProject)
+		cmds = append(cmds, selectProject)
+		return tea.Batch(cmds...)
 	}
 	if m.appConfig.ProjectID > 0 {
-		return tea.Batch(clear, currentProjectCommand(m.client, m.appConfig.ProjectID))
+		cmds = append(cmds, currentProjectCommand(m.client, m.appConfig.ProjectID))
+		return tea.Batch(cmds...)
 	}
-	return clear
+	return tea.Batch(cmds...)
 }
 
 // Update applies Bubble Tea messages to the root model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		if !m.agentRunningActive() {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.agentSpinner, cmd = m.agentSpinner.Update(msg)
+		return m, cmd
+	case agentElapsedMsg:
+		if !m.agentRunningActive() {
+			return m, nil
+		}
+		m.agentElapsed++
+		return m, agentElapsedTick()
 	case startupProjectSelectionMsg:
 		if !m.needsProjectSelection() {
 			return m, nil
@@ -114,6 +131,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.err != nil {
+			if msg.source == ChangesListState && m.agentFlow.Active() {
+				m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+				m.agentElapsed = 0
+			}
 			m.err = msg.err.Error()
 			m.status = "save failed"
 			return m, nil
@@ -133,6 +154,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.reloadErr.Error()
 			m.status = "load failed"
 		}
+		if msg.source == ChangesListState && m.agentFlow.Active() {
+			m.agentFlow = agent.NewModel()
+		}
 		m.detailEditField = ""
 		m.activeTestCase = dto.TestCase{}
 		m = m.setPromptValue("")
@@ -145,6 +169,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.arrive(msg.target, "deleted")
+	case optionCatalogLoadedMsg:
+		if msg.err != nil {
+			m.optionCatalog = optionCatalog{}
+			m.err = msg.err.Error()
+			m.status = "option catalog failed"
+			return m, nil
+		}
+		m.optionCatalog = optionCatalog{phases: msg.phases, types: msg.types, loaded: true}
+		return m, nil
+	case agentRewriteFinishedMsg:
+		return m.handleAgentRewriteFinished(msg)
+	case agentCommandOutputMsg:
+		return m.handleAgentCommandOutput(msg)
+	case agentInitFinishedMsg:
+		return m.handleAgentInitFinished(msg)
 	case projectSavedMsg:
 		if m.state != msg.source {
 			return m, nil
@@ -188,6 +227,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case editorFinishedMsg:
 		if m.state != msg.source {
 			return m, nil
+		}
+		if msg.source == ChangesListState && m.agentFlow.Active() {
+			return m.handleAgentEditorFinished(msg)
 		}
 		if msg.err != nil {
 			m.err = msg.err.Error()
@@ -610,6 +652,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 	case "/return":
 		return m.arrive(navigation.ReturnTargets()[source], "return")
 	case "/new-change", "/new-testcase", "/new-test-case", "/new-epic", "/new-project":
+		if command == "/new-change" && source == ChangesListState {
+			return m.beginAgentNewChange()
+		}
 		m.state = navigation.CreateTarget(source)
 		if m.state == ChangeCreateState {
 			m = m.setPromptValue("")
@@ -749,12 +794,12 @@ func (m Model) beginSelector(state State) (tea.Model, tea.Cmd) {
 	}
 	source := selectorSourceForState(state)
 	m.openSelectorDropdown(state, previous, onSelect, string(state), source)
-	return m, selectorCommand(m.client, source, m.currentProject.ID)
+	return m, m.selectorCommand(source)
 }
 
 func (m Model) beginFilter(label string, source selectorSource, field filterField) (tea.Model, tea.Cmd) {
 	m.openFilterDropdown(label, source, field)
-	return m, selectorCommand(m.client, source, m.currentProject.ID)
+	return m, m.selectorCommand(source)
 }
 
 func (m Model) beginDetailTitleEdit() (tea.Model, tea.Cmd) {
@@ -811,7 +856,7 @@ func (m Model) beginDetailFieldSelector(field detailEditField) (tea.Model, tea.C
 	if field == detailEditTypes {
 		m.dropdown.pendingTypes = normalizeTypeSet(m.changeList.Detail.ChangeTypes)
 	}
-	return m, selectorCommand(m.client, m.dropdown.source, m.currentProject.ID)
+	return m, m.selectorCommand(m.dropdown.source)
 }
 
 func (m Model) handleDetailSpaceToggle() (tea.Model, tea.Cmd) {

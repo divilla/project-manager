@@ -16,6 +16,8 @@ The prototype stores its local config under `cli-proto/.config`. It may persist 
 ## Reference TUI
 The `cli/` module contains the reference `mch` TUI. Its architecture, package boundaries, style tokens, state model, and test strategy are documented in `docs/architecture/mch.md`. The executable remains `mch`; `cli/` is only the source directory name.
 
+`mch` owns the interactive AI-assisted `/new-change` flow from the Change list. The flow may use local temporary files under `/tmp/mch` and Codex CLI process handoff, but saved product data must still be created through supported backend APIs.
+
 ## Current Project
 Current project selection is user-specific application state. CLI commands that operate on project-scoped data should read the same user setting as the app or require an explicit project option.
 

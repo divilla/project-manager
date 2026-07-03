@@ -1,6 +1,18 @@
 # Change file structure
 
-Use this structure exactly. Replace every placeholder with content for the active Change. Keep sections concise, specific, and testable. Do not add, remove, rename, or reorder sections unless the user explicitly changes the Change workflow.
+Use this structure exactly for every Change file. Replace placeholders with content for the active Change. Keep sections concise, specific, and testable. Do not add, remove, rename, or reorder sections unless the user explicitly changes the Change workflow.
+
+The first non-blank line must be the Change title as one H1. The first non-blank line after the title must be the type metadata line.
+
+Select one or more backend type slugs that best describe the Change. Do not hardcode, invent, or assume allowed type slugs. Use the type options supplied by the active workflow context; if no current type options are supplied, retrieve them from `POST /api/v1/options/change-types-list` when the environment supports backend access, otherwise stop and ask for valid backend type slugs.
+
+Format the metadata line exactly as `Types: <type-slugs>`, with selected backend slugs joined by `|` and no spaces.
+
+Do not wrap the generated Change file in a code block.
+
+# <Change Title>
+
+Types: <type-slugs>
 
 ## Goal
 

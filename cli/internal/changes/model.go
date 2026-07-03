@@ -17,6 +17,9 @@ type Filters struct {
 	Find  string
 }
 
+// PhaseColors maps backend phase slugs to optional Lip Gloss color values.
+type PhaseColors map[string]string
+
 // Model stores changes list and detail state.
 type Model struct {
 	Rows           []dto.Change

@@ -30,6 +30,8 @@ go build -o /tmp/mch ./cmd/mch
 
 After every `mch` code change, agents must run `make lint` from `cli` and fix all findings before handoff. `make lint` may rewrite imports or formatting; review and include those intentional changes with the `mch` code change.
 
+Changes to the `mch` AI-assisted `/new-change` flow should also be verified with tests that fake editor and Codex execution and cover temporary planning files, `/resume`, `/clear`, and `/cancel`, empty or unchanged ideas, rewrite retries, generated Change parsing, create payload fields, generated QA Test Case creation, and refreshed detail navigation.
+
 ## Frontend
 From the repository root:
 

@@ -1,17 +1,17 @@
 package app
 
 import (
+	"mch/internal/agent"
 	"mch/internal/changes"
 	"mch/internal/dto"
 	"mch/internal/epics"
 	"mch/internal/help"
-	"mch/internal/planning"
 	"mch/internal/projects"
 	"mch/internal/testcases"
 )
 
 var commandsByState = map[State][]string{
-	MainState:            planning.MainCommands(),
+	MainState:            agent.MainCommands(),
 	ChangesListState:     changes.ListCommands(),
 	ChangeDetailsState:   changes.DetailCommands(),
 	TestCaseDetailsState: testcases.DetailCommands(),

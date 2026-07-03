@@ -2,7 +2,9 @@ package app
 
 import (
 	"strconv"
+	"time"
 
+	"mch/internal/agent"
 	"mch/internal/changes"
 	"mch/internal/dto"
 	"mch/internal/epics"
@@ -11,6 +13,7 @@ import (
 	httpclient "mch/pkg/client"
 
 	"github.com/charmbracelet/bubbles/cursor"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -27,6 +30,7 @@ const (
 	dropdownList    dropdownKind = "list"
 	dropdownSelect  dropdownKind = "select"
 	dropdownConfirm dropdownKind = "confirm"
+	dropdownAgent   dropdownKind = "agent"
 )
 
 type selectorSource string
@@ -64,6 +68,12 @@ type changesFilters struct {
 	epic  dto.Option
 	typ   dto.Option
 	find  string
+}
+
+type optionCatalog struct {
+	phases []dto.Option
+	types  []dto.Option
+	loaded bool
 }
 
 type dropdownModel struct {
@@ -129,6 +139,29 @@ type changeDeletedMsg struct {
 	err    error
 }
 
+type agentRewriteFinishedMsg struct {
+	result agent.RewriteResult
+	err    error
+}
+
+type agentCommandOutputMsg struct {
+	output  string
+	updates <-chan string
+	done    bool
+}
+
+type optionCatalogLoadedMsg struct {
+	phases []dto.Option
+	types  []dto.Option
+	err    error
+}
+
+type agentInitFinishedMsg struct {
+	err error
+}
+
+type agentElapsedMsg time.Time
+
 type currentProjectLoadedMsg struct {
 	id      int
 	project dto.Project
@@ -164,7 +197,13 @@ type Model struct {
 	promptCursorCol int
 	pendingAltO     bool
 	changesFilters  changesFilters
+	optionCatalog   optionCatalog
 	changeList      changes.Model
+	agentFlow       agent.Model
+	agentRunner     agent.Runner
+	agentWorkspace  string
+	agentSpinner    spinner.Model
+	agentElapsed    int
 	currentProject  dto.Option
 	projectList     projects.Model
 	client          appClient
@@ -211,6 +250,10 @@ func newModelWithConfig(client appClient, cfg appConfig, configPath string) Mode
 	input.Cursor.TextStyle = input.FocusedStyle.Text
 	input.Cursor.SetMode(cursor.CursorStatic)
 	input.Focus()
+	spin := spinner.New(
+		spinner.WithSpinner(spinner.MiniDot),
+		spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("86"))),
+	)
 
 	currentProject := dto.Option{}
 	if cfg.ProjectID > 0 {
@@ -224,6 +267,10 @@ func newModelWithConfig(client appClient, cfg appConfig, configPath string) Mode
 		state:          MainState,
 		width:          80,
 		height:         24,
+		agentFlow:      agent.NewModel(),
+		agentRunner:    agent.NewProcessRunner(),
+		agentWorkspace: agent.DefaultWorkspaceDir,
+		agentSpinner:   spin,
 		currentProject: currentProject,
 		client:         client,
 		appConfig:      cfg,

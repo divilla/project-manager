@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"mch/internal/changes"
 	"mch/internal/dto"
@@ -64,6 +65,35 @@ func optionIndex(options []dto.Option, id string, label string) int {
 		}
 	}
 	return 0
+}
+
+func optionIDs(options []dto.Option) []string {
+	values := make([]string, 0, len(options))
+	for _, option := range options {
+		if option.ID != "" {
+			values = append(values, option.ID)
+			continue
+		}
+		if option.Label != "" {
+			values = append(values, option.Label)
+		}
+	}
+	return values
+}
+
+func phaseColorMap(options []dto.Option) changes.PhaseColors {
+	colors := make(changes.PhaseColors, len(options))
+	for _, option := range options {
+		id := strings.TrimSpace(option.ID)
+		if id == "" {
+			id = strings.TrimSpace(option.Label)
+		}
+		color := strings.TrimSpace(option.Color)
+		if id != "" && color != "" {
+			colors[id] = color
+		}
+	}
+	return colors
 }
 
 func (m *Model) setChangesFilter(field filterField, option dto.Option) {
@@ -136,6 +166,40 @@ func selectorSourceForState(state State) selectorSource {
 	}
 }
 
+func optionCatalogCommand(client appClient) tea.Cmd {
+	return func() tea.Msg {
+		phases, err := client.ListPhases()
+		if err != nil {
+			return optionCatalogLoadedMsg{err: err}
+		}
+		types, err := client.ListTypes()
+		if err != nil {
+			return optionCatalogLoadedMsg{err: err}
+		}
+		return optionCatalogLoadedMsg{phases: phases, types: types}
+	}
+}
+
+func (m Model) selectorCommand(source selectorSource) tea.Cmd {
+	switch source {
+	case selectorPhases:
+		return cachedSelectorCommand(source, m.optionCatalog.phases, m.optionCatalog.loaded)
+	case selectorTypes:
+		return cachedSelectorCommand(source, m.optionCatalog.types, m.optionCatalog.loaded)
+	default:
+		return selectorCommand(m.client, source, m.currentProject.ID)
+	}
+}
+
+func cachedSelectorCommand(source selectorSource, options []dto.Option, loaded bool) tea.Cmd {
+	return func() tea.Msg {
+		if !loaded {
+			return selectorLoadedMsg{source: source, err: fmt.Errorf("backend option catalog is not loaded")}
+		}
+		return selectorLoadedMsg{source: source, options: options}
+	}
+}
+
 func selectorCommand(client appClient, source selectorSource, projectID string) tea.Cmd {
 	return func() tea.Msg {
 		var (
@@ -147,10 +211,6 @@ func selectorCommand(client appClient, source selectorSource, projectID string) 
 			options, err = client.ListProjects()
 		case selectorEpics:
 			options, err = client.ListEpics(projectID)
-		case selectorPhases:
-			options, err = client.ListPhases()
-		case selectorTypes:
-			options, err = client.ListTypes()
 		}
 		return selectorLoadedMsg{source: source, options: options, err: err}
 	}

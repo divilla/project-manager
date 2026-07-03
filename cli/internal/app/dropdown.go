@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	"mch/internal/agent"
 	"mch/internal/dto"
 	"mch/internal/styles"
 
@@ -155,6 +156,24 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m.executeCommandFrom(m.dropdown.previous, selected.ID)
+	}
+	if m.dropdown.kind == dropdownAgent {
+		selected := m.selectedOption()
+		m.dropdown = dropdownModel{}
+		switch selected.ID {
+		case "/resume":
+			return m.openAgentIdeaEditor(false, m.agentFlow.IdeaEntryContent)
+		case "/clear":
+			return m.openAgentIdeaEditor(true, "")
+		case "/cancel":
+			m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+			m.state = ChangesListState
+			m.status = "cancel"
+			return m, nil
+		default:
+			m.err = "unknown command"
+			return m, nil
+		}
 	}
 
 	selected := m.selectedOption()

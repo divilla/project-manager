@@ -530,6 +530,7 @@ func optionsFromArray(values []any) []dto.Option {
 			option := dto.Option{
 				ID:    firstString(typed, "id", "project_id", "epic_id", "slug", "value"),
 				Label: firstString(typed, "name", "title", "slug", "label", "value", "id"),
+				Color: firstString(typed, "color", "colour", "lip_gloss_color", "lipgloss_color"),
 			}
 			if option.Label == "" {
 				continue

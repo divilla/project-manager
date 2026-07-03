@@ -1,4 +1,4 @@
-package planning
+package agent
 
 // MainCommands returns slash commands for the main screen.
 func MainCommands() []string {

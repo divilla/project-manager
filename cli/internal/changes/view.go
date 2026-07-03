@@ -24,7 +24,8 @@ func DetailTitle() string {
 }
 
 // TableView renders the selectable changes list.
-func TableView(m Model, filters Filters, width int, pageSize int) string {
+func TableView(m Model, filters Filters, width int, pageSize int, phaseColors ...PhaseColors) string {
+	colors := activePhaseColors(phaseColors)
 	width = ui.NormalizeWidth(width)
 	if m.Loading {
 		return styles.Default.InputBand.Width(width).Render("Changes: loading")
@@ -65,6 +66,7 @@ func TableView(m Model, filters Filters, width int, pageSize int) string {
 			epicWidth,
 			titleWidth,
 			rowIndex == selected,
+			colors,
 		)
 		lines = append(lines, line)
 	}
@@ -94,7 +96,7 @@ func changeTableLine(ref, phase, types, epic, title, done, total, completed, mod
 	)
 }
 
-func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, modified string, typesWidth, epicWidth, titleWidth int, selected bool) string {
+func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, modified string, typesWidth, epicWidth, titleWidth int, selected bool, phaseColors PhaseColors) string {
 	prefix := fmt.Sprintf("%6s ", tableText(ref, 6))
 	phaseValue := fmt.Sprintf("%-10s", tableText(phase, 10))
 	beforeTitle := fmt.Sprintf(
@@ -116,7 +118,7 @@ func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, 
 	if selected {
 		base := styles.Default.Selection
 		return base.Render(prefix) +
-			phaseStyle(phase).Background(lipgloss.Color("60")).Render(phaseValue) +
+			phaseStyle(phase, phaseColors).Background(lipgloss.Color("60")).Render(phaseValue) +
 			base.Render(beforeTitle) +
 			base.Foreground(lipgloss.Color("15")).Render(titleValue) +
 			base.Render(beforeCompleted) +
@@ -125,7 +127,7 @@ func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, 
 	}
 
 	return styles.Default.Muted.Render(prefix) +
-		phaseStyle(phase).Render(phaseValue) +
+		phaseStyle(phase, phaseColors).Render(phaseValue) +
 		styles.Default.Muted.Render(beforeTitle) +
 		lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Render(titleValue) +
 		styles.Default.Muted.Render(beforeCompleted) +
@@ -133,25 +135,12 @@ func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, 
 		styles.Default.Muted.Render(afterCompleted)
 }
 
-func phaseStyle(phase string) lipgloss.Style {
-	switch strings.ToLower(strings.TrimSpace(phase)) {
-	case "backlog":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
-	case "progress":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	case "review":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("13"))
-	case "staging":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
-	case "production":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-	case "done":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	case "rejected":
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	default:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+func phaseStyle(phase string, phaseColors PhaseColors) lipgloss.Style {
+	color := strings.TrimSpace(phaseColors[strings.TrimSpace(phase)])
+	if color == "" {
+		color = "240"
 	}
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(color))
 }
 
 func changeTableColumnWidths(width int) (int, int, int) {
@@ -221,7 +210,8 @@ func shrinkColumns(available, typesWidth, epicWidth, titleWidth int) (int, int, 
 }
 
 // DetailsView renders selected change details as a two-column selectable table.
-func DetailsView(m Model, width int, pageSize int) string {
+func DetailsView(m Model, width int, pageSize int, phaseColors ...PhaseColors) string {
+	colors := activePhaseColors(phaseColors)
 	if m.Detail.ID == "" && m.Detail.Title == "" {
 		return ""
 	}
@@ -239,7 +229,7 @@ func DetailsView(m Model, width int, pageSize int) string {
 
 	allLines := make([]string, 0, len(rows))
 	for rowIndex, row := range rows {
-		allLines = append(allLines, detailTableRowLines(row, labelWidth, textWidth, rowIndex == m.DetailSelected)...)
+		allLines = append(allLines, detailTableRowLines(row, labelWidth, textWidth, rowIndex == m.DetailSelected, colors)...)
 		if detailDividerAfter(row) {
 			allLines = append(allLines, detailDividerLine(labelWidth, textWidth))
 		}
@@ -255,6 +245,13 @@ func DetailsView(m Model, width int, pageSize int) string {
 	}
 	content := ui.TruncateBlock(strings.Join(lines, "\n"), contentWidth)
 	return boxedTable(content, contentWidth)
+}
+
+func activePhaseColors(values []PhaseColors) PhaseColors {
+	if len(values) == 0 || values[0] == nil {
+		return PhaseColors{}
+	}
+	return values[0]
 }
 
 func tableText(value string, limit int) string {
@@ -317,7 +314,7 @@ func innerTableWidth(width int) int {
 	return width - 2
 }
 
-func detailTableRowLines(row DetailRow, labelWidth int, textWidth int, selected bool) []string {
+func detailTableRowLines(row DetailRow, labelWidth int, textWidth int, selected bool, phaseColors PhaseColors) []string {
 	textLines := detailRowTextLines(row, textWidth)
 	lines := make([]string, 0, len(textLines))
 	for i, text := range textLines {
@@ -329,10 +326,10 @@ func detailTableRowLines(row DetailRow, labelWidth int, textWidth int, selected 
 		valueText := padRightDisplay(tableText(text, textWidth), textWidth)
 		line := labelText + " │ " + valueText
 		if selected && row.Selectable {
-			lines = append(lines, detailSelectedStyle(row).Render(line))
+			lines = append(lines, detailSelectedStyle(row, phaseColors).Render(line))
 			continue
 		}
-		lines = append(lines, styles.Default.Muted.Render(labelText+" │ ")+detailValueStyle(row).Render(valueText))
+		lines = append(lines, styles.Default.Muted.Render(labelText+" │ ")+detailValueStyle(row, phaseColors).Render(valueText))
 	}
 	return lines
 }
@@ -345,10 +342,10 @@ func detailBlankLine(labelWidth int, textWidth int) string {
 	return styles.Default.Muted.Render(padLeftDisplay("", labelWidth) + " │ " + padRightDisplay("", textWidth))
 }
 
-func detailValueStyle(row DetailRow) lipgloss.Style {
+func detailValueStyle(row DetailRow, phaseColors PhaseColors) lipgloss.Style {
 	switch row.Label {
 	case "Phase":
-		return phaseStyle(row.Text)
+		return phaseStyle(row.Text, phaseColors)
 	case "Title":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
 	case "Agent Edit":
@@ -360,10 +357,10 @@ func detailValueStyle(row DetailRow) lipgloss.Style {
 	}
 }
 
-func detailSelectedStyle(row DetailRow) lipgloss.Style {
+func detailSelectedStyle(row DetailRow, phaseColors PhaseColors) lipgloss.Style {
 	switch row.Label {
 	case "Phase":
-		return phaseStyle(row.Text).Background(lipgloss.Color("60"))
+		return phaseStyle(row.Text, phaseColors).Background(lipgloss.Color("60"))
 	case "Title":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Background(lipgloss.Color("60"))
 	case "Agent Edit":

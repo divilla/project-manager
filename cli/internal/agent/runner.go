@@ -1,0 +1,191 @@
+package agent
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"sync"
+)
+
+// RewriteResult stores the observed result of a Codex rewrite run.
+type RewriteResult struct {
+	RepoRoot      string
+	SessionID     string
+	Output        string
+	CommandOutput string
+}
+
+// RewriteProgress receives command output while a rewrite command is still running.
+type RewriteProgress func(output string)
+
+// Runner executes external commands for agent-assisted workflows.
+type Runner interface {
+	ResolveRepoRoot(ctx context.Context) (string, error)
+	Rewrite(ctx context.Context, repoRoot string, sessionID string, workspace Workspace, progress RewriteProgress) (RewriteResult, error)
+	InitCommand(repoRoot string, sessionID string) *exec.Cmd
+}
+
+// ProcessRunner runs the real Codex and Git commands.
+type ProcessRunner struct{}
+
+// NewProcessRunner creates a runner backed by local processes.
+func NewProcessRunner() ProcessRunner {
+	return ProcessRunner{}
+}
+
+// ResolveRepoRoot resolves the current Git repository root.
+func (ProcessRunner) ResolveRepoRoot(ctx context.Context) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--show-toplevel")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	repoRoot := strings.TrimSpace(string(output))
+	if repoRoot == "" {
+		return "", fmt.Errorf("repository root is required")
+	}
+	return repoRoot, nil
+}
+
+// Rewrite runs Codex in JSON event mode and captures output/session data.
+func (ProcessRunner) Rewrite(ctx context.Context, repoRoot string, sessionID string, workspace Workspace, progress RewriteProgress) (RewriteResult, error) {
+	args := []string{"exec"}
+	if sessionID == "" {
+		args = append(args, "--json", "-C", repoRoot, "-o", workspace.OutputPath(), RewritePrompt)
+	} else {
+		args = append(args, "resume", "-o", workspace.OutputPath(), sessionID, RewritePrompt)
+	}
+	cmd := exec.CommandContext(ctx, "codex", args...)
+	cmd.Dir = repoRoot
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return RewriteResult{RepoRoot: repoRoot}, err
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return RewriteResult{RepoRoot: repoRoot}, err
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := cmd.Start(); err != nil {
+		return RewriteResult{RepoRoot: repoRoot}, err
+	}
+	var wg sync.WaitGroup
+	var stdoutErr error
+	var stderrErr error
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		stdoutErr = captureCommandOutput(stdoutPipe, "", &stdout, progress)
+	}()
+	go func() {
+		defer wg.Done()
+		stderrErr = captureCommandOutput(stderrPipe, "stderr:\n", &stderr, progress)
+	}()
+	runErr := cmd.Wait()
+	wg.Wait()
+	commandOutput := commandOutputText(stdout.String(), stderr.String())
+	if runErr == nil {
+		if stdoutErr != nil {
+			return RewriteResult{RepoRoot: repoRoot, CommandOutput: commandOutput}, stdoutErr
+		}
+		if stderrErr != nil {
+			return RewriteResult{RepoRoot: repoRoot, CommandOutput: commandOutput}, stderrErr
+		}
+	}
+	if sessionID == "" {
+		if err := writeFile(workspace.LogPath(), stdout.Bytes()); err != nil && runErr == nil {
+			return RewriteResult{RepoRoot: repoRoot, CommandOutput: commandOutput}, err
+		}
+		sessionID = ExtractSessionID(stdout.String())
+	}
+	output, err := readFile(workspace.OutputPath())
+	if err != nil && runErr == nil {
+		return RewriteResult{RepoRoot: repoRoot, SessionID: sessionID, CommandOutput: commandOutput}, err
+	}
+	result := RewriteResult{RepoRoot: repoRoot, SessionID: sessionID, Output: output, CommandOutput: commandOutput}
+	if runErr != nil {
+		if strings.TrimSpace(stderr.String()) != "" {
+			return result, fmt.Errorf("%w: %s", runErr, strings.TrimSpace(stderr.String()))
+		}
+		return result, runErr
+	}
+	return result, nil
+}
+
+func captureCommandOutput(reader io.Reader, prefix string, output *bytes.Buffer, progress RewriteProgress) error {
+	buffered := bufio.NewReader(reader)
+	for {
+		chunk, err := buffered.ReadString('\n')
+		if chunk != "" {
+			output.WriteString(chunk)
+			if progress != nil {
+				progress(prefix + chunk)
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+// InitCommand builds the interactive Codex command that generates the final Change file.
+func (ProcessRunner) InitCommand(repoRoot string, sessionID string) *exec.Cmd {
+	cmd := exec.Command("codex", "resume", sessionID, InitPrompt)
+	cmd.Dir = repoRoot
+	return cmd
+}
+
+var readFile = func(path string) (string, error) {
+	output, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
+var writeFile = func(path string, content []byte) error {
+	return os.WriteFile(path, content, 0o644)
+}
+
+func commandOutputText(stdout string, stderr string) string {
+	parts := make([]string, 0, 2)
+	if strings.TrimSpace(stdout) != "" {
+		parts = append(parts, strings.TrimRight(stdout, "\n"))
+	}
+	if strings.TrimSpace(stderr) != "" {
+		parts = append(parts, "stderr:\n"+strings.TrimRight(stderr, "\n"))
+	}
+	return strings.Join(parts, "\n")
+}
+
+// FormatCommandOutput formats JSON-line command output into a readable form.
+func FormatCommandOutput(output string) string {
+	lines := strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n")
+	formatted := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		var value any
+		if err := json.Unmarshal([]byte(trimmed), &value); err == nil {
+			pretty, err := json.MarshalIndent(value, "", "  ")
+			if err == nil {
+				formatted = append(formatted, string(pretty))
+				continue
+			}
+		}
+		formatted = append(formatted, trimmed)
+	}
+	return strings.Join(formatted, "\n")
+}

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"mch/internal/agent"
 	"mch/internal/changes"
 	"mch/internal/epics"
 	"mch/internal/help"
-	"mch/internal/planning"
 	"mch/internal/projects"
 	"mch/internal/styles"
 	"mch/internal/testcases"
@@ -25,11 +25,15 @@ func (m Model) View() string {
 		lines = append(lines, projects.TableView(m.projectList, width))
 	}
 	if m.state == ChangesListState && !m.hasDropdown() {
-		table := changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows())
-		lines = append(lines, m.changeFiltersLine(table), table)
+		if m.agentFlow.Stage == agent.StageAIRunning {
+			lines = append(lines, "", m.agentRunningView(width))
+		} else {
+			table := changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
+			lines = append(lines, m.changeFiltersLine(table), table)
+		}
 	}
 	if m.state == ChangeDetailsState {
-		details := changes.DetailsView(m.changeList, width, m.changeTableRows())
+		details := changes.DetailsView(m.changeList, width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
 		if details != "" {
 			lines = append(lines, "")
 			lines = append(lines, details)
@@ -76,11 +80,30 @@ func (m Model) headerLine(width int) string {
 }
 
 func (m Model) headerRight() string {
+	if m.state == ChangesListState && m.agentFlow.Stage == agent.StageAIRunning {
+		return styles.Default.Foreground.Render("AgentRunningScreen")
+	}
 	title := screenTitle(m.state)
 	if before, _, ok := strings.Cut(title, " - "); ok {
 		title = before
 	}
 	return styles.Default.Foreground.Render(title)
+}
+
+func (m Model) agentRunningView(width int) string {
+	message := "Agent running: rewriting idea"
+	if m.agentFlow.SessionID != "" {
+		message = "Agent running: updating idea"
+	}
+	unit := "seconds"
+	if m.agentElapsed == 1 {
+		unit = "second"
+	}
+	lines := []string{fmt.Sprintf("%s %s... %d %s", m.agentSpinner.View(), message, m.agentElapsed, unit)}
+	if strings.TrimSpace(m.agentFlow.CommandOutput) != "" {
+		lines = append(lines, "", "Codex output:", strings.TrimSpace(m.agentFlow.CommandOutput))
+	}
+	return styles.Default.InputBand.Width(width).Render(strings.Join(lines, "\n"))
 }
 
 func (m Model) changeFiltersLine(table string) string {
@@ -239,7 +262,7 @@ func (m Model) currentProjectFooter() string {
 
 func screenTitle(state State) string {
 	titles := map[State]string{
-		MainState:                  planning.MainTitle(),
+		MainState:                  agent.MainTitle(),
 		ChangesListState:           changes.ListTitle(),
 		ChangeDetailsState:         changes.DetailTitle(),
 		TestCaseDetailsState:       testcases.DetailTitle(),

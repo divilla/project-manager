@@ -22,9 +22,9 @@ Hard boundaries:
 - Do not produce vague acceptance criteria. Every acceptance criterion must be observable and testable.
 - Do not use markdown tables unless the user explicitly asks for them.
 
-Reference data:
+Backend options:
 
-- Retrieve valid requirement type options from `POST http://localhost:8080/api/v1/change/reference` and use the response `types` group. Use each option's `slug` value.
+- Retrieve valid requirement type options from `POST http://localhost:8080/api/v1/options/change-types-list`. Use each option's `slug` value.
 - Retrieve available epics from `POST http://localhost:8080/api/v1/epic/list` with the current `project_id` when the current project is known.
 - Do not invent type slugs or epic names. If backend reference data is unavailable and the user has not provided valid options, ask a clarifying question or record the missing reference data under Open Questions.
 
@@ -35,7 +35,6 @@ Final output contract:
 - The first non-blank line after the H1 title must be the type line.
 - The type line must be formatted exactly as `Types: <type-slugs>`.
 - `<type-slugs>` must contain only selected backend type slugs joined by `|`, with no spaces.
-- Example type line: `Types: feature|test`
 - If a suitable epic exists, the next non-blank line after the type line must be formatted exactly as `Epic: <epic-name>`.
 - If no suitable epic exists, omit the `Epic:` line entirely.
 - Do not include any preamble before the H1 title.
@@ -45,7 +44,7 @@ Final requirement structure:
 
 # Requirement Title
 
-Types: feature|test|docs
+Types: <type-slugs>
 
 Epic: Existing Epic Name
 

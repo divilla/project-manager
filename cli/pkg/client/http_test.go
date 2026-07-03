@@ -28,7 +28,7 @@ func TestHTTPClientPostsToSelectorEndpoints(t *testing.T) {
 				"modified":     "2026-06-29T10:45:00Z",
 			}}})
 		case "/api/v1/options/change-phases-list":
-			writeJSON(t, w, []map[string]any{{"slug": "backlog"}})
+			writeJSON(t, w, []map[string]any{{"slug": "backlog", "color": "12"}})
 		case "/api/v1/options/change-types-list":
 			writeJSON(t, w, []map[string]any{{"slug": "feature"}})
 		case "/api/v1/epic/list":
@@ -52,7 +52,7 @@ func TestHTTPClientPostsToSelectorEndpoints(t *testing.T) {
 	phases, err := client.ListPhases()
 	require.NoError(t, err)
 	require.Len(t, phases, 1)
-	assert.Equal(t, dto.Option{ID: "backlog", Label: "backlog"}, phases[0])
+	assert.Equal(t, dto.Option{ID: "backlog", Label: "backlog", Color: "12"}, phases[0])
 
 	types, err := client.ListTypes()
 	require.NoError(t, err)

@@ -1,4 +1,4 @@
-package planning
+package agent
 
 // InitialStatus returns the default app status label.
 func InitialStatus() string {

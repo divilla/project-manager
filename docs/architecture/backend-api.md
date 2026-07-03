@@ -69,14 +69,14 @@ Rendered body requests render markdown from `body` and `pr_body` and return sani
 Focused update endpoints identify the Change by numeric `id`, mutate only the named field, and return the refreshed Change. They must preserve the existing `ref` and `slug`. Boolean update payloads must explicitly include the named boolean field, such as `agent_edit` or `open`; omitted fields or old field names are invalid. PR URL updates accept an empty value or absolute `http` and `https` URLs only. Clients that update Change title, `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, `change_types`, or `epic_id` should use the matching focused endpoint rather than submitting a broad edit payload.
 
 ## Options
-Reference options are managed with separate POST endpoints:
+Change options are managed with separate POST endpoints:
 
 - `POST /api/v1/options/change-phases-list`
 - `POST /api/v1/options/change-types-list`
 
 Change phase responses return `ChangePhase` items. Change type responses return `ChangeType` items. Clients must not depend on a combined Change references response.
 
-Reference options come from the database. Change phase and type options are ordered by `priority` and then `slug`.
+Change phase and type option slugs come from the database. Clients must not hardcode allowed phase or type values; they must retrieve them from `POST /api/v1/options/change-phases-list` and `POST /api/v1/options/change-types-list`. Change phase and type options are ordered by `priority` and then `slug`. Phase options may include display color metadata; clients should use it when present and fall back to neutral grey when absent.
 
 ## Test Cases
 Test cases are managed with POST endpoints:
@@ -97,7 +97,7 @@ Planning endpoints are backend-mediated LLM workflows:
 - `POST /api/v1/planning/chat`
 - `POST /api/v1/planning/commit`
 
-Generated changes and test cases must be validated against database-provided reference options before being saved.
+Generated changes and test cases must be validated against database-provided option values before being saved.
 
 ## Error Handling
 The API maps domain errors to JSON responses with a `message` field. Validation errors use client status codes. Unexpected failures are logged server-side and returned as sanitized server errors.

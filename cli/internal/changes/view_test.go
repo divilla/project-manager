@@ -1,6 +1,7 @@
 package changes
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -57,6 +58,11 @@ func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
 			assert.LessOrEqual(t, lipgloss.Width(line), 120)
 		}
 	}
+}
+
+func TestPhaseStyleUsesOptionColorOrGreyFallback(t *testing.T) {
+	assert.Equal(t, "12", fmt.Sprint(phaseStyle("custom", PhaseColors{"custom": "12"}).GetForeground()))
+	assert.Equal(t, "240", fmt.Sprint(phaseStyle("custom", PhaseColors{}).GetForeground()))
 }
 
 func stripANSI(value string) string {

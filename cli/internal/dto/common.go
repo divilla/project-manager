@@ -4,4 +4,5 @@ package dto
 type Option struct {
 	ID    string
 	Label string
+	Color string
 }

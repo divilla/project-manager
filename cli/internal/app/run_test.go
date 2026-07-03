@@ -2,16 +2,24 @@ package app
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"mch/internal/agent"
 	"mch/internal/changes"
 	"mch/internal/dto"
 	"mch/internal/projects"
 	"mch/internal/styles"
+	httpclient "mch/pkg/client"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
@@ -85,6 +93,54 @@ type fakeClient struct {
 	testCaseDeleteIDs      []int
 	changeDeleteIDs        []int
 	changeGetIDs           []int
+	requestOrder           []string
+}
+
+type fakeAgentRunner struct {
+	repoRoot        string
+	rewriteResult   agent.RewriteResult
+	rewriteErr      error
+	resolveErr      error
+	rewriteSessions []string
+	initRepoRoot    string
+	initSessionID   string
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func (f *fakeAgentRunner) ResolveRepoRoot(context.Context) (string, error) {
+	if f.resolveErr != nil {
+		return "", f.resolveErr
+	}
+	if f.repoRoot == "" {
+		return "/repo", nil
+	}
+	return f.repoRoot, nil
+}
+
+func (f *fakeAgentRunner) Rewrite(_ context.Context, repoRoot string, sessionID string, workspace agent.Workspace, progress agent.RewriteProgress) (agent.RewriteResult, error) {
+	f.rewriteSessions = append(f.rewriteSessions, sessionID)
+	if progress != nil && f.rewriteResult.CommandOutput != "" {
+		progress(f.rewriteResult.CommandOutput)
+	}
+	if f.rewriteErr != nil {
+		return agent.RewriteResult{}, f.rewriteErr
+	}
+	result := f.rewriteResult
+	if result.RepoRoot == "" {
+		result.RepoRoot = repoRoot
+	}
+	return result, nil
+}
+
+func (f *fakeAgentRunner) InitCommand(repoRoot string, sessionID string) *exec.Cmd {
+	f.initRepoRoot = repoRoot
+	f.initSessionID = sessionID
+	return exec.Command("true")
 }
 
 func (f *fakeClient) ListProjects() ([]dto.Option, error) {
@@ -144,6 +200,7 @@ func (f *fakeClient) ListChangeRows(projectID string) ([]dto.Change, error) {
 }
 
 func (f *fakeClient) GetChange(id int) (dto.Change, error) {
+	f.requestOrder = append(f.requestOrder, "change/get")
 	f.changeGetCalls++
 	f.changeGetIDs = append(f.changeGetIDs, id)
 	if f.changeGetErr != nil {
@@ -156,6 +213,7 @@ func (f *fakeClient) GetChange(id int) (dto.Change, error) {
 }
 
 func (f *fakeClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error) {
+	f.requestOrder = append(f.requestOrder, "change/create")
 	f.changeCreateCalls++
 	f.changeCreateInputs = append(f.changeCreateInputs, input)
 	if f.changeCreateErr != nil {
@@ -238,6 +296,7 @@ func (f *fakeClient) UpdateChangeEpic(id int, epicID *int) (dto.Change, error) {
 }
 
 func (f *fakeClient) CreateTestCase(changeID int, scenario string) (dto.Change, error) {
+	f.requestOrder = append(f.requestOrder, "test-case/create")
 	f.testCaseCreateCalls++
 	f.testCaseCreateInputs = append(f.testCaseCreateInputs, dto.TestCase{ChangeID: fmt.Sprint(changeID), Scenario: scenario})
 	if f.changeUpdateErr != nil {
@@ -311,6 +370,12 @@ func (f *fakeClient) ListTypes() ([]dto.Option, error) {
 	return f.types, f.err
 }
 
+func newModelWithOptionCatalog(client *fakeClient) Model {
+	m := NewModelWithClient(client)
+	m.optionCatalog = optionCatalog{phases: client.phases, types: client.types, loaded: true}
+	return m
+}
+
 func TestRunVersionPrintsVersion(t *testing.T) {
 	var out bytes.Buffer
 
@@ -377,6 +442,22 @@ func TestStartupSkipsProjectSelectionWhenProjectIDIsSaved(t *testing.T) {
 	assert.Equal(t, "7", got.currentProject.ID)
 	assert.Equal(t, "Project Seven", got.currentProject.Label)
 	assert.Contains(t, stripANSI(got.View()), "Current Project: #7 Project Seven")
+}
+
+func TestStartupLoadsChangeOptionCatalog(t *testing.T) {
+	client := &fakeClient{
+		phases: []dto.Option{{ID: "todo", Label: "todo", Color: "12"}},
+		types:  []dto.Option{{ID: "enhancement", Label: "enhancement"}},
+	}
+	m := NewModelWithClient(client)
+
+	got := applyMsg(m, optionCatalogCommand(client)())
+
+	assert.Equal(t, 1, client.phaseCalls)
+	assert.Equal(t, 1, client.typeCalls)
+	assert.True(t, got.optionCatalog.loaded)
+	assert.Equal(t, client.phases, got.optionCatalog.phases)
+	assert.Equal(t, client.types, got.optionCatalog.types)
 }
 
 func TestStartupProjectSelectionShowsErrorWhenNoProjectsExist(t *testing.T) {
@@ -712,7 +793,7 @@ func TestProjectsCommandReloadsAndRendersSelectableTable(t *testing.T) {
 			},
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 
 	got, cmd := sendCommand(m, "/projects")
 	require.Equal(t, ProjectsListState, got.state)
@@ -799,7 +880,7 @@ func TestProjectsEnterOpensDetailsWithoutMutatingCurrentProject(t *testing.T) {
 	client := &fakeClient{
 		gotProject: dto.Project{ID: "8", Name: "Fresh Project Eight", ChangeCount: 5, Created: "2026-06-30T08:15:00Z", Modified: "2026-06-30T11:45:00Z"},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ProjectsListState
 	m.currentProject = current
 	m.projectList.Rows = []dto.Project{
@@ -890,7 +971,7 @@ func TestProjectPagesReloadOnArrival(t *testing.T) {
 		gotProject:  dto.Project{ID: "7", Name: "Reloaded Detail Project"},
 	}
 
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ProjectDetailsState
 	m.projectList.Detail = dto.Project{ID: "7", Name: "Stale Detail Project"}
 	got, cmd := sendCommand(m, "/return")
@@ -1083,7 +1164,7 @@ func TestProjectSaveBackendFailurePreservesRecoverableFormState(t *testing.T) {
 		updatedProject: dto.Project{ID: "7"},
 		getErr:         errors.New("project not found"),
 	}
-	m = NewModelWithClient(client)
+	m = newModelWithOptionCatalog(client)
 	m.state = ProjectUpdateState
 	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project"}
 	m.input.SetValue("Renamed Project")
@@ -1112,7 +1193,7 @@ func TestProjectCancelDoesNotCallPersistence(t *testing.T) {
 	assert.Zero(t, client.createCalls)
 	assert.Zero(t, client.updateCalls)
 
-	m = NewModelWithClient(client)
+	m = newModelWithOptionCatalog(client)
 	m.state = ProjectUpdateState
 	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project"}
 	m.input.SetValue("Renamed Project")
@@ -1161,7 +1242,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 			Modified:    "2026-06-29T10:45:00Z",
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.width = 120
 
@@ -1313,7 +1394,7 @@ func TestChangesTableKeyboardSelectionMatchesProjects(t *testing.T) {
 	client := &fakeClient{
 		gotChange: dto.Change{ID: "2", Title: "Second Change"},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ChangesListState
 	m.changeList = m.changeList.WithRows([]dto.Change{
 		{ID: "1", Ref: "1", Title: "First Change"},
@@ -1399,6 +1480,571 @@ func TestChangesEnterWithNoSelectableRowErrors(t *testing.T) {
 	assert.NotEmpty(t, got.err)
 }
 
+func TestNewChangeRequiresCurrentProject(t *testing.T) {
+	client := &fakeClient{}
+	m := newModelWithOptionCatalog(client)
+	m.state = ChangesListState
+	m.agentWorkspace = t.TempDir()
+
+	got, cmd := sendCommand(m, "/new-change")
+
+	require.Nil(t, cmd)
+	assert.Equal(t, ChangesListState, got.state)
+	assert.Equal(t, "current project must be numeric", got.err)
+	assert.Zero(t, client.changeCreateCalls)
+}
+
+func TestNewChangeCreatesWorkspaceAndOpensIdeaEditor(t *testing.T) {
+	workspaceDir := t.TempDir()
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ChangesListState
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.agentWorkspace = workspaceDir
+
+	got, cmd := sendCommand(m, "/new-change")
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, ChangesListState, got.state)
+	assert.Equal(t, agent.StageIdeaEntry, got.agentFlow.Stage)
+	content, err := os.ReadFile(filepath.Join(workspaceDir, agent.IdeaFileName))
+	require.NoError(t, err)
+	assert.Empty(t, string(content))
+}
+
+func TestNewChangeReplacesRegularWorkspaceFile(t *testing.T) {
+	parent := t.TempDir()
+	workspaceDir := filepath.Join(parent, "mch")
+	require.NoError(t, os.WriteFile(workspaceDir, []byte("file"), 0o644))
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ChangesListState
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.agentWorkspace = workspaceDir
+
+	got, cmd := sendCommand(m, "/new-change")
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, ChangesListState, got.state)
+	info, err := os.Stat(workspaceDir)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+}
+
+func TestNewChangeExistingIdeaPromptsResumeClearOrCancel(t *testing.T) {
+	workspaceDir := t.TempDir()
+	workspace := agent.Workspace{Dir: workspaceDir}
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.IdeaPath(), []byte("existing idea"), 0o644))
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ChangesListState
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.agentWorkspace = workspaceDir
+
+	got, cmd := sendCommand(m, "/new-change")
+
+	require.Nil(t, cmd)
+	assert.Equal(t, dropdownAgent, got.dropdown.kind)
+	assert.Equal(t, []dto.Option{{ID: "/resume", Label: "/resume"}, {ID: "/clear", Label: "/clear"}, {ID: "/cancel", Label: "/cancel"}}, got.dropdown.options)
+
+	resumed, resumeCmd := got.confirmDropdown()
+	resumeModel := resumed.(Model)
+	require.NotNil(t, resumeCmd)
+	content, err := os.ReadFile(workspace.IdeaPath())
+	require.NoError(t, err)
+	assert.Equal(t, "existing idea", string(content))
+	assert.Equal(t, agent.StageIdeaEntry, resumeModel.agentFlow.Stage)
+	assert.Equal(t, "existing idea", resumeModel.agentFlow.IdeaEntryContent)
+
+	got, _ = sendCommand(m, "/new-change")
+	got.dropdown.highlighted = 1
+	replaced, replaceCmd := got.confirmDropdown()
+	replaceModel := replaced.(Model)
+	require.NotNil(t, replaceCmd)
+	content, err = os.ReadFile(workspace.IdeaPath())
+	require.NoError(t, err)
+	assert.Empty(t, string(content))
+	assert.Equal(t, agent.StageIdeaEntry, replaceModel.agentFlow.Stage)
+
+	require.NoError(t, os.WriteFile(workspace.IdeaPath(), []byte("existing idea"), 0o644))
+	got, _ = sendCommand(m, "/new-change")
+	got.dropdown.highlighted = 2
+	cancelled, cancelCmd := got.confirmDropdown()
+	cancelModel := cancelled.(Model)
+	require.Nil(t, cancelCmd)
+	assert.Equal(t, ChangesListState, cancelModel.state)
+	assert.False(t, cancelModel.agentFlow.Active())
+}
+
+func TestAgentIdeaEmptyReturnsToChangesWithoutCodexOrCreate(t *testing.T) {
+	client := &fakeClient{}
+	runner := &fakeAgentRunner{}
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.agentWorkspace = t.TempDir()
+	m.agentRunner = runner
+	m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+	m.agentFlow.Stage = agent.StageIdeaEntry
+
+	got := applyMsg(m, editorFinishedMsg{source: ChangesListState, content: " \n"})
+
+	assert.Equal(t, ChangesListState, got.state)
+	assert.False(t, got.agentFlow.Active())
+	assert.Empty(t, runner.rewriteSessions)
+	assert.Zero(t, client.changeCreateCalls)
+}
+
+func TestAgentResumeUnchangedReturnsToChangesWithoutCodexOrCreate(t *testing.T) {
+	client := &fakeClient{}
+	runner := &fakeAgentRunner{}
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.agentWorkspace = t.TempDir()
+	m.agentRunner = runner
+	m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+	m.agentFlow.Stage = agent.StageIdeaEntry
+	m.agentFlow.IdeaEntryContent = "existing idea"
+
+	got := applyMsg(m, editorFinishedMsg{source: ChangesListState, content: "existing idea"})
+
+	assert.Equal(t, ChangesListState, got.state)
+	assert.False(t, got.agentFlow.Active())
+	assert.Empty(t, runner.rewriteSessions)
+	assert.Zero(t, client.changeCreateCalls)
+}
+
+func TestAgentResumeChangedRunsRewrite(t *testing.T) {
+	runner := &fakeAgentRunner{
+		rewriteResult: agent.RewriteResult{SessionID: "session-1", Output: "Done."},
+	}
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ChangesListState
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.agentWorkspace = t.TempDir()
+	m.agentRunner = runner
+	m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+	m.agentFlow.Stage = agent.StageIdeaEntry
+	m.agentFlow.IdeaEntryContent = "existing idea"
+
+	got, cmd := m.Update(editorFinishedMsg{source: ChangesListState, content: "changed idea"})
+	model := got.(Model)
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, string(agent.StageAIRunning), model.status)
+	assert.Contains(t, stripANSI(model.View()), "AgentRunningScreen")
+	assert.Contains(t, stripANSI(model.View()), "Agent running: rewriting idea")
+}
+
+func TestAgentRunningViewRendersInsteadOfChangeList(t *testing.T) {
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ChangesListState
+	m.width = 120
+	m.changeList = m.changeList.WithRows([]dto.Change{{ID: "12", Title: "Hidden While Running"}})
+	m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
+	m.agentFlow.Stage = agent.StageAIRunning
+	m.agentFlow.CommandOutput = agent.FormatCommandOutput("{\"session_id\":\"session-1\"}") + "\nfinal output:\nNope"
+	m.agentElapsed = 3
+
+	view := stripANSI(m.View())
+
+	assert.Contains(t, view, "AgentRunningScreen")
+	assert.Contains(t, view, "Agent running: rewriting idea")
+	assert.Contains(t, view, "3 seconds")
+	assert.Contains(t, view, "Codex output:")
+	assert.Contains(t, view, "\"session_id\": \"session-1\"")
+	assert.Contains(t, view, "final output:")
+	assert.Contains(t, view, "Nope")
+	assert.NotContains(t, view, "Hidden While Running")
+}
+
+func TestAgentRewriteSuccessReopensReviewEditor(t *testing.T) {
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.ResetIdea())
+	require.NoError(t, os.WriteFile(workspace.IdeaPath(), []byte("rewritten idea"), 0o644))
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ChangesListState
+	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
+	m.agentFlow.Stage = agent.StageIdeaEntry
+
+	got, cmd := m.Update(agentRewriteFinishedMsg{result: agent.RewriteResult{
+		RepoRoot:  "/repo",
+		SessionID: "session-1",
+		Output:    "Done.",
+	}})
+	model := got.(Model)
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, agent.StageReview, model.agentFlow.Stage)
+	assert.Equal(t, "session-1", model.agentFlow.SessionID)
+	assert.Equal(t, "/repo", model.agentFlow.RepoRoot)
+	assert.Equal(t, "rewritten idea", model.agentFlow.ReviewContent)
+}
+
+func TestAgentRewriteInvalidOutputShowsGenericError(t *testing.T) {
+	tests := []struct {
+		name   string
+		result agent.RewriteResult
+	}{
+		{
+			name:   "missing session id",
+			result: agent.RewriteResult{Output: "Done.", CommandOutput: "{\"type\":\"done\"}"},
+		},
+		{
+			name:   "unexpected output",
+			result: agent.RewriteResult{SessionID: "session-1", Output: "Nope", CommandOutput: "{\"session_id\":\"session-1\"}"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewModelWithClient(&fakeClient{})
+			m.state = ChangesListState
+			m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
+			m.agentFlow.Stage = agent.StageIdeaEntry
+
+			got := applyMsg(m, agentRewriteFinishedMsg{result: tt.result})
+
+			assert.Equal(t, ChangesListState, got.state)
+			assert.Equal(t, agent.GenericError, got.err)
+			assert.NotEmpty(t, got.agentFlow.CommandOutput)
+			view := stripANSI(got.View())
+			assert.Contains(t, view, "AgentRunningScreen")
+			assert.Contains(t, view, "Codex output:")
+			for _, line := range strings.Split(agent.FormatCommandOutput(tt.result.CommandOutput), "\n") {
+				assert.Contains(t, view, strings.TrimSpace(line))
+			}
+		})
+	}
+}
+
+func TestAgentReviewChangedContentResumesRewrite(t *testing.T) {
+	runner := &fakeAgentRunner{}
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ChangesListState
+	m.agentRunner = runner
+	m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
+	m.agentFlow.Stage = agent.StageReview
+	m.agentFlow.SessionID = "session-1"
+	m.agentFlow.ReviewContent = "original"
+
+	got, cmd := m.Update(editorFinishedMsg{source: ChangesListState, content: "changed"})
+	model := got.(Model)
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, agent.StageAIRunning, model.agentFlow.Stage)
+	assert.Equal(t, string(agent.StageAIRunning), model.status)
+}
+
+func TestAgentReviewUnchangedStartsInteractiveCodex(t *testing.T) {
+	runner := &fakeAgentRunner{}
+	m := NewModelWithClient(&fakeClient{})
+	m.state = ChangesListState
+	m.agentRunner = runner
+	m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
+	m.agentFlow.Stage = agent.StageReview
+	m.agentFlow.SessionID = "session-1"
+	m.agentFlow.RepoRoot = "/repo"
+	m.agentFlow.ReviewContent = "same"
+
+	got, cmd := m.Update(editorFinishedMsg{source: ChangesListState, content: "same"})
+	model := got.(Model)
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, ChangesListState, model.state)
+	assert.Equal(t, "/repo", runner.initRepoRoot)
+	assert.Equal(t, "session-1", runner.initSessionID)
+}
+
+func TestAgentGeneratedChangeCreatesPayloadAndReloadsDetails(t *testing.T) {
+	body := "# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First QA scenario.\n- Second QA scenario."
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.GeneratedPath(), []byte(body), 0o644))
+	client := &fakeClient{
+		createdChange: dto.Change{ID: "12"},
+		gotChange: dto.Change{
+			ID:          "12",
+			Title:       "Generated Change",
+			Body:        body,
+			ChangeTypes: []string{"feature", "test"},
+			TestCases: []dto.TestCase{
+				{ChangeID: "12", Scenario: "First QA scenario."},
+				{ChangeID: "12", Scenario: "Second QA scenario."},
+			},
+		},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
+	m.agentFlow.Stage = agent.StageReview
+
+	got, cmd := m.Update(agentInitFinishedMsg{})
+	model := got.(Model)
+	require.NotNil(t, cmd)
+	model = applyMsg(model, agentChangeCreateCommand(client, 7, workspace, agentGeneratedValidTypes())())
+
+	require.Len(t, client.changeCreateInputs, 1)
+	assert.Equal(t, 7, client.changeCreateInputs[0].ProjectID)
+	assert.Equal(t, "Generated Change", client.changeCreateInputs[0].Title)
+	assert.Equal(t, body, client.changeCreateInputs[0].Body)
+	assert.Equal(t, []string{"feature", "test"}, client.changeCreateInputs[0].ChangeTypes)
+	assert.Nil(t, client.changeCreateInputs[0].EpicID)
+	assert.Equal(t, []dto.TestCase{
+		{ChangeID: "12", Scenario: "First QA scenario."},
+		{ChangeID: "12", Scenario: "Second QA scenario."},
+	}, client.testCaseCreateInputs)
+	assert.Equal(t, []string{"change/create", "test-case/create", "test-case/create", "change/get"}, client.requestOrder)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Equal(t, ChangeDetailsState, model.state)
+	assert.Equal(t, client.gotChange, model.changeList.Detail)
+	assert.False(t, model.agentFlow.Active())
+}
+
+func TestAgentGeneratedChangeCreatesEveryQATestCaseFromGeneratedBody(t *testing.T) {
+	expectedScenarios := agentGeneratedQATestCaseScenarios()
+	body := agentGeneratedBodyWithQATestCases(expectedScenarios)
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.GeneratedPath(), []byte(body), 0o644))
+	client := &fakeClient{
+		createdChange: dto.Change{ID: "12"},
+		gotChange:     dto.Change{ID: "12", Title: "Generated Change", Body: body, ChangeTypes: []string{"feature", "test"}},
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
+	m.agentFlow.Stage = agent.StageReview
+
+	got := applyMsg(m, agentChangeCreateCommand(client, 7, workspace, agentGeneratedValidTypes())())
+
+	require.Len(t, client.testCaseCreateInputs, len(expectedScenarios))
+	for i, scenario := range expectedScenarios {
+		assert.Equal(t, dto.TestCase{ChangeID: "12", Scenario: scenario}, client.testCaseCreateInputs[i])
+	}
+	wantOrder := append([]string{"change/create"}, make([]string, len(expectedScenarios))...)
+	for i := range expectedScenarios {
+		wantOrder[i+1] = "test-case/create"
+	}
+	wantOrder = append(wantOrder, "change/get")
+	assert.Equal(t, wantOrder, client.requestOrder)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Empty(t, got.err)
+}
+
+func TestAgentGeneratedChangePostsEveryQATestCaseThroughHTTPClient(t *testing.T) {
+	expectedScenarios := agentGeneratedQATestCaseScenarios()
+	body := agentGeneratedBodyWithQATestCases(expectedScenarios)
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.GeneratedPath(), []byte(body), 0o644))
+	var paths []string
+	var payloads []map[string]any
+	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var payload map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+		paths = append(paths, r.URL.Path)
+		payloads = append(payloads, payload)
+		status := http.StatusOK
+		var response any
+		switch r.URL.Path {
+		case "/api/v1/change/create":
+			status = http.StatusCreated
+			response = map[string]any{"id": 12, "title": "Generated Change", "body": body, "change_types": []string{"feature", "test"}}
+		case "/api/v1/test-case/create":
+			response = map[string]any{
+				"change":    map[string]any{"id": payload["change_id"]},
+				"test_case": map[string]any{"id": len(paths), "change_id": payload["change_id"], "scenario": payload["scenario"]},
+			}
+		case "/api/v1/change/get":
+			response = map[string]any{
+				"change":     map[string]any{"id": payload["id"], "title": "Generated Change", "body": body, "change_types": []string{"feature", "test"}},
+				"test_cases": []map[string]any{},
+			}
+		default:
+			status = http.StatusNotFound
+			response = map[string]any{"message": "not found"}
+		}
+		return appTestJSONResponse(t, status, response), nil
+	})
+	client := httpclient.NewHTTPClient("http://example.test")
+	client.Client = &http.Client{Transport: transport}
+
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	got := applyMsg(m, agentChangeCreateCommand(client, 7, workspace, agentGeneratedValidTypes())())
+
+	wantPaths := append([]string{"/api/v1/change/create"}, make([]string, len(expectedScenarios))...)
+	for i := range expectedScenarios {
+		wantPaths[i+1] = "/api/v1/test-case/create"
+	}
+	wantPaths = append(wantPaths, "/api/v1/change/get")
+	assert.Equal(t, wantPaths, paths)
+	require.Len(t, payloads, len(expectedScenarios)+2)
+	assert.Equal(t, float64(7), payloads[0]["project_id"])
+	for i, scenario := range expectedScenarios {
+		assert.Equal(t, float64(12), payloads[i+1]["change_id"])
+		assert.Equal(t, scenario, payloads[i+1]["scenario"])
+	}
+	assert.Equal(t, float64(12), payloads[len(payloads)-1]["id"])
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Empty(t, got.err)
+}
+
+func agentGeneratedQATestCaseScenarios() []string {
+	return []string{
+		"Start `/new-change` with no valid current project and confirm the flow stops with a recoverable project-context error and no editor, Codex, or create request runs.",
+		"Start `/new-change` when `/tmp/mch` is absent and confirm the directory and blank `initial-idea.md` are created.",
+		"Start `/new-change` when `/tmp/mch` is a regular file and confirm it is replaced by a directory.",
+		"Start `/new-change` when non-empty `initial-idea.md` already exists, choose `/resume`, and confirm the existing contents open in the editor.",
+		"Start `/new-change` when non-empty `initial-idea.md` already exists, choose `/clear`, and confirm a blank idea file opens.",
+		"Start `/new-change` when non-empty `initial-idea.md` already exists, choose `/cancel`, and confirm the flow returns to the list without opening an editor.",
+		"Resume an existing idea, exit without changing it, and confirm the flow returns to the list without Codex or backend calls.",
+		"Resume an existing idea, change it, and confirm the rewrite prompt `Use $change-idea-tmp.` runs.",
+		"Exit the first editor with an empty idea and confirm `ChangesListScreen` returns without Codex or backend calls.",
+		"Enter a non-empty idea and confirm the initial Codex rewrite writes the JSON log, output file, and session ID.",
+		"Simulate a Codex rewrite event stream containing `thread.started.thread_id` and confirm that value is used as the session ID.",
+		"Simulate older Codex event shapes containing `session_id`, `session.id`, or `id` and confirm they are accepted only as fallbacks.",
+		"Simulate missing Codex session ID and confirm `something went wrong - please try again` is shown.",
+		"Simulate Codex rewrite output other than `Done.` and confirm `something went wrong - please try again` is shown with formatted Codex output still visible on `AgentRunningScreen`.",
+		"Save changes during review and confirm the same Codex session is resumed for another rewrite pass.",
+		"Exit review without saving and confirm interactive Codex resumes with `Use $change-spec-tmp.`.",
+		"Provide a valid generated Change file and confirm the backend create payload includes numeric `project_id`, parsed `title`, full `body`, and parsed `change_types`.",
+		"Provide a generated Change file without a title and confirm no backend create request is sent.",
+		"Provide a generated Change file without `Types:`, with blank types, malformed separators, or unsupported type slugs and confirm no backend create request is sent.",
+		"Provide a valid generated Change file with multiple QA Test Case bullets and confirm `mch` creates one backend test case for each scenario before reloading details.",
+		"Simulate a Change create backend failure and confirm the error is displayed above the prompt with no local-only success state.",
+		"Simulate a generated test case create failure after Change create and confirm the error is displayed above the prompt and created details are not opened.",
+		"Simulate a detail reload failure after successful create and confirm the error is displayed above the prompt and stale local data is not shown as success.",
+		"Complete a successful create and confirm `mch` reloads and renders the created Change detail using backend data.",
+	}
+}
+
+func agentGeneratedValidTypes() []string {
+	return []string{"feature", "test"}
+}
+
+func agentGeneratedBodyWithQATestCases(expectedScenarios []string) string {
+	return "# Generated Change\n\nTypes: feature|test\n\n" +
+		"## Relevant Specs\n\n" +
+		"- `/tmp/mch/initial-change.md`\n" +
+		"- `agent/prompts/change-file-structure.md`\n\n" +
+		"## Verification\n\n" +
+		"- From `cli`: `make lint`\n" +
+		"- From `cli`: `go test ./...`\n\n" +
+		"## QA Test Cases\n\n- " + strings.Join(expectedScenarios, "\n- ") + "\n\n" +
+		"## Review Focus\n\n" +
+		"- Generated Change parser strictness for H1 title, `Types:` metadata, type slugs, full body preservation, and `## QA Test Cases` extraction."
+}
+
+func appTestJSONResponse(t *testing.T, status int, value any) *http.Response {
+	t.Helper()
+	var body bytes.Buffer
+	require.NoError(t, json.NewEncoder(&body).Encode(value))
+	return &http.Response{
+		StatusCode: status,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(&body),
+	}
+}
+
+func TestAgentGeneratedChangeTestCaseCreateFailureStaysRecoverable(t *testing.T) {
+	body := "# Generated Change\n\nTypes: feature|test\n\n## QA Test Cases\n\n- First QA scenario.\n- Second QA scenario."
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.GeneratedPath(), []byte(body), 0o644))
+	client := &fakeClient{
+		createdChange:   dto.Change{ID: "12"},
+		changeUpdateErr: errors.New("testcase create failed"),
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
+	m.agentFlow.Stage = agent.StageReview
+
+	got := applyMsg(m, agentChangeCreateCommand(client, 7, workspace, agentGeneratedValidTypes())())
+
+	assert.Equal(t, ChangesListState, got.state)
+	assert.Equal(t, "create QA test case 1: testcase create failed", got.err)
+	assert.False(t, got.agentFlow.Active())
+	assert.False(t, got.agentRunningActive())
+	assert.NotContains(t, stripANSI(got.View()), "AgentRunningScreen")
+	assert.Equal(t, 1, client.changeCreateCalls)
+	assert.Equal(t, []dto.TestCase{{ChangeID: "12", Scenario: "First QA scenario."}}, client.testCaseCreateInputs)
+	assert.Zero(t, client.changeGetCalls)
+}
+
+func TestAgentGeneratedChangeParseErrorDoesNotCreate(t *testing.T) {
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.GeneratedPath(), []byte("# Missing Types\n\n## Goal\nNope."), 0o644))
+	client := &fakeClient{}
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
+	m.agentFlow.Stage = agent.StageReview
+
+	got := applyMsg(m, agentChangeCreateCommand(client, 7, workspace, agentGeneratedValidTypes())())
+
+	assert.Equal(t, ChangesListState, got.state)
+	assert.NotEmpty(t, got.err)
+	assert.False(t, got.agentFlow.Active())
+	assert.False(t, got.agentRunningActive())
+	assert.NotContains(t, stripANSI(got.View()), "AgentRunningScreen")
+	assert.Zero(t, client.changeCreateCalls)
+	assert.Zero(t, client.changeGetCalls)
+}
+
+func TestAgentGeneratedChangeCreateFailureStaysRecoverable(t *testing.T) {
+	body := "# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it."
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.GeneratedPath(), []byte(body), 0o644))
+	client := &fakeClient{changeCreateErr: errors.New("backend create failed")}
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
+	m.agentFlow.Stage = agent.StageReview
+
+	got := applyMsg(m, agentChangeCreateCommand(client, 7, workspace, agentGeneratedValidTypes())())
+
+	assert.Equal(t, ChangesListState, got.state)
+	assert.Equal(t, "backend create failed", got.err)
+	assert.False(t, got.agentFlow.Active())
+	assert.False(t, got.agentRunningActive())
+	assert.NotContains(t, stripANSI(got.View()), "AgentRunningScreen")
+	assert.Equal(t, 1, client.changeCreateCalls)
+	assert.Zero(t, client.changeGetCalls)
+}
+
+func TestAgentGeneratedChangeReloadFailureStaysRecoverable(t *testing.T) {
+	body := "# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First QA scenario."
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.GeneratedPath(), []byte(body), 0o644))
+	client := &fakeClient{
+		createdChange: dto.Change{ID: "12", Title: "Generated Change", Body: body, ChangeTypes: []string{"feature", "test"}},
+		changeGetErr:  errors.New("temporary reload failure"),
+	}
+	m := NewModelWithClient(client)
+	m.state = ChangesListState
+	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
+	m.agentFlow.Stage = agent.StageReview
+
+	got := applyMsg(m, agentChangeCreateCommand(client, 7, workspace, agentGeneratedValidTypes())())
+
+	assert.Equal(t, ChangesListState, got.state)
+	assert.Equal(t, "temporary reload failure", got.err)
+	assert.False(t, got.agentFlow.Active())
+	assert.False(t, got.agentRunningActive())
+	assert.NotContains(t, stripANSI(got.View()), "AgentRunningScreen")
+	assert.Equal(t, 1, client.changeCreateCalls)
+	assert.Equal(t, []dto.TestCase{{ChangeID: "12", Scenario: "First QA scenario."}}, client.testCaseCreateInputs)
+	assert.Equal(t, []int{12}, client.changeGetIDs)
+	assert.NotEqual(t, client.createdChange, got.changeList.Detail)
+}
+
 func TestChangeCreateSaveExtractsMetadataAndPreservesBody(t *testing.T) {
 	epicID := 5
 	body := "# New Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nKeep every section."
@@ -1408,7 +2054,7 @@ func TestChangeCreateSaveExtractsMetadataAndPreservesBody(t *testing.T) {
 		createdChange: dto.Change{ID: "12"},
 		gotChange:     dto.Change{ID: "12", Title: "New Change", Body: body, ChangeTypes: []string{"feature", "test"}, EpicID: "5", EpicName: "Epic Five"},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeCreateState
 	m.input.SetValue(body)
@@ -1437,7 +2083,7 @@ func TestChangeCreateSuccessWithReloadFailureOpensCreatedDetails(t *testing.T) {
 		createdChange: dto.Change{ID: "12", Title: "New Change", Body: body, ChangeTypes: []string{"feature"}},
 		changeGetErr:  errors.New("temporary reload failure"),
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeCreateState
 	m.input.SetValue(body)
@@ -1463,7 +2109,7 @@ func TestStandaloneChangeSaveDoesNotRequireEpicLookup(t *testing.T) {
 		createdChange: dto.Change{ID: "12"},
 		gotChange:     dto.Change{ID: "12", Title: "Standalone Change", Body: body, ChangeTypes: []string{"feature"}},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeCreateState
 	m.input.SetValue(body)
@@ -1490,7 +2136,7 @@ func TestStandaloneChangeSaveDoesNotRequireEpicLookup(t *testing.T) {
 		epicErr:   errors.New("epics unavailable"),
 		gotChange: dto.Change{ID: "12", Title: "Standalone Change", Body: updateBody, ChangeTypes: []string{"feature"}},
 	}
-	m = NewModelWithClient(client)
+	m = newModelWithOptionCatalog(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1618,7 +2264,7 @@ func TestChangeUpdateSaveUpdatesChangedExtractedFieldsAndReloads(t *testing.T) {
 		epics:     []dto.Option{{ID: "5", Label: "Epic Five"}},
 		gotChange: dto.Change{ID: "12", Title: "New Change", Body: body, ChangeTypes: []string{"test"}},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1650,7 +2296,7 @@ func TestChangeUpdateOnlyCallsChangedFieldEndpoints(t *testing.T) {
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
 		gotChange: dto.Change{ID: "12", Title: "Old Change", Body: body, ChangeTypes: []string{"feature"}},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1736,7 +2382,7 @@ func TestChangeUpdateOmittedEpicClearsBackendOnlyEpicID(t *testing.T) {
 		types:     []dto.Option{{ID: "feature", Label: "feature"}},
 		gotChange: original,
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.state = ChangeUpdateState
 	m.changeList.Detail = original
@@ -1921,7 +2567,7 @@ func TestChangeDetailsPhaseSelectionSavesAndReloads(t *testing.T) {
 			ChangePhase: "stage",
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
 		ID:          "12",
@@ -1955,7 +2601,7 @@ func TestChangeDetailsFieldSelectionEscapeCancelsWithoutSaving(t *testing.T) {
 	client := &fakeClient{
 		phases: []dto.Option{{ID: "stage", Label: "stage"}},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
 		ID:          "12",
@@ -2185,7 +2831,7 @@ func TestChangeDetailsTypesSelectionAddsUnselectedType(t *testing.T) {
 			ChangeTypes: []string{"docs", "feature"},
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
 		ID:          "12",
@@ -2233,7 +2879,7 @@ func TestChangeDetailsTypesSelectionRemovesSelectedType(t *testing.T) {
 			ChangeTypes: []string{"test"},
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
 		ID:          "12",
@@ -2269,7 +2915,7 @@ func TestChangeDetailsTypesSelectionEnterWithoutToggleReturnsWithoutSaving(t *te
 			{ID: "test", Label: "test"},
 		},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
 		ID:          "12",
@@ -2466,9 +3112,12 @@ func TestChangeDetailsTestcaseDeleteConfirmsAndRefreshes(t *testing.T) {
 func TestCtrlNShortcutsCreateChangeAndTestCase(t *testing.T) {
 	changeList := NewModelWithClient(&fakeClient{})
 	changeList.state = ChangesListState
+	changeList.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+	changeList.agentWorkspace = t.TempDir()
 	got, cmd := sendKey(changeList, tea.KeyCtrlN)
 	require.NotNil(t, cmd)
-	assert.Equal(t, ChangeCreateState, got.state)
+	assert.Equal(t, ChangesListState, got.state)
+	assert.Equal(t, agent.StageIdeaEntry, got.agentFlow.Stage)
 
 	detail := NewModelWithClient(&fakeClient{})
 	detail.state = ChangeDetailsState
@@ -2613,7 +3262,6 @@ func TestCreateUpdateSaveCancelTransitions(t *testing.T) {
 		command string
 		want    State
 	}{
-		{start: ChangesListState, command: "/new-change", want: ChangeCreateState},
 		{start: ChangeCreateState, command: "/cancel", want: ChangesListState},
 		{start: ChangeDetailsState, command: "/edit", want: ChangeUpdateState},
 		{start: ChangeUpdateState, command: "/cancel", want: ChangeDetailsState},
@@ -2790,7 +3438,7 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 		gotChange: dto.Change{ID: "12", Ref: "3", Title: "Backend Change"},
 	}
 
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	got, cmd := sendCommand(m, "/select-project")
 	require.Equal(t, SelectProjectDropDown, got.state)
 	require.NotNil(t, cmd)
@@ -2807,7 +3455,7 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, 1, client.phaseCalls)
+	assert.Zero(t, client.phaseCalls)
 	assert.Equal(t, []string{"backlog"}, client.changePhaseUpdates)
 
 	got, cmd = sendCommand(got, "/types")
@@ -2818,7 +3466,7 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, 1, client.typeCalls)
+	assert.Zero(t, client.typeCalls)
 	assert.Equal(t, [][]string{{"feature"}}, client.changeTypesUpdates)
 
 	got, cmd = sendCommand(got, "/epic")
@@ -2875,7 +3523,7 @@ func TestFilterSelectorsReturnToChangesList(t *testing.T) {
 		epics:  []dto.Option{{ID: "epic-1", Label: "Epic One"}},
 		types:  []dto.Option{{ID: "test", Label: "test"}},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ChangesListState
 	m.currentProject = dto.Option{ID: "project-1", Label: "Project One"}
 
@@ -3128,7 +3776,7 @@ func TestNoPersistenceAPICallsForNavigationOnlyActions(t *testing.T) {
 	client := &fakeClient{
 		phases: []dto.Option{{ID: "backlog", Label: "backlog"}},
 	}
-	m := NewModelWithClient(client)
+	m := newModelWithOptionCatalog(client)
 	m.state = ChangeDetailsState
 
 	got, _ := sendCommand(m, "/save")
@@ -3146,7 +3794,7 @@ func TestNoPersistenceAPICallsForNavigationOnlyActions(t *testing.T) {
 	require.NotNil(t, cmd)
 	got = applyMsg(got, cmd())
 	got, _ = sendKey(got, tea.KeyEnter)
-	assert.Equal(t, 1, client.phaseCalls)
+	assert.Zero(t, client.phaseCalls)
 }
 
 func TestEveryDummyScreenTitleRendersExactly(t *testing.T) {

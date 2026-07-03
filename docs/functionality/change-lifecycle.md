@@ -16,11 +16,11 @@ Creating a change requires:
 - one or more types from `change_type`
 - optional epic ID
 
-The backend validates the project and reference options before insert.
+The backend validates the project and database-provided change options before insert.
 
 After a successful create, the returned change includes its database ID, project-scoped `ref`, and `slug`. Creating multiple changes in the same project advances that project's reference sequence. Creating changes in different projects uses independent reference sequences. New changes start in the database default phase.
 
-Codex-assisted planning tools may create planned changes after the user confirms the generated test cases. These changes use the `backlog` phase until the user moves them through the normal lifecycle.
+Codex-assisted planning tools may create planned changes after the user reviews the idea and generated Change file. These changes use the backend default phase until the user moves them through the normal lifecycle.
 
 ## List
 Project-scoped lists show active changes for one project. Lists include list-appropriate fields only: identity, phase and type data, linked epic identity and `epic_name` when present, title, `agent_edit`, open state, completion counters, and modified time.

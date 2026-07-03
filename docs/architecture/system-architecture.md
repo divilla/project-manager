@@ -38,7 +38,7 @@ The frontend is a Vue 3 and Quasar single-page app. It owns:
 Feature folders own domain API wrappers, types, stores, composables, and components.
 
 ## Database
-PostgreSQL stores projects, epics, changes, test cases, reference options, and history rows. Application code must use the database contract as supplied. Backend and frontend implementation changes must not invent new schema behavior.
+PostgreSQL stores projects, epics, changes, test cases, change options, and history rows. Application code must use the database contract as supplied. Backend and frontend implementation changes must not invent new schema behavior.
 
 ## AI Integration
-The backend mediates LLM calls. Prompts receive project context and database-provided reference options. Model output is parsed, validated, and shown to the user before persistence.
+The backend mediates backend-owned LLM calls. The `mch` TUI may run documented local Codex CLI flows for interactive planning, but saved product data must still be parsed, validated against backend-provided option values, and persisted through supported backend APIs.
