@@ -11,6 +11,9 @@ const (
 	ChangesListState           = navigation.ChangesListState
 	ChangeDetailsState         = navigation.ChangeDetailsState
 	TestCaseDetailsState       = navigation.TestCaseDetailsState
+	CreateIdeaState            = navigation.CreateIdeaState
+	UpdateIdeaState            = navigation.UpdateIdeaState
+	RewriteIdeaState           = navigation.RewriteIdeaState
 	ChangeCreateState          = navigation.ChangeCreateState
 	ChangeUpdateState          = navigation.ChangeUpdateState
 	TestCaseCreateState        = navigation.TestCaseCreateState

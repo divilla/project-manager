@@ -13,6 +13,9 @@ import (
 var commandsByState = map[State][]string{
 	MainState:            agent.MainCommands(),
 	ChangesListState:     changes.ListCommands(),
+	CreateIdeaState:      {"/cancel"},
+	UpdateIdeaState:      {"/cancel"},
+	RewriteIdeaState:     {},
 	ChangeDetailsState:   changes.DetailCommands(),
 	TestCaseDetailsState: testcases.DetailCommands(),
 	ChangeCreateState:    {"/save", "/cancel"},

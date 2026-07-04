@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,17 +60,33 @@ func TestExtractSessionID(t *testing.T) {
 	}
 }
 
-func TestFormatCommandOutputPrettyPrintsJSONLines(t *testing.T) {
-	output := "{\"type\":\"thread.started\",\"thread_id\":\"thread-1\"}\n{\"type\":\"turn.completed\",\"usage\":{\"input_tokens\":10,\"output_tokens\":2}}\n{\"type\":\"error\",\"message\":\"failed\"}\nplain text\n"
+func TestFormatCommandOutputHumanizesJSONLines(t *testing.T) {
+	output := strings.Join([]string{
+		`{"type":"thread.started","thread_id":"thread-1"}`,
+		`{"type":"turn.started"}`,
+		`{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Reading idea."}}`,
+		`{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"sed -n '1,40p' /tmp/mch/initial-idea.md","aggregated_output":"","exit_code":null,"status":"in_progress"}}`,
+		`{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"sed -n '1,40p' /tmp/mch/initial-idea.md","aggregated_output":"# Idea\n\nBody.","exit_code":0,"status":"completed"}}`,
+		`{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"/tmp/mch/initial-idea.md","kind":"update"}],"status":"completed"}}`,
+		`{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":5,"output_tokens":2,"reasoning_output_tokens":1}}`,
+		`{"type":"error","message":"failed"}`,
+		`plain text`,
+		``,
+	}, "\n")
 
 	formatted := FormatCommandOutput(output)
 
-	assert.Contains(t, formatted, "\"type\": \"thread.started\"")
-	assert.Contains(t, formatted, "\"thread_id\": \"thread-1\"")
-	assert.Contains(t, formatted, "\"usage\": {\n    \"input_tokens\": 10,\n    \"output_tokens\": 2\n  }")
-	assert.Contains(t, formatted, "\"type\": \"error\"")
-	assert.Contains(t, formatted, "\"message\": \"failed\"")
+	assert.Contains(t, formatted, "thread started: thread-1")
+	assert.Contains(t, formatted, "turn started")
+	assert.Contains(t, formatted, "assistant: Reading idea.")
+	assert.Contains(t, formatted, "running command: sed -n '1,40p' /tmp/mch/initial-idea.md")
+	assert.Contains(t, formatted, "command completed (completed): exit 0")
+	assert.Contains(t, formatted, "output:\n  # Idea\n  \n  Body.")
+	assert.Contains(t, formatted, "file change completed:\n  update: /tmp/mch/initial-idea.md")
+	assert.Contains(t, formatted, "turn completed (input=10, cached_input=5, output=2, reasoning_output=1)")
+	assert.Contains(t, formatted, "error: failed")
 	assert.Contains(t, formatted, "plain text")
+	assert.NotContains(t, formatted, `"type":`)
 }
 
 func TestCodexPromptsUseExpectedSkills(t *testing.T) {
@@ -82,28 +99,28 @@ func generatedChangeTypes() []string {
 }
 
 func TestParseGeneratedChange(t *testing.T) {
-	body := "\n# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First scenario.\n- Second scenario spans\n  more detail.\n1. Numbered scenario.\n\n## Review Focus\n\n- Parser."
+	spec := "\n# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First scenario.\n- Second scenario spans\n  more detail.\n1. Numbered scenario.\n\n## Review Focus\n\n- Parser."
 
-	parsed, err := ParseGeneratedChange(body, generatedChangeTypes())
+	parsed, err := ParseGeneratedChange(spec, generatedChangeTypes())
 	require.NoError(t, err)
 
 	assert.Equal(t, "Generated Change", parsed.Title)
 	assert.Equal(t, []string{"feature", "test"}, parsed.ChangeTypes)
 	assert.Equal(t, []string{"First scenario.", "Second scenario spans more detail.", "Numbered scenario."}, parsed.TestCases)
-	assert.Equal(t, "\n# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First scenario.\n- Second scenario spans\n  more detail.\n1. Numbered scenario.\n\n## Review Focus\n\n- Parser.", parsed.Body)
+	assert.Equal(t, "\n# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First scenario.\n- Second scenario spans\n  more detail.\n1. Numbered scenario.\n\n## Review Focus\n\n- Parser.", parsed.Spec)
 }
 
 func TestParseGeneratedChangeSkipsNoneQATestCase(t *testing.T) {
-	body := "# Generated Change\n\nTypes: feature\n\n## QA Test Cases\n\n- None.\n\n## Review Focus\n\n- Parser."
+	spec := "# Generated Change\n\nTypes: feature\n\n## QA Test Cases\n\n- None.\n\n## Review Focus\n\n- Parser."
 
-	parsed, err := ParseGeneratedChange(body, generatedChangeTypes())
+	parsed, err := ParseGeneratedChange(spec, generatedChangeTypes())
 	require.NoError(t, err)
 
 	assert.Empty(t, parsed.TestCases)
 }
 
 func TestParseGeneratedChangeExtractsQATestCasesFromGeneratedBody(t *testing.T) {
-	body := `# Generated Change
+	spec := `# Generated Change
 
 Types: feature|test
 
@@ -128,9 +145,9 @@ Types: feature|test
 
 ## Review Focus
 
-- Generated Change parser strictness for H1 title, ` + "`Types:`" + ` metadata, type slugs, full body preservation, and ` + "`## QA Test Cases`" + ` extraction.`
+- Generated Change parser strictness for H1 title, ` + "`Types:`" + ` metadata, type slugs, full spec preservation, and ` + "`## QA Test Cases`" + ` extraction.`
 
-	parsed, err := ParseGeneratedChange(body, generatedChangeTypes())
+	parsed, err := ParseGeneratedChange(spec, generatedChangeTypes())
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -141,8 +158,8 @@ Types: feature|test
 	}, parsed.TestCases)
 }
 
-func TestExtractQATestCasesFromBodyFragment(t *testing.T) {
-	body := `## Relevant Specs
+func TestExtractQATestCasesFromSpecFragment(t *testing.T) {
+	spec := `## Relevant Specs
 
 - ` + "`/tmp/mch/initial-change.md`" + `
 - ` + "`agent/prompts/change-file-structure.md`" + `
@@ -160,32 +177,32 @@ func TestExtractQATestCasesFromBodyFragment(t *testing.T) {
 
 ## Review Focus
 
-- Generated Change parser strictness for H1 title, ` + "`Types:`" + ` metadata, type slugs, full body preservation, and ` + "`## QA Test Cases`" + ` extraction.`
+- Generated Change parser strictness for H1 title, ` + "`Types:`" + ` metadata, type slugs, full spec preservation, and ` + "`## QA Test Cases`" + ` extraction.`
 
 	assert.Equal(t, []string{
 		"Start `/new-change` with no valid current project and confirm the flow stops with a recoverable project-context error and no editor, Codex, or create request runs.",
 		"Start `/new-change` when `/tmp/mch` is absent and confirm the directory and blank `initial-idea.md` are created.",
 		"Complete a successful create and confirm `mch` reloads and renders the created Change detail using backend data.",
-	}, ExtractQATestCases(body))
+	}, ExtractQATestCases(spec))
 }
 
 func TestParseGeneratedChangeValidation(t *testing.T) {
 	tests := []struct {
 		name string
-		body string
+		spec string
 	}{
-		{name: "missing title", body: "Types: feature\n\n## Goal\nShip it."},
-		{name: "missing types", body: "# Generated Change\n\n## Goal\nShip it."},
-		{name: "blank types", body: "# Generated Change\n\nTypes: \n\n## Goal\nShip it."},
-		{name: "malformed types", body: "# Generated Change\n\nTypes: feature | test\n\n## Goal\nShip it."},
-		{name: "empty type", body: "# Generated Change\n\nTypes: feature|\n\n## Goal\nShip it."},
-		{name: "comma separator", body: "# Generated Change\n\nTypes: feature,test\n\n## Goal\nShip it."},
-		{name: "unsupported type", body: "# Generated Change\n\nTypes: spike\n\n## Goal\nShip it."},
+		{name: "missing title", spec: "Types: feature\n\n## Goal\nShip it."},
+		{name: "missing types", spec: "# Generated Change\n\n## Goal\nShip it."},
+		{name: "blank types", spec: "# Generated Change\n\nTypes: \n\n## Goal\nShip it."},
+		{name: "malformed types", spec: "# Generated Change\n\nTypes: feature | test\n\n## Goal\nShip it."},
+		{name: "empty type", spec: "# Generated Change\n\nTypes: feature|\n\n## Goal\nShip it."},
+		{name: "comma separator", spec: "# Generated Change\n\nTypes: feature,test\n\n## Goal\nShip it."},
+		{name: "unsupported type", spec: "# Generated Change\n\nTypes: spike\n\n## Goal\nShip it."},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseGeneratedChange(tt.body, generatedChangeTypes())
+			_, err := ParseGeneratedChange(tt.spec, generatedChangeTypes())
 			require.Error(t, err)
 		})
 	}

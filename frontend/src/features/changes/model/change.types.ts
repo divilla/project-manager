@@ -5,6 +5,7 @@ export type { Epic } from '@/features/epics/model/epic.types';
 export interface ChangePhase {
   slug: string;
   priority: number;
+  color?: string;
 }
 
 export interface ChangeType {
@@ -14,8 +15,8 @@ export interface ChangeType {
 
 export interface ChangeListItem {
   id: number;
-  ref: number;
-  slug: string;
+  ref: number | null;
+  slug: string | null;
   project_id: number;
   epic_id?: number | null;
   epic_name?: string | null;
@@ -32,11 +33,12 @@ export interface ChangeListItem {
 
 export interface Change extends ChangeListItem {
   version: number;
-  body: string;
-  html: string;
-  pr_body: string;
-  pr_html: string;
-  pr_url: string;
+  idea: string;
+  spec: string | null;
+  spec_html: string | null;
+  pr_body: string | null;
+  pr_html: string | null;
+  pr_url: string | null;
   created: string;
 }
 
@@ -45,22 +47,20 @@ export interface ChangeDetail {
   test_cases: TestCase[];
 }
 
-export interface ChangeRenderedBody {
+export interface ChangeRenderedArtifact {
   id: number;
-  html: string;
+  spec_html: string;
   pr_html: string;
 }
 
-export interface ChangeRenderedBodiesResponse {
-  bodies: ChangeRenderedBody[];
+export interface ChangeRenderedArtifactsResponse {
+  artifacts: ChangeRenderedArtifact[];
 }
 
 export interface ChangeCreateInput {
   project_id: number;
-  epic_id?: number | null;
   title: string;
-  body?: string;
-  change_types: string[];
+  idea: string;
 }
 
 export interface SelectOption {

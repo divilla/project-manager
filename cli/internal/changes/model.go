@@ -20,6 +20,15 @@ type Filters struct {
 // PhaseColors maps backend phase slugs to optional Lip Gloss color values.
 type PhaseColors map[string]string
 
+var defaultPhaseColors = PhaseColors{
+	"backlog":    "15",
+	"progress":   "10",
+	"review":     "11",
+	"staging":    "12",
+	"production": "13",
+	"rejected":   "9",
+}
+
 // Model stores changes list and detail state.
 type Model struct {
 	Rows           []dto.Change
@@ -42,13 +51,19 @@ type DetailRow struct {
 	TestCaseDone bool
 }
 
-// ParsedRequirement stores metadata extracted from requirement markdown.
-type ParsedRequirement struct {
+// ParsedSpec stores metadata extracted from spec markdown.
+type ParsedSpec struct {
 	Title       string
-	Body        string
+	Spec        string
 	ChangeTypes []string
 	EpicID      *int
 	EpicName    string
+}
+
+// ParsedIdea stores the title and full idea text extracted from idea markdown.
+type ParsedIdea struct {
+	Title string
+	Idea  string
 }
 
 // StartLoading returns a changes model in loading state.
@@ -146,8 +161,9 @@ func (m Model) MoveDetailSelection(delta int, pageSize int, width int) Model {
 		m.DetailSelected = next
 	}
 	_, textWidth := DetailColumnWidths(m.Detail, width)
-	m.DetailOffset = detailRowLineStart(rows, m.DetailSelected, textWidth)
-	m.DetailOffset = clampLineOffset(m.DetailOffset, detailLineCount(rows, textWidth), pageSize)
+	rowStart := detailRowLineStart(rows, m.DetailSelected, textWidth)
+	rowEnd := rowStart + detailRowLineCount(rows[m.DetailSelected], textWidth)
+	m.DetailOffset = detailOffsetKeepingRowVisible(m.DetailOffset, rowStart, rowEnd, detailLineCount(rows, textWidth), pageSize)
 	return m
 }
 
@@ -203,7 +219,8 @@ func DetailRows(change dto.Change) []DetailRow {
 		{Label: "Epic", Text: epicLabel(change), Selectable: true},
 		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true, DividerAfter: true},
 		{Label: "Title", Text: change.Title, Selectable: true, DividerAfter: true},
-		{Label: "Body", Text: change.Body, Selectable: true, DividerAfter: true},
+		{Label: "Idea", Text: change.Idea, Selectable: true, DividerAfter: true},
+		{Label: "Spec", Text: change.Spec, Selectable: true, DividerAfter: true},
 	}
 	for i, testCase := range change.TestCases {
 		rows = append(rows, DetailRow{
@@ -364,7 +381,7 @@ func detailRowTextLines(row DetailRow, textWidth int) []string {
 }
 
 func detailRowShouldTruncate(row DetailRow) bool {
-	return row.Label == "Body" || row.Label == "PR"
+	return row.Label == "Idea" || row.Label == "Spec" || row.Label == "PR"
 }
 
 func detailDividerAfter(row DetailRow) bool {
@@ -423,6 +440,23 @@ func clampLineOffset(offset, total, pageSize int) int {
 	return offset
 }
 
+func detailOffsetKeepingRowVisible(offset, rowStart, rowEnd, total, pageSize int) int {
+	offset = clampLineOffset(offset, total, pageSize)
+	if pageSize < 1 {
+		pageSize = 1
+	}
+	if rowEnd <= rowStart {
+		rowEnd = rowStart + 1
+	}
+	if rowStart < offset {
+		return clampLineOffset(rowStart, total, pageSize)
+	}
+	if rowEnd > offset+pageSize {
+		return clampLineOffset(rowEnd-pageSize, total, pageSize)
+	}
+	return offset
+}
+
 func abs(value int) int {
 	if value < 0 {
 		return -value
@@ -452,16 +486,34 @@ func FilteredRows(rows []dto.Change, filters Filters) []dto.Change {
 	return filtered
 }
 
-// ParseBody extracts backend fields while preserving the full body.
-func ParseBody(body string, validTypes, epics []dto.Option) (ParsedRequirement, error) {
-	parsed, err := ParseBodyStructure(body)
+// ParseIdeaStructure extracts the Change title and idea text.
+func ParseIdeaStructure(idea string) (ParsedIdea, error) {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(idea, "\r\n", "\n"), "\r", "\n")
+	lines := strings.Split(normalized, "\n")
+	firstIndex := firstNonBlankLine(lines, 0)
+	if firstIndex < 0 || !strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "# ") || strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "## ") {
+		return ParsedIdea{}, fmt.Errorf("idea title is required")
+	}
+	title := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[firstIndex]), "# "))
+	if title == "" {
+		return ParsedIdea{}, fmt.Errorf("idea title is required")
+	}
+	if strings.TrimSpace(normalized) == "" {
+		return ParsedIdea{}, fmt.Errorf("idea is required")
+	}
+	return ParsedIdea{Title: title, Idea: normalized}, nil
+}
+
+// ParseSpec extracts backend fields while preserving the full spec.
+func ParseSpec(spec string, validTypes, epics []dto.Option) (ParsedSpec, error) {
+	parsed, err := ParseSpecStructure(spec)
 	if err != nil {
-		return ParsedRequirement{}, err
+		return ParsedSpec{}, err
 	}
 	validTypeSet := optionSet(validTypes)
 	for _, typ := range parsed.ChangeTypes {
 		if _, ok := validTypeSet[typ]; !ok {
-			return ParsedRequirement{}, fmt.Errorf("invalid change type: %s", typ)
+			return ParsedSpec{}, fmt.Errorf("invalid change type: %s", typ)
 		}
 	}
 	if parsed.EpicName == "" {
@@ -469,50 +521,53 @@ func ParseBody(body string, validTypes, epics []dto.Option) (ParsedRequirement, 
 	}
 	epicID, ok := resolveEpic(parsed.EpicName, epics)
 	if !ok {
-		return ParsedRequirement{}, fmt.Errorf("unknown epic: %s", parsed.EpicName)
+		return ParsedSpec{}, fmt.Errorf("unknown epic: %s", parsed.EpicName)
 	}
 	parsed.EpicID = &epicID
 	return parsed, nil
 }
 
-// ParseBodyStructure extracts locally validated metadata before reference lookups.
-func ParseBodyStructure(body string) (ParsedRequirement, error) {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
+// ParseSpecStructure extracts locally validated metadata before reference lookups.
+func ParseSpecStructure(spec string) (ParsedSpec, error) {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
 	if firstIndex < 0 || !strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "# ") || strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "## ") {
-		return ParsedRequirement{}, fmt.Errorf("requirement title is required")
+		return ParsedSpec{}, fmt.Errorf("spec title is required")
 	}
 	title := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[firstIndex]), "# "))
 	if title == "" {
-		return ParsedRequirement{}, fmt.Errorf("requirement title is required")
+		return ParsedSpec{}, fmt.Errorf("spec title is required")
 	}
 
+	types := []string{}
+	metadataEndIndex := firstIndex
 	typeIndex := firstNonBlankLine(lines, firstIndex+1)
-	if typeIndex < 0 {
-		return ParsedRequirement{}, fmt.Errorf("types line is required")
-	}
-	typeLine := strings.TrimSpace(lines[typeIndex])
-	if !strings.HasPrefix(typeLine, "Types: ") {
-		return ParsedRequirement{}, fmt.Errorf("types line is required")
-	}
-	typeValue := strings.TrimPrefix(typeLine, "Types: ")
-	if strings.TrimSpace(typeValue) == "" || strings.Contains(typeValue, " ") {
-		return ParsedRequirement{}, fmt.Errorf("types line must contain backend type slugs joined by |")
-	}
-	types := strings.Split(typeValue, "|")
-	for _, typ := range types {
-		if typ == "" {
-			return ParsedRequirement{}, fmt.Errorf("types line must contain backend type slugs joined by |")
+	if typeIndex >= 0 {
+		typeLine := strings.TrimSpace(lines[typeIndex])
+		if strings.HasPrefix(typeLine, "Types:") {
+			metadataEndIndex = typeIndex
+			typeValue := strings.TrimPrefix(typeLine, "Types:")
+			if strings.TrimSpace(typeValue) != "" {
+				if !strings.HasPrefix(typeValue, " ") || strings.Contains(strings.TrimPrefix(typeValue, " "), " ") {
+					return ParsedSpec{}, fmt.Errorf("types line must contain backend type slugs joined by |")
+				}
+				types = strings.Split(strings.TrimPrefix(typeValue, " "), "|")
+				for _, typ := range types {
+					if typ == "" {
+						return ParsedSpec{}, fmt.Errorf("types line must contain backend type slugs joined by |")
+					}
+				}
+			}
 		}
 	}
 
-	parsed := ParsedRequirement{
+	parsed := ParsedSpec{
 		Title:       title,
-		Body:        normalized,
+		Spec:        normalized,
 		ChangeTypes: types,
 	}
-	epicIndex := firstNonBlankLine(lines, typeIndex+1)
+	epicIndex := firstNonBlankLine(lines, metadataEndIndex+1)
 	if epicIndex < 0 {
 		return parsed, nil
 	}
@@ -528,19 +583,15 @@ func ParseBodyStructure(body string) (ParsedRequirement, error) {
 	return parsed, nil
 }
 
-// RequirementEpicName returns the non-blank Epic metadata value when present.
-func RequirementEpicName(body string) string {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
+// SpecEpicName returns the non-blank Epic metadata value when present.
+func SpecEpicName(spec string) string {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
 	if firstIndex < 0 {
 		return ""
 	}
-	typeIndex := firstNonBlankLine(lines, firstIndex+1)
-	if typeIndex < 0 {
-		return ""
-	}
-	epicIndex := firstNonBlankLine(lines, typeIndex+1)
+	epicIndex := firstMetadataLineAfterTypes(lines, firstIndex)
 	if epicIndex < 0 {
 		return ""
 	}
@@ -551,11 +602,11 @@ func RequirementEpicName(body string) string {
 	return strings.TrimSpace(strings.TrimPrefix(epicLine, "Epic:"))
 }
 
-// RequirementMarkdown returns editable requirement markdown for a change.
-func RequirementMarkdown(change dto.Change) string {
-	body := strings.TrimSpace(change.Body)
-	if body != "" && hasRequirementMetadata(body) {
-		return requirementMarkdownWithBackendEpic(change.Body, change.EpicName)
+// SpecMarkdown returns editable spec markdown for a change.
+func SpecMarkdown(change dto.Change) string {
+	spec := strings.TrimSpace(change.Spec)
+	if spec != "" && hasSpecMetadata(spec) {
+		return specMarkdownWithBackendEpic(change.Spec, change.EpicName)
 	}
 	var lines []string
 	if strings.TrimSpace(change.Title) != "" {
@@ -567,22 +618,21 @@ func RequirementMarkdown(change dto.Change) string {
 	if strings.TrimSpace(change.EpicName) != "" {
 		lines = append(lines, "Epic: "+strings.TrimSpace(change.EpicName), "")
 	}
-	if body != "" {
-		lines = append(lines, change.Body)
+	if spec != "" {
+		lines = append(lines, change.Spec)
 	}
 	return strings.TrimRight(strings.Join(lines, "\n"), "\n")
 }
 
-func requirementMarkdownWithBackendEpic(body, epicName string) string {
+func specMarkdownWithBackendEpic(spec, epicName string) string {
 	epicName = strings.TrimSpace(epicName)
-	if epicName == "" || hasRequirementEpicLine(body) {
-		return body
+	if epicName == "" || hasSpecEpicLine(spec) {
+		return spec
 	}
-	normalized := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
+	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
-	typeIndex := firstNonBlankLine(lines, firstIndex+1)
-	epicIndex := firstNonBlankLine(lines, typeIndex+1)
+	epicIndex := firstMetadataLineAfterTypes(lines, firstIndex)
 	if epicIndex < 0 {
 		epicIndex = len(lines)
 	}
@@ -620,8 +670,8 @@ func firstNonBlankLine(lines []string, start int) int {
 	return -1
 }
 
-func hasRequirementMetadata(body string) bool {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
+func hasSpecMetadata(spec string) bool {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
 	if firstIndex < 0 {
@@ -631,34 +681,37 @@ func hasRequirementMetadata(body string) bool {
 	if !strings.HasPrefix(titleLine, "# ") || strings.HasPrefix(titleLine, "## ") || strings.TrimSpace(strings.TrimPrefix(titleLine, "# ")) == "" {
 		return false
 	}
-	typeIndex := firstNonBlankLine(lines, firstIndex+1)
-	if typeIndex < 0 {
-		return false
-	}
-	return strings.HasPrefix(strings.TrimSpace(lines[typeIndex]), "Types: ")
+	return true
 }
 
-func hasRequirementEpicLine(body string) bool {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
+func hasSpecEpicLine(spec string) bool {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
 	if firstIndex < 0 {
 		return false
 	}
-	typeIndex := firstNonBlankLine(lines, firstIndex+1)
-	if typeIndex < 0 {
-		return false
-	}
-	epicIndex := firstNonBlankLine(lines, typeIndex+1)
+	epicIndex := firstMetadataLineAfterTypes(lines, firstIndex)
 	if epicIndex < 0 {
 		return false
 	}
 	return strings.HasPrefix(strings.TrimSpace(lines[epicIndex]), "Epic:")
 }
 
-// RequirementHasEpicLine reports whether the editable requirement metadata includes an Epic line.
-func RequirementHasEpicLine(body string) bool {
-	return hasRequirementEpicLine(body)
+func firstMetadataLineAfterTypes(lines []string, titleIndex int) int {
+	nextIndex := firstNonBlankLine(lines, titleIndex+1)
+	if nextIndex < 0 {
+		return -1
+	}
+	if strings.HasPrefix(strings.TrimSpace(lines[nextIndex]), "Types:") {
+		return firstNonBlankLine(lines, nextIndex+1)
+	}
+	return nextIndex
+}
+
+// SpecHasEpicLine reports whether the editable spec metadata includes an Epic line.
+func SpecHasEpicLine(spec string) bool {
+	return hasSpecEpicLine(spec)
 }
 
 func optionSet(options []dto.Option) map[string]struct{} {
@@ -709,7 +762,8 @@ func matchesFind(change dto.Change, query string) bool {
 		change.ChangePhase,
 		change.EpicID,
 		change.EpicName,
-		change.Body,
+		change.Idea,
+		change.Spec,
 	}
 	values = append(values, change.ChangeTypes...)
 	for _, value := range values {

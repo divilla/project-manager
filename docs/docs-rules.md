@@ -35,7 +35,7 @@ docs/
 - Keep each Markdown file at or below 300 lines.
 - Write current product documentation, not migration notes.
 - Use `change`, `epic`, `test case`, and `history` as the core product vocabulary.
-- Use `title`, `body`, `pr_body`, `pr_url`, and `agent_edit` for change text, PR fields, and agent-edit state.
+- Use `title`, `idea`, `spec`, `pr_body`, `pr_url`, and `agent_edit` for change text, PR fields, and agent-edit state.
 - Do not describe obsolete hierarchy or obsolete terminology as active product behavior.
 - Functionality docs define product behavior.
 - Architecture docs define technical structure.

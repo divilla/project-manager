@@ -7,6 +7,8 @@ import (
 	"io"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 // Version is the user-visible mch executable version.
@@ -28,6 +30,7 @@ func Run(args []string, out io.Writer) error {
 		return err
 	}
 
+	lipgloss.SetColorProfile(termenv.ANSI256)
 	_, err := tea.NewProgram(NewModel(), tea.WithOutput(out)).Run()
 	return err
 }

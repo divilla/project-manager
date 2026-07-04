@@ -177,15 +177,152 @@ func FormatCommandOutput(output string) string {
 		if trimmed == "" {
 			continue
 		}
-		var value any
-		if err := json.Unmarshal([]byte(trimmed), &value); err == nil {
-			pretty, err := json.MarshalIndent(value, "", "  ")
-			if err == nil {
-				formatted = append(formatted, string(pretty))
-				continue
-			}
+		var event map[string]any
+		if err := json.Unmarshal([]byte(trimmed), &event); err == nil {
+			formatted = append(formatted, formatCodexEvent(event))
+			continue
 		}
 		formatted = append(formatted, trimmed)
 	}
 	return strings.Join(formatted, "\n")
+}
+
+func formatCodexEvent(event map[string]any) string {
+	eventType := stringField(event, "type")
+	switch eventType {
+	case "thread.started":
+		if id := stringField(event, "thread_id"); id != "" {
+			return "thread started: " + id
+		}
+		return "thread started"
+	case "turn.started":
+		return "turn started"
+	case "turn.completed":
+		if usage, ok := event["usage"].(map[string]any); ok {
+			return "turn completed" + formatUsage(usage)
+		}
+		return "turn completed"
+	case "error":
+		if message := stringField(event, "message"); message != "" {
+			return "error: " + message
+		}
+		return "error"
+	case "item.started", "item.completed":
+		item, ok := event["item"].(map[string]any)
+		if !ok {
+			return eventType
+		}
+		return formatCodexItem(eventType, item)
+	default:
+		if eventType != "" {
+			return eventType
+		}
+		pretty, err := json.MarshalIndent(event, "", "  ")
+		if err != nil {
+			return fmt.Sprint(event)
+		}
+		return string(pretty)
+	}
+}
+
+func formatCodexItem(eventType string, item map[string]any) string {
+	itemType := stringField(item, "type")
+	started := eventType == "item.started"
+	switch itemType {
+	case "agent_message":
+		if text := stringField(item, "text"); text != "" {
+			return "assistant: " + text
+		}
+		return "assistant message"
+	case "command_execution":
+		command := stringField(item, "command")
+		if started {
+			return "running command: " + command
+		}
+		parts := []string{"command completed"}
+		if status := stringField(item, "status"); status != "" {
+			parts[0] += " (" + status + ")"
+		}
+		if exitCode := stringField(item, "exit_code"); exitCode != "" && exitCode != "<nil>" {
+			parts[0] += ": exit " + exitCode
+		}
+		if command != "" {
+			parts = append(parts, "  "+command)
+		}
+		if output := strings.TrimSpace(stringField(item, "aggregated_output")); output != "" {
+			parts = append(parts, "output:\n"+indentLines(output, "  "))
+		}
+		return strings.Join(parts, "\n")
+	case "file_change":
+		return formatFileChange(started, item)
+	default:
+		if itemType == "" {
+			return eventType
+		}
+		if started {
+			return itemType + " started"
+		}
+		return itemType + " completed"
+	}
+}
+
+func formatFileChange(started bool, item map[string]any) string {
+	changes, ok := item["changes"].([]any)
+	if !ok || len(changes) == 0 {
+		if started {
+			return "file change started"
+		}
+		return "file change completed"
+	}
+	lines := make([]string, 0, len(changes))
+	for _, change := range changes {
+		values, ok := change.(map[string]any)
+		if !ok {
+			continue
+		}
+		kind := stringField(values, "kind")
+		path := stringField(values, "path")
+		if kind == "" {
+			kind = "change"
+		}
+		if path == "" {
+			lines = append(lines, kind)
+			continue
+		}
+		lines = append(lines, kind+": "+path)
+	}
+	if len(lines) == 0 {
+		if started {
+			return "file change started"
+		}
+		return "file change completed"
+	}
+	prefix := "file change"
+	if started {
+		prefix = "file change started"
+	} else {
+		prefix = "file change completed"
+	}
+	return prefix + ":\n" + indentLines(strings.Join(lines, "\n"), "  ")
+}
+
+func formatUsage(usage map[string]any) string {
+	parts := make([]string, 0, 4)
+	for _, key := range []string{"input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens"} {
+		if value := stringField(usage, key); value != "" {
+			parts = append(parts, strings.TrimSuffix(strings.ReplaceAll(key, "_tokens", ""), "_")+"="+value)
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
+}
+
+func indentLines(value string, prefix string) string {
+	lines := strings.Split(value, "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n")
 }

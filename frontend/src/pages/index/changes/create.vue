@@ -25,35 +25,14 @@
         autofocus
       />
 
-      <q-select
-        v-model="changeTypes"
-        outlined
-        emit-value
-        map-options
-        multiple
-        label="Types"
-        :options="typeOptions"
-        :disable="loading || saving"
-      />
-
-      <q-select
-        v-model="epicId"
-        outlined
-        emit-value
-        map-options
-        clearable
-        label="Epic"
-        :options="epicOptions"
-        :disable="loading || saving"
-      />
-
       <q-input
-        v-model="body"
+        v-model="idea"
         outlined
         type="textarea"
-        label="Body"
+        label="Idea"
         input-style="min-height: 240px"
         :disable="loading || saving"
+        :rules="requiredRules"
       />
 
       <div class="change-create-actions">
@@ -65,25 +44,21 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
-import { createChange, getChangeTypes } from '@/features/changes/api/changeApi';
+import { createChange } from '@/features/changes/api/changeApi';
 import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
-import type { ChangeCreateInput, SelectOption } from '@/features/changes/model/change.types';
+import type { ChangeCreateInput } from '@/features/changes/model/change.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 
 const router = useRouter();
 const projectSelection = useProjectSelectionStore();
 const changeCache = useChangeCacheStore();
 const { currentProjectId } = storeToRefs(projectSelection);
-const { epics } = storeToRefs(changeCache);
 
 const title = ref('');
-const body = ref('');
-const changeTypes = ref<string[]>([]);
-const epicId = ref<number | null>(null);
-const typeOptions = ref<SelectOption[]>([]);
+const idea = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
@@ -94,21 +69,12 @@ const requiredRules = [
   },
 ];
 
-const epicOptions = computed(() =>
-  epics.value.map((epic) => ({ label: epic.name, value: epic.id })),
-);
-
 async function loadCreateContext() {
   loading.value = true;
   error.value = '';
 
   try {
-    const [types] = await Promise.all([
-      getChangeTypes(),
-      projectSelection.hasLoaded ? Promise.resolve() : projectSelection.loadProjects(),
-    ]);
-    typeOptions.value = types.map((type) => ({ label: type.slug, value: type.slug }));
-    if (!changeTypes.value.length && types[0]) changeTypes.value = [types[0].slug];
+    await (projectSelection.hasLoaded ? Promise.resolve() : projectSelection.loadProjects());
     if (currentProjectId.value) await changeCache.loadProjectChanges(currentProjectId.value);
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Unable to load change creation context.';
@@ -121,12 +87,13 @@ async function createChangeFromPage() {
   if (saving.value) return;
 
   const changeTitle = title.value.trim();
+  const changeIdea = idea.value.trim();
   const projectId = currentProjectId.value;
   if (!projectId) {
     error.value = 'Select a project before creating a change.';
     return;
   }
-  if (!changeTitle || !changeTypes.value.length) return;
+  if (!changeTitle || !changeIdea) return;
 
   saving.value = true;
   error.value = '';
@@ -134,10 +101,8 @@ async function createChangeFromPage() {
   try {
     const input: ChangeCreateInput = {
       project_id: projectId,
-      epic_id: epicId.value || null,
       title: changeTitle,
-      body: body.value.trim(),
-      change_types: changeTypes.value,
+      idea: changeIdea,
     };
 
     const change = await createChange(input);

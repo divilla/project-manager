@@ -16,7 +16,7 @@ func (m Model) saveChangeCreate() (tea.Model, tea.Cmd) {
 	return m.saveChangeCreateValue(m.input.Value())
 }
 
-func (m Model) saveChangeCreateValue(body string) (tea.Model, tea.Cmd) {
+func (m Model) saveChangeCreateValue(idea string) (tea.Model, tea.Cmd) {
 	projectID, err := currentProjectNumericID(m.currentProject.ID)
 	if err != nil {
 		m.err = err.Error()
@@ -24,14 +24,14 @@ func (m Model) saveChangeCreateValue(body string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.status = "saving"
-	return m, changeCreateCommand(m.client, projectID, m.currentProject.ID, body, m.optionCatalog.types)
+	return m, changeCreateCommand(m.client, projectID, idea)
 }
 
 func (m Model) saveChangeUpdate() (tea.Model, tea.Cmd) {
 	return m.saveChangeUpdateValue(m.input.Value())
 }
 
-func (m Model) saveChangeUpdateValue(body string) (tea.Model, tea.Cmd) {
+func (m Model) saveChangeUpdateValue(spec string) (tea.Model, tea.Cmd) {
 	id, err := changeNumericID(m.changeList.Detail)
 	if err != nil {
 		m.err = err.Error()
@@ -39,7 +39,7 @@ func (m Model) saveChangeUpdateValue(body string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.status = "saving"
-	return m, changeUpdateCommand(m.client, id, m.currentProject.ID, m.changeList.Detail, body, m.optionCatalog.types)
+	return m, changeUpdateCommand(m.client, id, m.currentProject.ID, m.changeList.Detail, spec, m.optionCatalog.types)
 }
 
 func (m Model) saveTestCaseCreateValue(scenario string) (tea.Model, tea.Cmd) {
@@ -74,25 +74,16 @@ func (m Model) saveTestCaseUpdateValue(scenario string) (tea.Model, tea.Cmd) {
 	return m, testCaseUpdateCommand(m.client, testCaseID, scenario)
 }
 
-func changeCreateCommand(client appClient, projectID int, projectIDValue string, body string, validTypes []dto.Option) tea.Cmd {
+func changeCreateCommand(client appClient, projectID int, idea string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := changes.ParseBodyStructure(body); err != nil {
-			return changeSavedMsg{source: ChangeCreateState, err: err}
-		}
-		types, epics, err := changeReferenceData(client, projectIDValue, body, validTypes)
-		if err != nil {
-			return changeSavedMsg{source: ChangeCreateState, err: err}
-		}
-		parsed, err := changes.ParseBody(body, types, epics)
+		parsed, err := changes.ParseIdeaStructure(idea)
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
 		}
 		created, err := client.CreateChange(dto.ChangeCreateInput{
-			ProjectID:   projectID,
-			Title:       parsed.Title,
-			Body:        parsed.Body,
-			ChangeTypes: parsed.ChangeTypes,
-			EpicID:      parsed.EpicID,
+			ProjectID: projectID,
+			Title:     parsed.Title,
+			Idea:      parsed.Idea,
 		})
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
@@ -109,16 +100,16 @@ func changeCreateCommand(client appClient, projectID int, projectIDValue string,
 	}
 }
 
-func changeUpdateCommand(client appClient, id int, projectID string, original dto.Change, body string, validTypes []dto.Option) tea.Cmd {
+func changeUpdateCommand(client appClient, id int, projectID string, original dto.Change, spec string, validTypes []dto.Option) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := changes.ParseBodyStructure(body); err != nil {
+		if _, err := changes.ParseSpecStructure(spec); err != nil {
 			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
-		types, epics, err := changeReferenceData(client, projectID, body, validTypes)
+		types, epics, err := changeReferenceData(client, projectID, spec, validTypes)
 		if err != nil {
 			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
-		parsed, err := changes.ParseBody(body, types, epics)
+		parsed, err := changes.ParseSpec(spec, types, epics)
 		if err != nil {
 			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
@@ -127,8 +118,8 @@ func changeUpdateCommand(client appClient, id int, projectID string, original dt
 				return changeSavedMsg{source: ChangeUpdateState, err: err}
 			}
 		}
-		if parsed.Body != original.Body {
-			if _, err := client.UpdateChangeBody(id, parsed.Body); err != nil {
+		if parsed.Spec != original.Spec {
+			if _, err := client.UpdateChangeSpec(id, &parsed.Spec); err != nil {
 				return changeSavedMsg{source: ChangeUpdateState, err: err}
 			}
 		}
@@ -161,6 +152,33 @@ func changeDeleteCommand(client appClient, change dto.Change, target State) tea.
 			return changeDeletedMsg{target: target, err: err}
 		}
 		return changeDeletedMsg{target: target, err: client.DeleteChange(id)}
+	}
+}
+
+func changeReferenceCommand(client appClient, change dto.Change) tea.Cmd {
+	return func() tea.Msg {
+		id, err := changeNumericID(change)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		referenced, err := client.ReferenceChange(id)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, err: err}
+		}
+		if strings.TrimSpace(referenced.Ref) == "" || strings.TrimSpace(referenced.Slug) == "" {
+			return changeSavedMsg{source: ChangeDetailsState, change: referenced, err: fmt.Errorf("referenced change must include ref and slug")}
+		}
+		refreshed, err := client.GetChange(id)
+		if err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, change: referenced, err: err}
+		}
+		if strings.TrimSpace(refreshed.Ref) == "" || strings.TrimSpace(refreshed.Slug) == "" {
+			return changeSavedMsg{source: ChangeDetailsState, change: refreshed, err: fmt.Errorf("referenced change must include ref and slug")}
+		}
+		if err := reconcileChangeBranch(refreshed.Ref, refreshed.Slug); err != nil {
+			return changeSavedMsg{source: ChangeDetailsState, change: refreshed, err: err}
+		}
+		return changeSavedMsg{source: ChangeDetailsState, change: refreshed}
 	}
 }
 
@@ -278,8 +296,12 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 			if _, err := client.UpdateChangeTitle(id, value); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
-		case detailEditRequirement:
-			if _, err := client.UpdateChangeBody(id, value); err != nil {
+		case detailEditSpec:
+			if _, err := client.UpdateChangeSpec(id, &value); err != nil {
+				return changeSavedMsg{source: source, err: err}
+			}
+		case detailEditIdea:
+			if _, err := client.UpdateChangeIdea(id, value); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditPullRequest:
@@ -298,11 +320,11 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 	}
 }
 
-func changeReferenceData(client appClient, projectID string, body string, types []dto.Option) ([]dto.Option, []dto.Option, error) {
+func changeReferenceData(client appClient, projectID string, spec string, types []dto.Option) ([]dto.Option, []dto.Option, error) {
 	if len(types) == 0 {
 		return nil, nil, fmt.Errorf("backend change type options are not loaded")
 	}
-	if changes.RequirementEpicName(body) == "" {
+	if changes.SpecEpicName(spec) == "" {
 		return types, nil, nil
 	}
 	epics, err := client.ListEpics(projectID)

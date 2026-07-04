@@ -26,14 +26,17 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 
 	a.g.POST("/list", a.listChanges)
 	a.g.POST("/get", a.getChange)
-	a.g.POST("/rendered-bodies", a.renderedBodies)
+	a.g.POST("/rendered-artifacts", a.renderedArtifacts)
 	a.g.POST("/create", a.createChange)
+	a.g.POST("/reference", a.referenceChange)
 	a.g.POST("/update-epic", a.updateEpic)
 	a.g.POST("/update-phase", a.updatePhase)
 	a.g.POST("/update-open", a.updateOpen)
 	a.g.POST("/update-change-types", a.updateChangeTypes)
 	a.g.POST("/update-title", a.updateTitle)
-	a.g.POST("/update-body", a.updateBody)
+	a.g.POST("/update-idea", a.updateIdea)
+	a.g.POST("/update-idea-agent-edit", a.updateIdeaAgentEdit)
+	a.g.POST("/update-spec", a.updateSpec)
 	a.g.POST("/update-pr-body", a.updatePRBody)
 	a.g.POST("/update-pr-url", a.updatePRUrl)
 	a.g.POST("/update-agent-edit", a.updateAgentEdit)
@@ -66,12 +69,12 @@ func (a *API) getChange(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) renderedBodies(c *echo.Context) error {
-	var req dto.ChangeRenderedBodiesRequest
+func (a *API) renderedArtifacts(c *echo.Context) error {
+	var req dto.ChangeRenderedArtifactsRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change rendered bodies payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change rendered artifacts payload")
 	}
-	res, err := a.s.RenderedBodies(c.Request().Context(), req)
+	res, err := a.s.RenderedArtifacts(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}
@@ -126,12 +129,48 @@ func (a *API) updateTitle(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) updateBody(c *echo.Context) error {
-	var req dto.ChangeUpdateBodyRequest
+func (a *API) referenceChange(c *echo.Context) error {
+	var req dto.ChangeIDRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change body payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change reference payload")
 	}
-	res, err := a.s.UpdateBody(c.Request().Context(), req)
+	res, err := a.s.ReferenceChange(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updateIdea(c *echo.Context) error {
+	var req dto.ChangeUpdateIdeaRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change idea payload")
+	}
+	res, err := a.s.UpdateIdea(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updateIdeaAgentEdit(c *echo.Context) error {
+	var req dto.ChangeUpdateIdeaAgentEditRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change idea agent edit payload")
+	}
+	res, err := a.s.UpdateIdeaAgentEdit(c.Request().Context(), req)
+	if err != nil {
+		return changeError(err)
+	}
+	return c.JSON(http.StatusOK, &res)
+}
+
+func (a *API) updateSpec(c *echo.Context) error {
+	var req dto.ChangeUpdateSpecRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change spec payload")
+	}
+	res, err := a.s.UpdateSpec(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}

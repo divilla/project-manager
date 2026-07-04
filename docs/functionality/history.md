@@ -8,17 +8,15 @@ Before updating or deleting a history-bearing change field, the backend records 
 
 History-bearing change data includes:
 
-- project ID
-- epic ID
-- change types
+- project_id
+- change_types
+- epic_id
 - title
-- `body`
-- `pr_body`
-- `pr_url`
-- `agent_edit`
-- `open`
-- modified time
-- delete marker
+- idea
+- spec
+- agent_edit
+- modified
+- deleted
 
 ## Epic History
 Before updating or deleting an epic, the backend records the current epic row in `epic_history`.

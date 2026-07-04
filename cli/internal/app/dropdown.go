@@ -1,13 +1,15 @@
 package app
 
 import (
+	"regexp"
+	"slices"
 	"strings"
 
-	"mch/internal/agent"
 	"mch/internal/dto"
 	"mch/internal/styles"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -162,14 +164,56 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		m.dropdown = dropdownModel{}
 		switch selected.ID {
 		case "/resume":
-			return m.openAgentIdeaEditor(false, m.agentFlow.IdeaEntryContent)
+			content, err := m.agentFlow.Workspace.ReadIdea()
+			if err != nil {
+				m.err = err.Error()
+				m.status = "agent failed"
+				return m, nil
+			}
+			return m.openAgentIdeaEditor(false, content)
 		case "/clear":
 			return m.openAgentIdeaEditor(true, "")
 		case "/cancel":
-			m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
-			m.state = ChangesListState
-			m.status = "cancel"
+			return m.discardAgentIdea(ChangesListState, "cancel", true)
+		default:
+			m.err = "unknown command"
 			return m, nil
+		}
+	}
+	if m.dropdown.kind == dropdownIdea {
+		selected := m.selectedOption()
+		previous := m.dropdown.previous
+		m.dropdown = dropdownModel{}
+		switch selected.ID {
+		case "/edit":
+			if previous == UpdateIdeaState {
+				m.state = UpdateIdeaState
+				if err := m.agentFlow.Workspace.WriteIdea(m.agentFlow.IdeaEntryContent); err != nil {
+					m.err = err.Error()
+					m.status = "agent failed"
+					return m, nil
+				}
+				return m.openPersistentEditor(UpdateIdeaState, m.agentFlow.Workspace.IdeaPath())
+			}
+			content, err := m.agentFlow.Workspace.ReadIdea()
+			if err != nil {
+				m.err = err.Error()
+				m.status = "agent failed"
+				return m, nil
+			}
+			return m.openAgentIdeaEditor(false, content)
+		case "/cancel", "/no":
+			return m.discardAgentIdea(ChangesListState, "cancel", true)
+		case "/yes":
+			projectID, err := currentProjectNumericID(m.currentProject.ID)
+			if err != nil {
+				m.err = err.Error()
+				m.status = "validation failed"
+				return m, nil
+			}
+			m.state = CreateIdeaState
+			m.status = "creating change"
+			return m, agentChangeCreateForRewriteCommand(m.client, projectID, m.agentFlow.Workspace)
 		default:
 			m.err = "unknown command"
 			return m, nil
@@ -238,22 +282,162 @@ func (m Model) dropdownView(width int) string {
 	if len(options) == 0 {
 		return styles.Default.InputBand.Width(width).Render(m.dropdown.label + ": no options")
 	}
-	lines := []string{m.dropdown.label + " " + m.dropdown.filter}
+	promptLines := make([]string, 0, len(options)+2)
+	promptLines = append(promptLines, m.dropdown.label+" "+m.dropdown.filter)
 	if m.dropdown.editField == detailEditTypes {
-		lines = append(lines, "press <space> to change")
+		promptLines = append(promptLines, "press <space> to change")
 	}
 	for i, option := range options {
 		line := m.dropdownLine(option)
 		if i == m.dropdown.highlighted {
 			line = styles.Default.Selection.Render(line)
 		}
-		lines = append(lines, line)
+		promptLines = append(promptLines, line)
 	}
-	rendered := styles.Default.InputBand.Width(width).Render(strings.Join(lines, "\n"))
+	rendered := styles.Default.InputBand.Width(width).Render(strings.Join(promptLines, "\n"))
+	if m.dropdownShowsIdeaPreview() {
+		if idea := m.renderIdeaPreview(width); strings.TrimSpace(idea) != "" {
+			rendered = strings.TrimRight(idea, "\n") + "\n\n" + rendered
+		}
+	}
 	if m.dropdown.kind == dropdownCommand {
 		rendered += "\n" + styles.Default.Background.Width(width).Render("")
 	}
 	return rendered
+}
+
+func (m Model) dropdownShowsIdeaPreview() bool {
+	return m.state == CreateIdeaState || m.state == UpdateIdeaState
+}
+
+func (m Model) renderIdeaPreview(_ int) string {
+	idea := strings.TrimSpace(m.ideaPreviewContent())
+	if idea == "" {
+		return ""
+	}
+	return strings.TrimRight(highlightMarkdownPreview(idea), "\n")
+}
+
+func (m Model) ideaPreviewContent() string {
+	if m.dropdownShowsIdeaPreview() && strings.TrimSpace(m.agentFlow.Workspace.Dir) != "" {
+		if content, err := m.agentFlow.Workspace.ReadIdea(); err == nil {
+			return content
+		}
+	}
+	return m.agentFlow.IdeaEntryContent
+}
+
+var (
+	markdownHeadingLine     = regexp.MustCompile(`^#.*`)
+	markdownHeadingRuleLine = regexp.MustCompile(`^(=+|-+)$`)
+	markdownQuoteLine       = regexp.MustCompile(`^[ \t]*>.*`)
+	markdownListMarker      = regexp.MustCompile(`^(    |\t)* ? ? ?(\*|\+|-|[0-9]+\.)( +|\t)`)
+	markdownIndentedCode    = regexp.MustCompile(`^(    |\t)+ *([^*+0-9> \t-]|[*+-]\S|[0-9][^.]).*`)
+	markdownLink            = regexp.MustCompile(`\[[^]]+\]\([^)]+\)`)
+	markdownLinkLabel       = regexp.MustCompile(`!?\[[^]]+\]`)
+	markdownStrong          = regexp.MustCompile(`\*\*[^*]+\*\*|__[^_]+__`)
+	markdownEmphasis        = regexp.MustCompile(`\*[^* \t][^*]*\*|_[^_ \t][^_]*_`)
+	markdownStrike          = regexp.MustCompile(`~~[^~]+~~`)
+	markdownInlineCode      = regexp.MustCompile("`[^`]+`")
+	markdownHTML            = regexp.MustCompile(`<!--.*-->|<[^>]+>`)
+)
+
+var markdownPreviewStyles = struct {
+	text       lipgloss.Style
+	quote      lipgloss.Style
+	listMarker lipgloss.Style
+	emphasis   lipgloss.Style
+	strong     lipgloss.Style
+	strike     lipgloss.Style
+	link       lipgloss.Style
+	linkLabel  lipgloss.Style
+	code       lipgloss.Style
+	heading    lipgloss.Style
+	html       lipgloss.Style
+}{
+	text:       lipgloss.NewStyle().Foreground(lipgloss.Color("15")),
+	quote:      lipgloss.NewStyle().Foreground(lipgloss.Color("5")),
+	listMarker: lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
+	emphasis:   lipgloss.NewStyle().Foreground(lipgloss.Color("2")),
+	strong:     lipgloss.NewStyle().Foreground(lipgloss.Color("10")),
+	strike:     lipgloss.NewStyle().Foreground(lipgloss.Color("1")),
+	link:       lipgloss.NewStyle().Foreground(lipgloss.Color("12")),
+	linkLabel:  lipgloss.NewStyle().Foreground(lipgloss.Color("13")),
+	code:       lipgloss.NewStyle().Foreground(lipgloss.Color("14")),
+	heading:    lipgloss.NewStyle().Foreground(lipgloss.Color("11")),
+	html:       lipgloss.NewStyle().Foreground(lipgloss.Color("6")),
+}
+
+func highlightMarkdownPreview(markdown string) string {
+	lines := strings.Split(markdown, "\n")
+	highlighted := make([]string, 0, len(lines))
+	inFence := false
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			highlighted = append(highlighted, markdownPreviewStyles.code.Render(line))
+			inFence = !inFence
+			continue
+		}
+		if inFence || markdownIndentedCode.MatchString(line) {
+			highlighted = append(highlighted, markdownPreviewStyles.code.Render(line))
+			continue
+		}
+		switch {
+		case markdownHeadingLine.MatchString(line), markdownHeadingRuleLine.MatchString(line):
+			highlighted = append(highlighted, markdownPreviewStyles.heading.Render(line))
+		case markdownQuoteLine.MatchString(line):
+			highlighted = append(highlighted, markdownPreviewStyles.quote.Render(line))
+		default:
+			highlighted = append(highlighted, highlightMarkdownInline(line))
+		}
+	}
+	return strings.Join(highlighted, "\n")
+}
+
+func highlightMarkdownInline(line string) string {
+	spans := make([]markdownSpan, 0, 8)
+	spans = appendMarkdownSpans(spans, line, markdownListMarker, markdownPreviewStyles.listMarker)
+	spans = appendMarkdownSpans(spans, line, markdownLink, markdownPreviewStyles.link)
+	spans = appendMarkdownSpans(spans, line, markdownLinkLabel, markdownPreviewStyles.linkLabel)
+	spans = appendMarkdownSpans(spans, line, markdownStrong, markdownPreviewStyles.strong)
+	spans = appendMarkdownSpans(spans, line, markdownEmphasis, markdownPreviewStyles.emphasis)
+	spans = appendMarkdownSpans(spans, line, markdownStrike, markdownPreviewStyles.strike)
+	spans = appendMarkdownSpans(spans, line, markdownInlineCode, markdownPreviewStyles.code)
+	spans = appendMarkdownSpans(spans, line, markdownHTML, markdownPreviewStyles.html)
+	if len(spans) == 0 {
+		return markdownPreviewStyles.text.Render(line)
+	}
+	slices.SortFunc(spans, func(a, b markdownSpan) int {
+		if a.start != b.start {
+			return a.start - b.start
+		}
+		return b.end - a.end
+	})
+	var b strings.Builder
+	pos := 0
+	for _, span := range spans {
+		if span.start < pos {
+			continue
+		}
+		b.WriteString(markdownPreviewStyles.text.Render(line[pos:span.start]))
+		b.WriteString(span.style.Render(line[span.start:span.end]))
+		pos = span.end
+	}
+	b.WriteString(markdownPreviewStyles.text.Render(line[pos:]))
+	return b.String()
+}
+
+type markdownSpan struct {
+	start int
+	end   int
+	style lipgloss.Style
+}
+
+func appendMarkdownSpans(spans []markdownSpan, line string, expression *regexp.Regexp, style lipgloss.Style) []markdownSpan {
+	for _, index := range expression.FindAllStringIndex(line, -1) {
+		spans = append(spans, markdownSpan{start: index[0], end: index[1], style: style})
+	}
+	return spans
 }
 
 func (m Model) dropdownLine(option dto.Option) string {

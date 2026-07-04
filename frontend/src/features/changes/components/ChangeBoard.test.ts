@@ -63,4 +63,25 @@ describe('ChangeBoard', () => {
     expect(wrapper.emitted('move-change')).toEqual([[backlogChange, 'review']]);
     expect(wrapper.emitted('delete-change')).toEqual([[backlogChange]]);
   });
+
+  it('renders a blank ref for unreferenced changes', () => {
+    const unreferencedChange = changeFixture({ id: 1, ref: null, title: 'Unreferenced change', change_phase: 'backlog' });
+    const wrapper = mount(ChangeBoard, {
+      props: {
+        hasSelectedProject: true,
+        boardPhases: [{ slug: 'backlog', priority: 1 }],
+        changesByPhase: {
+          backlog: [unreferencedChange],
+        },
+        phaseOptions: [{ label: 'backlog', value: 'backlog' }],
+      },
+      global: {
+        stubs: quasarStubs,
+      },
+    });
+
+    expect(wrapper.text()).toContain('Unreferenced change');
+    expect(wrapper.text()).not.toContain('#null');
+    expect(wrapper.text()).not.toContain('id:');
+  });
 });

@@ -18,7 +18,7 @@ func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 	_, err = service.GetChange(context.Background(), dto.ChangeIDRequest{})
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{
-		ProjectID: 1, Title: "   ", ChangeTypes: []string{"feature"},
+		ProjectID: 1, Title: "   ",
 	})
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdateTitle(context.Background(), dto.ChangeUpdateTitleRequest{ID: 2, Title: "   "})
@@ -27,11 +27,15 @@ func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdateAgentEdit(context.Background(), dto.ChangeUpdateAgentEditRequest{ID: 2})
 	require.ErrorIs(t, err, ErrInvalidInput)
+	_, err = service.UpdateIdeaAgentEdit(context.Background(), dto.ChangeUpdateIdeaAgentEditRequest{ID: 2, Idea: "   "})
+	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdateOpen(context.Background(), dto.ChangeUpdateOpenRequest{ID: 2})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: "javascript:alert(1)"})
+	badURL := "javascript:alert(1)"
+	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: &badURL})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: "https:///missing-host"})
+	missingHostURL := "https:///missing-host"
+	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: &missingHostURL})
 	require.ErrorIs(t, err, ErrInvalidInput)
 	err = service.DeleteChange(context.Background(), dto.ChangeIDRequest{})
 	require.ErrorIs(t, err, ErrInvalidInput)
@@ -49,14 +53,10 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, repo.id)
 
-	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{
-		ProjectID: 1, Title: " Change Title ", Body: " Body ",
-		ChangeTypes: []string{" feature ", "feature", " fix "}, EpicID: &epicID,
-	})
+	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, Title: " Change Title ", Idea: " Idea "})
 	require.NoError(t, err)
 	assert.Equal(t, "Change Title", repo.createReq.Title)
-	assert.Equal(t, "Body", repo.createReq.Body)
-	assert.Equal(t, []string{"feature", "fix"}, repo.createReq.ChangeTypes)
+	assert.Equal(t, "Idea", repo.createReq.Idea)
 
 	_, err = service.UpdateChangeTypes(context.Background(), dto.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{" fix ", "fix "}})
 	require.NoError(t, err)
@@ -64,18 +64,35 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	_, err = service.UpdateTitle(context.Background(), dto.ChangeUpdateTitleRequest{ID: 2, Title: " Focused Title "})
 	require.NoError(t, err)
 	assert.Equal(t, "Focused Title", repo.updateTitleReq.Title)
-	_, err = service.UpdateBody(context.Background(), dto.ChangeUpdateBodyRequest{ID: 2, Body: " Focused Body "})
+	_, err = service.UpdateIdea(context.Background(), dto.ChangeUpdateIdeaRequest{ID: 2, Idea: " Focused Idea "})
 	require.NoError(t, err)
-	assert.Equal(t, "Focused Body", repo.updateBodyReq.Body)
-	_, err = service.UpdatePRBody(context.Background(), dto.ChangeUpdatePRBodyRequest{ID: 2, PRBody: " PR Body "})
+	assert.Equal(t, "Focused Idea", repo.updateIdeaReq.Idea)
+	_, err = service.UpdateIdeaAgentEdit(context.Background(), dto.ChangeUpdateIdeaAgentEditRequest{ID: 2, Idea: " Agent Idea "})
 	require.NoError(t, err)
-	assert.Equal(t, "PR Body", repo.updatePRBodyReq.PRBody)
-	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: " https://example.test/pr "})
+	assert.Equal(t, "Agent Idea", repo.updateIdeaAgentEditReq.Idea)
+	spec := " Focused Spec "
+	_, err = service.UpdateSpec(context.Background(), dto.ChangeUpdateSpecRequest{ID: 2, Spec: &spec})
 	require.NoError(t, err)
-	assert.Equal(t, "https://example.test/pr", repo.updatePRUrlReq.PRUrl)
-	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: ""})
+	require.NotNil(t, repo.updateSpecReq.Spec)
+	assert.Equal(t, "Focused Spec", *repo.updateSpecReq.Spec)
+	_, err = service.UpdateSpec(context.Background(), dto.ChangeUpdateSpecRequest{ID: 2})
 	require.NoError(t, err)
-	assert.Empty(t, repo.updatePRUrlReq.PRUrl)
+	assert.Nil(t, repo.updateSpecReq.Spec)
+	prBody := " PR Body "
+	_, err = service.UpdatePRBody(context.Background(), dto.ChangeUpdatePRBodyRequest{ID: 2, PRBody: &prBody})
+	require.NoError(t, err)
+	require.NotNil(t, repo.updatePRBodyReq.PRBody)
+	assert.Equal(t, "PR Body", *repo.updatePRBodyReq.PRBody)
+	prURL := " https://example.test/pr "
+	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: &prURL})
+	require.NoError(t, err)
+	require.NotNil(t, repo.updatePRUrlReq.PRUrl)
+	assert.Equal(t, "https://example.test/pr", *repo.updatePRUrlReq.PRUrl)
+	blankPRURL := ""
+	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: &blankPRURL})
+	require.NoError(t, err)
+	require.NotNil(t, repo.updatePRUrlReq.PRUrl)
+	assert.Empty(t, *repo.updatePRUrlReq.PRUrl)
 	agentEdit := true
 	_, err = service.UpdateAgentEdit(context.Background(), dto.ChangeUpdateAgentEditRequest{ID: 2, AgentEdit: &agentEdit})
 	require.NoError(t, err)
@@ -98,34 +115,35 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	assert.Equal(t, 2, repo.id)
 }
 
-func TestServiceRendersChangeBodyHTML(t *testing.T) {
+func TestServiceRendersChangeSpecHTML(t *testing.T) {
 	repo := &fakeChangeRepository{}
 	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
 	detail, err := service.GetChange(context.Background(), dto.ChangeIDRequest{ID: 2})
 	require.NoError(t, err)
-	assert.Equal(t, "clean(parsed(**Change**))", detail.Change.HTML)
+	require.NotNil(t, detail.Change.SpecHTML)
+	assert.Equal(t, "clean(parsed(**Change**))", *detail.Change.SpecHTML)
 }
 
-func TestServiceRendersBatchChangeBodies(t *testing.T) {
+func TestServiceRendersBatchChangeSpecs(t *testing.T) {
 	repo := &fakeChangeRepository{}
 	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
-	response, err := service.RenderedBodies(context.Background(), dto.ChangeRenderedBodiesRequest{
+	response, err := service.RenderedArtifacts(context.Background(), dto.ChangeRenderedArtifactsRequest{
 		IDs: []int{3, 2, 3},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, []int{3, 2}, repo.bodyIDs)
-	require.Equal(t, 2, len(response.Bodies))
-	assert.Equal(t, 3, response.Bodies[0].ID)
-	assert.Equal(t, "clean(parsed(**Change 3**))", response.Bodies[0].HTML)
-	assert.Equal(t, 2, response.Bodies[1].ID)
-	assert.Equal(t, "clean(parsed(**Change 2**))", response.Bodies[1].HTML)
+	assert.Equal(t, []int{3, 2}, repo.specIDs)
+	require.Equal(t, 2, len(response.Artifacts))
+	assert.Equal(t, 3, response.Artifacts[0].ID)
+	assert.Equal(t, "clean(parsed(**Change 3**))", response.Artifacts[0].SpecHTML)
+	assert.Equal(t, 2, response.Artifacts[1].ID)
+	assert.Equal(t, "clean(parsed(**Change 2**))", response.Artifacts[1].SpecHTML)
 }
 
-func TestServiceRejectsInvalidRenderedBodyIDs(t *testing.T) {
+func TestServiceRejectsInvalidRenderedSpecIDs(t *testing.T) {
 	service := &Service{}
-	_, err := service.RenderedBodies(context.Background(), dto.ChangeRenderedBodiesRequest{IDs: []int{1, 0}})
+	_, err := service.RenderedArtifacts(context.Background(), dto.ChangeRenderedArtifactsRequest{IDs: []int{1, 0}})
 	require.ErrorIs(t, err, ErrInvalidInput)
 }
 
@@ -142,18 +160,20 @@ func (fakeMarkdownSanitizer) Parse(source string) string {
 }
 
 type fakeChangeRepository struct {
-	projectID          int
-	id                 int
-	phase              string
-	open               *bool
-	bodyIDs            []int
-	createReq          dto.ChangeCreateRequest
-	updateTypesReq     dto.ChangeUpdateChangeTypesRequest
-	updateTitleReq     dto.ChangeUpdateTitleRequest
-	updateBodyReq      dto.ChangeUpdateBodyRequest
-	updatePRBodyReq    dto.ChangeUpdatePRBodyRequest
-	updatePRUrlReq     dto.ChangeUpdatePRUrlRequest
-	updateAgentEditReq dto.ChangeUpdateAgentEditRequest
+	projectID              int
+	id                     int
+	phase                  string
+	open                   *bool
+	specIDs                []int
+	createReq              dto.ChangeCreateRequest
+	updateTypesReq         dto.ChangeUpdateChangeTypesRequest
+	updateTitleReq         dto.ChangeUpdateTitleRequest
+	updateIdeaReq          dto.ChangeUpdateIdeaRequest
+	updateIdeaAgentEditReq dto.ChangeUpdateIdeaAgentEditRequest
+	updateSpecReq          dto.ChangeUpdateSpecRequest
+	updatePRBodyReq        dto.ChangeUpdatePRBodyRequest
+	updatePRUrlReq         dto.ChangeUpdatePRUrlRequest
+	updateAgentEditReq     dto.ChangeUpdateAgentEditRequest
 }
 
 func (r *fakeChangeRepository) List(_ context.Context, projectID int) ([]dto.ChangeListItem, error) {
@@ -163,21 +183,23 @@ func (r *fakeChangeRepository) List(_ context.Context, projectID int) ([]dto.Cha
 
 func (r *fakeChangeRepository) Get(_ context.Context, id int) (dto.ChangeDetail, error) {
 	r.id = id
-	return dto.ChangeDetail{Change: dto.Change{ID: id, Body: "**Change**"}}, nil
+	spec := "**Change**"
+	return dto.ChangeDetail{Change: dto.Change{ID: id, Spec: &spec}}, nil
 }
 
-func (r *fakeChangeRepository) Bodies(_ context.Context, ids []int) ([]dto.Change, error) {
-	r.bodyIDs = ids
+func (r *fakeChangeRepository) Artifacts(_ context.Context, ids []int) ([]dto.Change, error) {
+	r.specIDs = ids
 	changes := make([]dto.Change, 0, len(ids))
 	for _, id := range ids {
-		changes = append(changes, dto.Change{ID: id, Body: "**Change " + strconv.Itoa(id) + "**"})
+		spec := "**Change " + strconv.Itoa(id) + "**"
+		changes = append(changes, dto.Change{ID: id, Spec: &spec})
 	}
 	return changes, nil
 }
 
 func (r *fakeChangeRepository) Create(_ context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	r.createReq = req
-	return dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, Body: req.Body}, nil
+	return dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, Idea: req.Idea}, nil
 }
 
 func (r *fakeChangeRepository) UpdateChangeTypes(_ context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {
@@ -190,9 +212,19 @@ func (r *fakeChangeRepository) UpdateTitle(_ context.Context, req dto.ChangeUpda
 	return dto.Change{ID: req.ID, Title: req.Title}, nil
 }
 
-func (r *fakeChangeRepository) UpdateBody(_ context.Context, req dto.ChangeUpdateBodyRequest) (dto.Change, error) {
-	r.updateBodyReq = req
-	return dto.Change{ID: req.ID, Body: req.Body}, nil
+func (r *fakeChangeRepository) UpdateIdea(_ context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error) {
+	r.updateIdeaReq = req
+	return dto.Change{ID: req.ID, Idea: req.Idea}, nil
+}
+
+func (r *fakeChangeRepository) UpdateIdeaAgentEdit(_ context.Context, req dto.ChangeUpdateIdeaAgentEditRequest) (dto.Change, error) {
+	r.updateIdeaAgentEditReq = req
+	return dto.Change{ID: req.ID, Idea: req.Idea, AgentEdit: true}, nil
+}
+
+func (r *fakeChangeRepository) UpdateSpec(_ context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error) {
+	r.updateSpecReq = req
+	return dto.Change{ID: req.ID, Spec: req.Spec}, nil
 }
 
 func (r *fakeChangeRepository) UpdatePRBody(_ context.Context, req dto.ChangeUpdatePRBodyRequest) (dto.Change, error) {
@@ -228,4 +260,9 @@ func (r *fakeChangeRepository) UpdateOpen(_ context.Context, req dto.ChangeUpdat
 func (r *fakeChangeRepository) Delete(_ context.Context, req dto.ChangeIDRequest) error {
 	r.id = req.ID
 	return nil
+}
+
+func (r *fakeChangeRepository) Reference(_ context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
+	r.id = req.ID
+	return dto.Change{ID: req.ID}, nil
 }

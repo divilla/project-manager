@@ -15,12 +15,12 @@ import (
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
-func TestDetailsViewSeparatesBodyAndTestCases(t *testing.T) {
+func TestDetailsViewSeparatesSpecAndTestCases(t *testing.T) {
 	model := Model{}.WithDetail(dto.Change{
 		ID:    "12",
 		Ref:   "3",
 		Title: "Backend Change",
-		Body:  "Body text",
+		Spec:  "Spec text",
 		TestCases: []dto.TestCase{
 			{ID: "31", Scenario: "first scenario", Done: true},
 		},
@@ -28,14 +28,14 @@ func TestDetailsViewSeparatesBodyAndTestCases(t *testing.T) {
 
 	view := stripANSI(DetailsView(model, 120, 20))
 
-	bodyIndex := strings.Index(view, "Body │ Body text")
-	dividerIndex := strings.Index(view[bodyIndex:], "───────────┼")
+	specIndex := strings.Index(view, "Spec │ Spec text")
+	dividerIndex := strings.Index(view[specIndex:], "───────────┼")
 	testCaseIndex := strings.Index(view, "✅ │ first scenario (#31)")
-	require.NotEqual(t, -1, bodyIndex)
+	require.NotEqual(t, -1, specIndex)
 	require.NotEqual(t, -1, dividerIndex)
 	require.NotEqual(t, -1, testCaseIndex)
-	assert.Less(t, bodyIndex, bodyIndex+dividerIndex)
-	assert.Less(t, bodyIndex+dividerIndex, testCaseIndex)
+	assert.Less(t, specIndex, specIndex+dividerIndex)
+	assert.Less(t, specIndex+dividerIndex, testCaseIndex)
 }
 
 func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
@@ -43,7 +43,7 @@ func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
 		ID:      "12",
 		Ref:     "3",
 		Title:   "Backend Change",
-		Body:    "Body text",
+		Spec:    "Spec text",
 		Open:    true,
 		Created: "2026-06-29T08:15:00Z",
 		TestCases: []dto.TestCase{
@@ -58,6 +58,52 @@ func TestDetailsViewEmojiRowsDoNotOverflowSelectionWidth(t *testing.T) {
 			assert.LessOrEqual(t, lipgloss.Width(line), 120)
 		}
 	}
+}
+
+func TestDetailsViewRendersUnassignedRefAsBlank(t *testing.T) {
+	model := Model{}.WithDetail(dto.Change{
+		ID:    "201",
+		Title: "Unreferenced Change",
+	})
+
+	view := stripANSI(DetailsView(model, 120, 20))
+
+	assert.Contains(t, view, "Ref │")
+	assert.NotContains(t, view, "id:201")
+	assert.NotContains(t, view, "Ref │ ?")
+}
+
+func TestMoveDetailSelectionKeepsVisibleRowsAnchored(t *testing.T) {
+	model := Model{}.WithDetail(dto.Change{
+		ID:          "12",
+		Ref:         "201",
+		Slug:        "201-change",
+		ChangePhase: "backlog",
+		Title:       "Backend Change",
+		Spec:        "Spec text",
+	})
+
+	model = model.MoveDetailSelection(2, 4, 120)
+
+	assert.Equal(t, 2, model.DetailSelected)
+	assert.Equal(t, 0, model.DetailOffset)
+}
+
+func TestMoveDetailSelectionScrollsOnlyEnoughToRevealBottom(t *testing.T) {
+	model := Model{}.WithDetail(dto.Change{
+		ID:          "12",
+		Ref:         "201",
+		Slug:        "201-change",
+		ChangePhase: "backlog",
+		EpicName:    "CLI",
+		Title:       "Backend Change",
+		Spec:        "Spec text",
+	})
+
+	model = model.MoveDetailSelection(3, 3, 120)
+
+	assert.Equal(t, 3, model.DetailSelected)
+	assert.Equal(t, 1, model.DetailOffset)
 }
 
 func TestPhaseStyleUsesOptionColorOrGreyFallback(t *testing.T) {

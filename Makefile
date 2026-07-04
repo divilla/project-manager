@@ -1,4 +1,6 @@
-.PHONY: init run
+DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/changes
+
+.PHONY: init run db
 
 init:
 	@go install golang.org/x/lint/golint@latest
@@ -16,3 +18,8 @@ run:
 		echo "Backend:  http://localhost:8080"; \
 		echo "Frontend: http://localhost:8000"; \
 		wait $$backend_pid $$frontend_pid
+
+db:
+	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f db/init.sql
+	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f db/seed.sql
+	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f db/seed-demo.sql

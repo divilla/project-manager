@@ -27,4 +27,6 @@ Change detail views show linked test cases in numeric ID order. Test case create
 Acceptance criteria define the user-visible or system-visible outcomes required for a change to be considered done. They should be written as testable statements, not vague goals.
 
 ## Planning Output
-LLM-generated planning output must produce a standard Change file with concrete acceptance criteria and QA test cases. The user reviews and edits the idea or generated Change before anything is saved.
+LLM-assisted planning first rewrites the user's idea. The user confirms creation before the rewritten idea is saved as a Change.
+
+Spec generation is a separate flow. Until that flow is implemented, choosing the temporary spec-writing prompt should leave the saved idea intact and route to Change details without creating local-only spec content.

@@ -10,14 +10,14 @@ import (
 // ParsedChange stores the backend fields parsed from generated Change markdown.
 type ParsedChange struct {
 	Title       string
-	Body        string
+	Spec        string
 	ChangeTypes []string
 	TestCases   []string
 }
 
 // ParseGeneratedChange extracts the title and Types metadata from a generated Change file.
-func ParseGeneratedChange(body string, validTypes []string) (ParsedChange, error) {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
+func ParseGeneratedChange(spec string, validTypes []string) (ParsedChange, error) {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	titleIndex := firstNonBlankLine(lines, 0)
 	if titleIndex < 0 {
@@ -55,12 +55,12 @@ func ParseGeneratedChange(body string, validTypes []string) (ParsedChange, error
 		}
 	}
 
-	return ParsedChange{Title: title, Body: normalized, ChangeTypes: types, TestCases: ExtractQATestCases(normalized)}, nil
+	return ParsedChange{Title: title, Spec: normalized, ChangeTypes: types, TestCases: ExtractQATestCases(normalized)}, nil
 }
 
 // ExtractQATestCases extracts QA scenarios listed under the generated Change QA section.
-func ExtractQATestCases(body string) []string {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(body, "\r\n", "\n"), "\r", "\n")
+func ExtractQATestCases(spec string) []string {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	sectionIndex := -1
 	for i, line := range lines {

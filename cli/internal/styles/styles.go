@@ -23,9 +23,7 @@ type Tokens struct {
 var Default = Tokens{
 	Background: lipgloss.NewStyle().
 		Background(lipgloss.Color("235")),
-	Surface: lipgloss.NewStyle().
-		Background(lipgloss.Color("235")).
-		Foreground(lipgloss.Color("252")),
+	Surface: lipgloss.NewStyle(),
 	Foreground: lipgloss.NewStyle().
 		Foreground(lipgloss.Color("252")),
 	Muted: lipgloss.NewStyle().

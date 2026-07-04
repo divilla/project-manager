@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	"mch/internal/agent"
+	"mch/internal/changes"
 	"mch/internal/dto"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -41,7 +41,7 @@ func (m Model) beginAgentNewChange() (tea.Model, tea.Cmd) {
 			return m.openAgentIdeaEditor(false, "")
 		}
 		m.agentFlow.IdeaEntryContent = content
-		m.openDropdown(ChangesListState, dropdownAgent, ChangesListState, ChangesListState, "Resume idea?", []dto.Option{
+		m.openDropdown(CreateIdeaState, dropdownAgent, ChangesListState, CreateIdeaState, "Resume idea?", []dto.Option{
 			{ID: "/resume", Label: "/resume"},
 			{ID: "/clear", Label: "/clear"},
 			{ID: "/cancel", Label: "/cancel"},
@@ -61,9 +61,9 @@ func (m Model) openAgentIdeaEditor(replace bool, initialContent string) (tea.Mod
 	}
 	m.agentFlow.IdeaEntryContent = initialContent
 	m.agentFlow.Stage = agent.StageIdeaEntry
-	m.state = ChangesListState
+	m.state = CreateIdeaState
 	m.status = "agent idea"
-	return m.openPersistentEditor(ChangesListState, m.agentFlow.Workspace.IdeaPath())
+	return m.openPersistentEditor(CreateIdeaState, m.agentFlow.Workspace.IdeaPath())
 }
 
 func (m Model) handleAgentEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
@@ -74,28 +74,79 @@ func (m Model) handleAgentEditorFinished(msg editorFinishedMsg) (tea.Model, tea.
 	}
 	switch m.agentFlow.Stage {
 	case agent.StageIdeaEntry:
-		if msg.content == m.agentFlow.IdeaEntryContent && strings.TrimSpace(m.agentFlow.IdeaEntryContent) != "" {
-			m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
-			m.status = string(ChangesListState)
+		if err := m.agentFlow.Workspace.WriteIdea(msg.content); err != nil {
+			m.err = err.Error()
+			m.status = "agent failed"
 			return m, tea.ClearScreen
 		}
-		if strings.TrimSpace(msg.content) == "" {
-			m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
-			m.status = string(ChangesListState)
+		if _, err := changes.ParseIdeaStructure(msg.content); err != nil {
+			m.err = "error parsing title"
+			m.agentFlow.IdeaEntryContent = msg.content
+			m.openDropdown(CreateIdeaState, dropdownIdea, CreateIdeaState, CreateIdeaState, "error parsing title:", []dto.Option{
+				{ID: "/edit", Label: "/edit"},
+				{ID: "/cancel", Label: "/cancel"},
+			}, false)
 			return m, tea.ClearScreen
 		}
-		return m.startAgentRewrite("")
-	case agent.StageReview:
-		if msg.content != m.agentFlow.ReviewContent {
-			return m.startAgentRewrite(m.agentFlow.SessionID)
-		}
-		return m.openAgentInit()
+		m.agentFlow.IdeaEntryContent = msg.content
+		m.agentFlow.Stage = agent.StageCreateConfirmation
+		m.openDropdown(CreateIdeaState, dropdownIdea, CreateIdeaState, CreateIdeaState, "Create Change?", []dto.Option{
+			{ID: "/yes", Label: "/yes"},
+			{ID: "/no", Label: "/no"},
+		}, false)
+		return m, tea.ClearScreen
 	default:
 		return m, tea.ClearScreen
 	}
 }
 
+func (m Model) handleUpdateIdeaEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.err = msg.err.Error()
+		m.status = "editor failed"
+		return m, tea.ClearScreen
+	}
+	if err := m.agentFlow.Workspace.WriteIdea(msg.content); err != nil {
+		m.err = err.Error()
+		m.status = "agent failed"
+		return m, tea.ClearScreen
+	}
+	m.agentFlow.IdeaEntryContent = msg.content
+	if _, err := changes.ParseIdeaStructure(msg.content); err != nil {
+		m.err = "error parsing title"
+		m.openDropdown(UpdateIdeaState, dropdownIdea, UpdateIdeaState, UpdateIdeaState, "error parsing title:", []dto.Option{
+			{ID: "/edit", Label: "/edit"},
+			{ID: "/cancel", Label: "/cancel"},
+		}, false)
+		return m, tea.ClearScreen
+	}
+	id, err := changeNumericID(m.changeList.Detail)
+	if err != nil {
+		m.err = err.Error()
+		m.status = "validation failed"
+		return m, tea.ClearScreen
+	}
+	m.state = UpdateIdeaState
+	m.status = "saving idea"
+	return m, tea.Sequence(tea.ClearScreen, changeIdeaUpdateForRewriteCommand(m.client, id, msg.content))
+}
+
+func (m Model) discardAgentIdea(target State, status string, clear bool) (tea.Model, tea.Cmd) {
+	if clear {
+		if err := m.agentFlow.Workspace.RemoveIdea(); err != nil {
+			m.err = err.Error()
+			m.status = "agent failed"
+			return m, nil
+		}
+	}
+	m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+	m.state = target
+	m.status = status
+	return m, nil
+}
+
 func (m Model) startAgentRewrite(sessionID string) (tea.Model, tea.Cmd) {
+	m.state = RewriteIdeaState
 	m.agentFlow.Stage = agent.StageAIRunning
 	m.agentFlow.CommandOutput = ""
 	m.agentElapsed = 0
@@ -126,16 +177,47 @@ func (m Model) handleAgentRewriteFinished(msg agentRewriteFinishedMsg) (tea.Mode
 	}
 	m.agentFlow.SessionID = msg.result.SessionID
 	m.agentFlow.RepoRoot = msg.result.RepoRoot
-	content, err := m.agentFlow.Workspace.ReadIdea()
+	id, err := changeNumericID(m.changeList.Detail)
 	if err != nil {
 		m.err = err.Error()
+		m.status = "validation failed"
+		return m, nil
+	}
+	m.status = "saving idea"
+	return m, changeIdeaAgentEditSaveCommand(m.client, id, m.agentFlow.Workspace)
+}
+
+//lint:ignore U1000 preserved for the future Write Spec with Agent flow.
+func (m Model) openAgentSpecInit() (tea.Model, tea.Cmd) {
+	m.state = RewriteIdeaState
+	m.agentFlow.Stage = agent.StageAIRunning
+	m.agentFlow.CommandOutput = ""
+	m.agentElapsed = 0
+	m.status = string(agent.StageAIRunning)
+	return m, tea.Batch(
+		tea.ClearScreen,
+		agentSpecInitCommand(m.agentRunner, m.agentFlow.RepoRoot, m.agentFlow.SessionID),
+		m.agentSpinner.Tick,
+		agentElapsedTick(),
+	)
+}
+
+func (m Model) handleAgentInitFinished(msg agentInitFinishedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.agentFlow.Stage = agent.StageAIRunning
+		m.err = msg.err.Error()
 		m.status = "agent failed"
 		return m, nil
 	}
-	m.agentFlow.ReviewContent = content
-	m.agentFlow.Stage = agent.StageReview
-	m.status = "agent review"
-	return m.openPersistentEditor(ChangesListState, m.agentFlow.Workspace.IdeaPath())
+	m.agentFlow.RepoRoot = msg.repoRoot
+	projectID, err := currentProjectNumericID(m.currentProject.ID)
+	if err != nil {
+		m.err = err.Error()
+		m.status = "validation failed"
+		return m, nil
+	}
+	m.status = "saving change"
+	return m, agentSpecCreateCommand(m.client, projectID, m.agentFlow.Workspace, optionIDs(m.optionCatalog.types))
 }
 
 func (m Model) handleAgentCommandOutput(msg agentCommandOutputMsg) (tea.Model, tea.Cmd) {
@@ -149,36 +231,6 @@ func (m Model) handleAgentCommandOutput(msg agentCommandOutputMsg) (tea.Model, t
 		return m, nil
 	}
 	return m, agentCommandOutputCommand(msg.updates)
-}
-
-func (m Model) openAgentInit() (tea.Model, tea.Cmd) {
-	if m.agentRunner == nil {
-		m.agentRunner = agent.NewProcessRunner()
-	}
-	m.agentFlow.Stage = agent.StageAIRunning
-	m.agentFlow.CommandOutput = ""
-	m.agentElapsed = 0
-	m.status = string(agent.StageAIRunning)
-	cmd := tea.ExecProcess(m.agentRunner.InitCommand(m.agentFlow.RepoRoot, m.agentFlow.SessionID), func(err error) tea.Msg {
-		return agentInitFinishedMsg{err: err}
-	})
-	return m, tea.Batch(cmd, m.agentSpinner.Tick, agentElapsedTick())
-}
-
-func (m Model) handleAgentInitFinished(msg agentInitFinishedMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		m.err = msg.err.Error()
-		m.status = "agent failed"
-		return m, tea.ClearScreen
-	}
-	projectID, err := currentProjectNumericID(m.currentProject.ID)
-	if err != nil {
-		m.err = err.Error()
-		m.status = "validation failed"
-		return m, tea.ClearScreen
-	}
-	m.status = "saving"
-	return m, tea.Sequence(tea.ClearScreen, agentChangeCreateCommand(m.client, projectID, m.agentFlow.Workspace, optionIDs(m.optionCatalog.types)))
 }
 
 func agentRewriteCommand(runner agent.Runner, workspace agent.Workspace, sessionID string, updates chan<- string) tea.Cmd {
@@ -202,6 +254,27 @@ func agentRewriteCommand(runner agent.Runner, workspace agent.Workspace, session
 	}
 }
 
+//lint:ignore U1000 preserved for the future Write Spec with Agent flow.
+func agentSpecInitCommand(runner agent.Runner, repoRoot string, sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		if runner == nil {
+			runner = agent.NewProcessRunner()
+		}
+		if strings.TrimSpace(repoRoot) == "" {
+			var err error
+			repoRoot, err = runner.ResolveRepoRoot(context.Background())
+			if err != nil {
+				return agentInitFinishedMsg{err: err}
+			}
+		}
+		cmd := runner.InitCommand(repoRoot, sessionID)
+		if err := cmd.Run(); err != nil {
+			return agentInitFinishedMsg{repoRoot: repoRoot, err: err}
+		}
+		return agentInitFinishedMsg{repoRoot: repoRoot}
+	}
+}
+
 func agentCommandOutputCommand(updates <-chan string) tea.Cmd {
 	return func() tea.Msg {
 		output, ok := <-updates
@@ -210,6 +283,58 @@ func agentCommandOutputCommand(updates <-chan string) tea.Cmd {
 		}
 		return agentCommandOutputMsg{output: output, updates: updates}
 	}
+}
+
+func agentSpecCreateCommand(client appClient, projectID int, workspace agent.Workspace, validTypes []string) tea.Cmd {
+	return func() tea.Msg {
+		spec, err := workspace.ReadGenerated()
+		if err != nil {
+			return agentSpecCreatedMsg{err: err}
+		}
+		parsed, err := agent.ParseGeneratedChange(spec, validTypes)
+		if err != nil {
+			return agentSpecCreatedMsg{err: err}
+		}
+		created, err := client.CreateChange(dto.ChangeCreateInput{
+			ProjectID: projectID,
+			Title:     parsed.Title,
+			Idea:      parsed.Spec,
+		})
+		if err != nil {
+			return agentSpecCreatedMsg{err: err}
+		}
+		id, err := changeNumericID(created)
+		if err != nil {
+			return agentSpecCreatedMsg{err: err}
+		}
+		if _, err := client.UpdateChangeSpec(id, &parsed.Spec); err != nil {
+			return agentSpecCreatedMsg{err: err}
+		}
+		if _, err := client.UpdateChangeTypes(id, parsed.ChangeTypes); err != nil {
+			return agentSpecCreatedMsg{err: err}
+		}
+		for _, scenario := range parsed.TestCases {
+			if _, err := client.CreateTestCase(id, scenario); err != nil {
+				return agentSpecCreatedMsg{err: err}
+			}
+		}
+		change, err := client.GetChange(id)
+		if err != nil {
+			return agentSpecCreatedMsg{change: created, reloadErr: err}
+		}
+		return agentSpecCreatedMsg{change: change}
+	}
+}
+
+func optionIDs(options []dto.Option) []string {
+	ids := make([]string, 0, len(options))
+	for _, option := range options {
+		id := strings.TrimSpace(option.ID)
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 func agentRewriteDisplayOutput(result agent.RewriteResult) string {
@@ -247,38 +372,58 @@ func agentElapsedTick() tea.Cmd {
 	})
 }
 
-func agentChangeCreateCommand(client appClient, projectID int, workspace agent.Workspace, validTypes []string) tea.Cmd {
+func agentChangeCreateForRewriteCommand(client appClient, projectID int, workspace agent.Workspace) tea.Cmd {
 	return func() tea.Msg {
-		body, err := workspace.ReadGenerated()
+		idea, err := workspace.ReadIdea()
 		if err != nil {
-			return changeSavedMsg{source: ChangesListState, err: err}
+			return changeCreatedForRewriteMsg{err: err}
 		}
-		parsed, err := agent.ParseGeneratedChange(body, validTypes)
+		parsed, err := changes.ParseIdeaStructure(idea)
 		if err != nil {
-			return changeSavedMsg{source: ChangesListState, err: err}
+			return changeCreatedForRewriteMsg{err: err}
 		}
 		created, err := client.CreateChange(dto.ChangeCreateInput{
-			ProjectID:   projectID,
-			Title:       parsed.Title,
-			Body:        parsed.Body,
-			ChangeTypes: parsed.ChangeTypes,
+			ProjectID: projectID,
+			Title:     parsed.Title,
+			Idea:      parsed.Idea,
 		})
 		if err != nil {
-			return changeSavedMsg{source: ChangesListState, err: err}
+			return changeCreatedForRewriteMsg{err: err}
 		}
-		id, err := changeNumericID(created)
+		if _, err := changeNumericID(created); err != nil {
+			return changeCreatedForRewriteMsg{err: err}
+		}
+		return changeCreatedForRewriteMsg{change: created}
+	}
+}
+
+func changeIdeaUpdateForRewriteCommand(client appClient, id int, idea string) tea.Cmd {
+	return func() tea.Msg {
+		change, err := client.UpdateChangeIdea(id, idea)
 		if err != nil {
-			return changeSavedMsg{source: ChangesListState, err: err}
+			return changeIdeaUpdatedForRewriteMsg{err: err}
 		}
-		for i, testCase := range parsed.TestCases {
-			if _, err := client.CreateTestCase(id, testCase); err != nil {
-				return changeSavedMsg{source: ChangesListState, err: fmt.Errorf("create QA test case %d: %w", i+1, err)}
-			}
+		return changeIdeaUpdatedForRewriteMsg{change: change}
+	}
+}
+
+func changeIdeaAgentEditSaveCommand(client appClient, id int, workspace agent.Workspace) tea.Cmd {
+	return func() tea.Msg {
+		idea, err := workspace.ReadIdea()
+		if err != nil {
+			return changeIdeaAgentEditSavedMsg{err: err}
+		}
+		updated, err := client.UpdateChangeIdeaAgentEdit(id, idea)
+		if err != nil {
+			return changeIdeaAgentEditSavedMsg{err: err}
+		}
+		if err := workspace.RemoveIdea(); err != nil {
+			return changeIdeaAgentEditSavedMsg{change: updated, err: err}
 		}
 		change, err := client.GetChange(id)
 		if err != nil {
-			return changeSavedMsg{source: ChangesListState, err: err}
+			return changeIdeaAgentEditSavedMsg{change: updated, reloadErr: err}
 		}
-		return changeSavedMsg{source: ChangesListState, change: change}
+		return changeIdeaAgentEditSavedMsg{change: change}
 	}
 }

@@ -45,6 +45,11 @@ func NewClient(t *testing.T) *Client {
 	return client
 }
 
+// BaseURL returns the API base URL used by the test client.
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 func apiTestBaseURLFromEnv() string {
 	if value := os.Getenv("API_TEST_BASE_URL"); value != "" {
 		return value

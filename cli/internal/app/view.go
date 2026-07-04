@@ -24,10 +24,10 @@ func (m Model) View() string {
 		lines = append(lines, "")
 		lines = append(lines, projects.TableView(m.projectList, width))
 	}
-	if m.state == ChangesListState && !m.hasDropdown() {
+	if (m.state == ChangesListState || m.state == RewriteIdeaState) && !m.hasDropdown() {
 		if m.agentFlow.Stage == agent.StageAIRunning {
 			lines = append(lines, "", m.agentRunningView(width))
-		} else {
+		} else if m.state == ChangesListState {
 			table := changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
 			lines = append(lines, m.changeFiltersLine(table), table)
 		}
@@ -80,7 +80,7 @@ func (m Model) headerLine(width int) string {
 }
 
 func (m Model) headerRight() string {
-	if m.state == ChangesListState && m.agentFlow.Stage == agent.StageAIRunning {
+	if (m.state == ChangesListState || m.state == RewriteIdeaState) && m.agentFlow.Stage == agent.StageAIRunning {
 		return styles.Default.Foreground.Render("AgentRunningScreen")
 	}
 	title := screenTitle(m.state)
@@ -264,6 +264,9 @@ func screenTitle(state State) string {
 	titles := map[State]string{
 		MainState:                  agent.MainTitle(),
 		ChangesListState:           changes.ListTitle(),
+		CreateIdeaState:            "CreateIdeaScreen - Title: New Change",
+		UpdateIdeaState:            "UpdateIdeaScreen - Title: Edit Idea",
+		RewriteIdeaState:           "RewriteIdeaScreen - Title: Rewrite Idea",
 		ChangeDetailsState:         changes.DetailTitle(),
 		TestCaseDetailsState:       testcases.DetailTitle(),
 		ChangeCreateState:          "ChangeCreateScreen - Title: New Change",

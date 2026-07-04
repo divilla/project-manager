@@ -11,7 +11,8 @@ type Change struct {
 	ChangePhase string
 	ChangeTypes []string
 	Title       string
-	Body        string
+	Idea        string
+	Spec        string
 	PRBody      string
 	PRUrl       string
 	AgentEdit   bool
@@ -34,9 +35,7 @@ type TestCase struct {
 
 // ChangeCreateInput is the backend payload for creating a change.
 type ChangeCreateInput struct {
-	ProjectID   int
-	Title       string
-	Body        string
-	ChangeTypes []string
-	EpicID      *int
+	ProjectID int
+	Title     string
+	Idea      string
 }

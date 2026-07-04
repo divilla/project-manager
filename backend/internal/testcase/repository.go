@@ -27,9 +27,10 @@ const changeColumns = `
 	epic_id,
 	epic_name,
 	title,
-	coalesce(body, ''),
-	coalesce(pr_body, ''),
-	coalesce(pr_url, ''),
+	idea,
+	spec,
+	pr_body,
+	pr_url,
 	agent_edit,
 	open,
 	done_tc,
@@ -279,16 +280,29 @@ func getChange(ctx context.Context, q queryer, id int) (dto.Change, error) {
 
 func scanChange(row pgx.Row) (dto.Change, error) {
 	var change dto.Change
+	var ref pgtype.Int4
+	var slug pgtype.Text
 	var epicID pgtype.Int8
 	var epicName pgtype.Text
+	var spec pgtype.Text
+	var prBody pgtype.Text
+	var prURL pgtype.Text
 	err := row.Scan(
-		&change.ID, &change.Ref, &change.Version, &change.Slug, &change.ProjectID,
+		&change.ID, &ref, &change.Version, &slug, &change.ProjectID,
 		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
-		&change.Body, &change.PRBody, &change.PRUrl, &change.AgentEdit, &change.Open, &change.DoneTC,
+		&change.Idea, &spec, &prBody, &prURL, &change.AgentEdit, &change.Open, &change.DoneTC,
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {
 		return dto.Change{}, err
+	}
+	if ref.Valid {
+		value := ref.Int32
+		change.Ref = &value
+	}
+	if slug.Valid {
+		value := slug.String
+		change.Slug = &value
 	}
 	if epicID.Valid {
 		value := int(epicID.Int64)
@@ -297,6 +311,18 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	if epicName.Valid {
 		value := epicName.String
 		change.EpicName = &value
+	}
+	if spec.Valid {
+		value := spec.String
+		change.Spec = &value
+	}
+	if prBody.Valid {
+		value := prBody.String
+		change.PRBody = &value
+	}
+	if prURL.Valid {
+		value := prURL.String
+		change.PRUrl = &value
 	}
 	return change, nil
 }

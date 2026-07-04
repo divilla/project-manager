@@ -136,7 +136,11 @@ func changeTableRowLine(ref, phase, types, epic, title, done, total, completed, 
 }
 
 func phaseStyle(phase string, phaseColors PhaseColors) lipgloss.Style {
-	color := strings.TrimSpace(phaseColors[strings.TrimSpace(phase)])
+	key := strings.TrimSpace(phase)
+	color := strings.TrimSpace(phaseColors[key])
+	if color == "" {
+		color = defaultPhaseColors[key]
+	}
 	if color == "" {
 		color = "240"
 	}
@@ -424,10 +428,7 @@ func displayRef(change dto.Change) string {
 		}
 		return ref
 	}
-	if strings.TrimSpace(change.ID) != "" {
-		return "id:" + strings.TrimSpace(change.ID)
-	}
-	return "?"
+	return ""
 }
 
 func epicLabel(change dto.Change) string {

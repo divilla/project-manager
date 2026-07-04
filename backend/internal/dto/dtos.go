@@ -5,6 +5,7 @@ type (
 	ChangePhase struct {
 		Slug     string `json:"slug"`
 		Priority int    `json:"priority"`
+		Color    string `json:"color,omitempty"`
 	}
 
 	// ChangeType defines ChangeType values.

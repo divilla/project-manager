@@ -21,8 +21,11 @@ type Client interface {
 	ListChangeRows(projectID string) ([]dto.Change, error)
 	GetChange(id int) (dto.Change, error)
 	CreateChange(input dto.ChangeCreateInput) (dto.Change, error)
+	ReferenceChange(id int) (dto.Change, error)
 	UpdateChangeTitle(id int, title string) (dto.Change, error)
-	UpdateChangeBody(id int, body string) (dto.Change, error)
+	UpdateChangeIdea(id int, idea string) (dto.Change, error)
+	UpdateChangeIdeaAgentEdit(id int, idea string) (dto.Change, error)
+	UpdateChangeSpec(id int, spec *string) (dto.Change, error)
 	UpdateChangePRBody(id int, prBody string) (dto.Change, error)
 	UpdateChangePRUrl(id int, prURL string) (dto.Change, error)
 	UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error)
@@ -125,15 +128,19 @@ func (c HTTPClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error
 		return dto.Change{}, fmt.Errorf("project ID must be a valid positive number")
 	}
 	payload := map[string]any{
-		"project_id":   input.ProjectID,
-		"title":        input.Title,
-		"body":         input.Body,
-		"change_types": input.ChangeTypes,
-	}
-	if input.EpicID != nil {
-		payload["epic_id"] = *input.EpicID
+		"project_id": input.ProjectID,
+		"title":      input.Title,
+		"idea":       input.Idea,
 	}
 	return c.postChange("/api/v1/change/create", payload)
+}
+
+// ReferenceChange assigns or refreshes a backend-owned change reference.
+func (c HTTPClient) ReferenceChange(id int) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/reference", map[string]any{"id": id})
 }
 
 // UpdateChangeTitle updates a change title.
@@ -144,14 +151,36 @@ func (c HTTPClient) UpdateChangeTitle(id int, title string) (dto.Change, error) 
 	return c.postChange("/api/v1/change/update-title", map[string]any{"id": id, "title": title})
 }
 
-// UpdateChangeBody updates a change body.
-func (c HTTPClient) UpdateChangeBody(id int, body string) (dto.Change, error) {
+// UpdateChangeIdea updates a change idea.
+func (c HTTPClient) UpdateChangeIdea(id int, idea string) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
-	return c.postChange("/api/v1/change/update-body", map[string]any{
+	return c.postChange("/api/v1/change/update-idea", map[string]any{
 		"id":   id,
-		"body": body,
+		"idea": idea,
+	})
+}
+
+// UpdateChangeIdeaAgentEdit updates a change idea and marks it as agent-edited.
+func (c HTTPClient) UpdateChangeIdeaAgentEdit(id int, idea string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-idea-agent-edit", map[string]any{
+		"id":   id,
+		"idea": idea,
+	})
+}
+
+// UpdateChangeSpec updates or clears a change spec.
+func (c HTTPClient) UpdateChangeSpec(id int, spec *string) (dto.Change, error) {
+	if id <= 0 {
+		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
+	}
+	return c.postChange("/api/v1/change/update-spec", map[string]any{
+		"id":   id,
+		"spec": spec,
 	})
 }
 
@@ -619,7 +648,8 @@ func changeFromMap(values map[string]any) dto.Change {
 		ChangePhase: firstString(values, "change_phase", "phase"),
 		ChangeTypes: firstStringSlice(values, "change_types", "types"),
 		Title:       firstString(values, "title", "name"),
-		Body:        firstString(values, "body"),
+		Idea:        firstString(values, "idea"),
+		Spec:        firstString(values, "spec"),
 		PRBody:      firstString(values, "pr_body"),
 		PRUrl:       firstString(values, "pr_url"),
 		AgentEdit:   firstBool(values, "agent_edit"),

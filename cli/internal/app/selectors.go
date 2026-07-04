@@ -67,20 +67,6 @@ func optionIndex(options []dto.Option, id string, label string) int {
 	return 0
 }
 
-func optionIDs(options []dto.Option) []string {
-	values := make([]string, 0, len(options))
-	for _, option := range options {
-		if option.ID != "" {
-			values = append(values, option.ID)
-			continue
-		}
-		if option.Label != "" {
-			values = append(values, option.Label)
-		}
-	}
-	return values
-}
-
 func phaseColorMap(options []dto.Option) changes.PhaseColors {
 	colors := make(changes.PhaseColors, len(options))
 	for _, option := range options {

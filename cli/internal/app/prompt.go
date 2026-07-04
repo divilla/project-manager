@@ -17,7 +17,7 @@ func (m Model) setPromptValue(value string) Model {
 
 func (m *Model) applyPromptLimit() {
 	if m.state == ChangeCreateState || m.state == ChangeUpdateState ||
-		m.detailEditField == detailEditRequirement || m.detailEditField == detailEditPullRequest {
+		m.detailEditField == detailEditSpec || m.detailEditField == detailEditPullRequest {
 		m.input.CharLimit = 0
 		return
 	}

@@ -75,6 +75,22 @@ func (w Workspace) ResetIdea() error {
 	return os.WriteFile(w.IdeaPath(), []byte{}, 0o644)
 }
 
+// WriteIdea replaces the idea file contents.
+func (w Workspace) WriteIdea(content string) error {
+	if err := w.Ensure(); err != nil {
+		return err
+	}
+	return os.WriteFile(w.IdeaPath(), []byte(content), 0o644)
+}
+
+// RemoveIdea removes the idea file when it exists.
+func (w Workspace) RemoveIdea() error {
+	if err := os.Remove(w.IdeaPath()); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // ReadIdea reads the current idea file contents.
 func (w Workspace) ReadIdea() (string, error) {
 	content, err := os.ReadFile(w.IdeaPath())

@@ -34,11 +34,11 @@
         </thead>
         <tbody>
           <tr class="bg-primary text-white text-weight-bold">
-            <td class="text-right">#{{ currentChange.ref }}</td>
+            <td class="text-right">{{ currentChange.ref ? `#${currentChange.ref}` : '' }}</td>
             <td class="text-center">{{ currentChange.change_types.join(', ') }}</td>
             <td class="text-left">
               <div>{{ currentChange.title }}</div>
-              <div class="text-caption text-white">{{ currentChange.slug }}</div>
+              <div class="text-caption text-white">{{ currentChange.slug || '' }}</div>
             </td>
             <td class="text-center">{{ epicName(currentChange) }}</td>
             <td class="text-center">{{ currentChange.change_phase }}</td>
@@ -168,6 +168,12 @@
             <td class="text-right text-weight-bold">Agent Edit</td>
             <td>{{ currentChange.agent_edit ? 'Yes' : 'No' }}</td>
           </tr>
+          <tr>
+            <td class="text-right text-weight-bold">Idea</td>
+            <td class="change-detail-artifact-cell">
+              <pre class="change-detail-text">{{ currentChange.idea }}</pre>
+            </td>
+          </tr>
           <tr v-if="currentChange.pr_url">
             <td class="text-right text-weight-bold">PR URL</td>
             <td>
@@ -177,13 +183,13 @@
               <span v-else>{{ currentChange.pr_url }}</span>
             </td>
           </tr>
-          <tr>
-            <td class="change-detail-body-cell" style="padding-top: 32px; padding-bottom: 32px">
-              <div class="apply-markdown" v-html="currentChange.html" />
+          <tr v-if="currentChange.spec_html">
+            <td class="change-detail-artifact-cell" style="padding-top: 32px; padding-bottom: 32px">
+              <div class="apply-markdown" v-html="currentChange.spec_html" />
             </td>
           </tr>
           <tr v-if="currentChange.pr_html">
-            <td class="change-detail-body-cell" style="padding-top: 32px; padding-bottom: 32px">
+            <td class="change-detail-artifact-cell" style="padding-top: 32px; padding-bottom: 32px">
               <div class="apply-markdown" v-html="currentChange.pr_html" />
             </td>
           </tr>
@@ -693,7 +699,14 @@ watch(changeId, () => {
   width: 64px;
 }
 
-.change-detail-body-cell {
+.change-detail-artifact-cell {
   min-height: 160px;
+}
+
+.change-detail-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
 }
 </style>

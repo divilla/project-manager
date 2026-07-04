@@ -135,6 +135,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
 				m.agentElapsed = 0
 			}
+			if msg.source == ChangeDetailsState && msg.change.ID != "" {
+				detailSelected := m.changeList.DetailSelected
+				detailOffset := m.changeList.DetailOffset
+				m.changeList = m.changeList.WithDetail(msg.change)
+				m.changeList.DetailSelected = detailSelected
+				m.changeList.DetailOffset = detailOffset
+				m.changeList = m.changeList.ClampDetailSelection(m.changeTableRows(), terminalWidth(m.width))
+			}
 			m.err = msg.err.Error()
 			m.status = "save failed"
 			return m, nil
@@ -161,6 +169,69 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.activeTestCase = dto.TestCase{}
 		m = m.setPromptValue("")
 		return m, nil
+	case changeCreatedForRewriteMsg:
+		if m.state != CreateIdeaState {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "save failed"
+			return m, nil
+		}
+		m.changeList = m.changeList.WithDetail(msg.change)
+		return m.startAgentRewrite("")
+	case changeIdeaUpdatedForRewriteMsg:
+		if m.state != UpdateIdeaState {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "save failed"
+			return m, nil
+		}
+		m.changeList = m.changeList.WithDetail(msg.change)
+		return m.startAgentRewrite("")
+	case changeIdeaAgentEditSavedMsg:
+		if m.state != RewriteIdeaState {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "save failed"
+			return m, nil
+		}
+		m.changeList = m.changeList.WithDetail(msg.change)
+		m.state = ChangeDetailsState
+		m.status = "save"
+		if msg.reloadErr != nil {
+			m.err = msg.reloadErr.Error()
+			m.status = "load failed"
+		}
+		m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+		m.agentElapsed = 0
+		m.detailEditField = ""
+		m.activeTestCase = dto.TestCase{}
+		m = m.setPromptValue("")
+		return m, nil
+	case agentSpecCreatedMsg:
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "save failed"
+			return m, nil
+		}
+		m.changeList = m.changeList.WithDetail(msg.change)
+		m.state = ChangeDetailsState
+		m.status = "save"
+		if msg.reloadErr != nil {
+			m.err = msg.reloadErr.Error()
+			m.status = "load failed"
+		}
+		m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+		m.agentElapsed = 0
+		m.detailEditField = ""
+		m.activeTestCase = dto.TestCase{}
+		m = m.setPromptValue("")
+		return m, nil
 	case changeDeletedMsg:
 		if msg.err != nil {
 			m.state = ChangeDetailsState
@@ -180,10 +251,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case agentRewriteFinishedMsg:
 		return m.handleAgentRewriteFinished(msg)
-	case agentCommandOutputMsg:
-		return m.handleAgentCommandOutput(msg)
 	case agentInitFinishedMsg:
 		return m.handleAgentInitFinished(msg)
+	case agentCommandOutputMsg:
+		return m.handleAgentCommandOutput(msg)
 	case projectSavedMsg:
 		if m.state != msg.source {
 			return m, nil
@@ -228,15 +299,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state != msg.source {
 			return m, nil
 		}
-		if msg.source == ChangesListState && m.agentFlow.Active() {
+		if msg.source == CreateIdeaState && m.agentFlow.Active() {
 			return m.handleAgentEditorFinished(msg)
+		}
+		if msg.source == UpdateIdeaState {
+			return m.handleUpdateIdeaEditorFinished(msg)
 		}
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			m.status = "editor failed"
 			return m, tea.ClearScreen
 		}
-		if msg.source == ChangeCreateState || msg.source == ChangeUpdateState ||
+		if msg.source == CreateIdeaState || msg.source == UpdateIdeaState ||
+			msg.source == ChangeCreateState || msg.source == ChangeUpdateState ||
 			(msg.source == ChangeDetailsState && m.detailEditField != "") {
 			m = m.setPromptValue(msg.content)
 		}
@@ -432,14 +507,14 @@ func (m Model) submitPromptValue(value string) (tea.Model, tea.Cmd) {
 	if m.detailEditField == detailEditTitle && strings.HasPrefix(trimmed, "/") {
 		return m.executeCommand(trimmed)
 	}
-	if m.detailEditField != "" && (m.state == ChangeDetailsState || m.state == ChangeUpdateState) {
+	if m.detailEditField != "" && (m.state == ChangeDetailsState || m.state == UpdateIdeaState || m.state == ChangeUpdateState) {
 		return m.saveChangeDetailTextValue(value)
 	}
 	if commandAllowed(m.state, "/save") {
-		if m.state == ChangeCreateState {
+		if m.state == CreateIdeaState || m.state == ChangeCreateState {
 			return m.saveChangeCreateValue(value)
 		}
-		if m.state == ChangeUpdateState {
+		if m.state == UpdateIdeaState || m.state == ChangeUpdateState {
 			return m.saveChangeUpdateValue(value)
 		}
 		if m.state == TestCaseCreateState {
@@ -514,6 +589,11 @@ func (m Model) handleEsc() (tea.Model, tea.Cmd) {
 		m.state = DoneState
 		m.quitting = true
 		return m, tea.Quit
+	case CreateIdeaState, UpdateIdeaState:
+		m.detailEditField = ""
+		m.activeTestCase = dto.TestCase{}
+		m = m.setPromptValue("")
+		return m.discardAgentIdea(ChangesListState, "cancel", true)
 	case ChangeUpdateState:
 		if m.detailEditField != "" {
 			m.detailEditField = ""
@@ -574,8 +654,10 @@ func (m Model) handleListSelection() (tea.Model, tea.Cmd) {
 			return m.beginDetailFieldSelector(detailEditTypes)
 		case "Title":
 			return m.beginDetailTitleEdit()
-		case "Requirement", "Body":
-			return m.beginDetailTextEditor(detailEditRequirement)
+		case "Idea":
+			return m.beginDetailTextEditor(detailEditIdea)
+		case "Spec":
+			return m.beginDetailTextEditor(detailEditSpec)
 		case "Pull Request", "PR":
 			return m.beginDetailTextEditor(detailEditPullRequest)
 		case "PR URL":
@@ -656,6 +738,11 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 			return m.beginAgentNewChange()
 		}
 		m.state = navigation.CreateTarget(source)
+		if m.state == CreateIdeaState {
+			m = m.setPromptValue("")
+			m.input.Placeholder = defaultInputPlaceholder
+			return m.openPromptEditor(CreateIdeaState)
+		}
 		if m.state == ChangeCreateState {
 			m = m.setPromptValue("")
 			m.input.Placeholder = defaultInputPlaceholder
@@ -674,10 +761,25 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		} else {
 			m.input.Placeholder = defaultInputPlaceholder
 		}
-	case "/edit":
+	case "/edit", "/edit-spec":
+		if command == "/edit" && source == ChangeDetailsState {
+			m.err = "/edit is not available from ChangeDetailsState; use /edit-spec"
+			return m, nil
+		}
+		if command == "/edit-spec" && source != ChangeDetailsState {
+			m.err = "/edit-spec is only available from ChangeDetailsState"
+			return m, nil
+		}
 		m.state = navigation.UpdateTarget(source)
+		if m.state == UpdateIdeaState {
+			m = m.setPromptValue(m.changeList.Detail.Idea)
+			m.input.Placeholder = defaultInputPlaceholder
+			m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+			m.agentFlow.Stage = agent.StageIdeaEntry
+			return m.openPromptEditor(UpdateIdeaState)
+		}
 		if m.state == ChangeUpdateState {
-			m = m.setPromptValue(changes.RequirementMarkdown(m.changeList.Detail))
+			m = m.setPromptValue(changes.SpecMarkdown(m.changeList.Detail))
 			m.input.Placeholder = defaultInputPlaceholder
 			return m.openPromptEditor(ChangeUpdateState)
 		}
@@ -686,10 +788,10 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		}
 		m.input.Placeholder = defaultInputPlaceholder
 	case "/save":
-		if source == ChangeCreateState {
+		if source == CreateIdeaState || source == ChangeCreateState {
 			return m.saveChangeCreate()
 		}
-		if source == ChangeUpdateState {
+		if source == UpdateIdeaState || source == ChangeUpdateState {
 			return m.saveChangeUpdate()
 		}
 		if source == TestCaseCreateState {
@@ -706,10 +808,21 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		}
 		m.state = navigation.SaveTarget(source)
 		m.status = "save"
+	case "/reference":
+		if source == ChangeDetailsState {
+			m.status = "referencing"
+			return m, changeReferenceCommand(m.client, m.changeList.Detail)
+		}
 	case "/editor":
 		return m.openPromptEditor(source)
 	case "/cancel":
-		if (source == ChangeUpdateState || source == TestCaseUpdateState) && m.detailEditField != "" {
+		if source == CreateIdeaState || source == UpdateIdeaState {
+			m.detailEditField = ""
+			m.activeTestCase = dto.TestCase{}
+			m = m.setPromptValue("")
+			return m.discardAgentIdea(ChangesListState, "cancel", true)
+		}
+		if (source == UpdateIdeaState || source == ChangeUpdateState || source == TestCaseUpdateState) && m.detailEditField != "" {
 			m.detailEditField = ""
 			m = m.setPromptValue("")
 		}
@@ -815,8 +928,14 @@ func (m Model) beginDetailTitleEdit() (tea.Model, tea.Cmd) {
 func (m Model) beginDetailTextEditor(field detailEditField) (tea.Model, tea.Cmd) {
 	m.detailEditField = field
 	switch field {
-	case detailEditRequirement:
-		m = m.setPromptValue(m.changeList.Detail.Body)
+	case detailEditIdea:
+		m.state = UpdateIdeaState
+		m = m.setPromptValue(m.changeList.Detail.Idea)
+		m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+		m.agentFlow.Stage = agent.StageIdeaEntry
+		return m.openPromptEditor(UpdateIdeaState)
+	case detailEditSpec:
+		m = m.setPromptValue(m.changeList.Detail.Spec)
 	case detailEditPullRequest:
 		m = m.setPromptValue(m.changeList.Detail.PRBody)
 	case detailEditPRUrl:

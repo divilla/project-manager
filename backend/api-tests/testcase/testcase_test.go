@@ -240,13 +240,16 @@ func createChange(t *testing.T, client *shared.Client, projectID int, epicID *in
 	t.Helper()
 	var created change
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
-		"project_id":   projectID,
-		"epic_id":      epicID,
-		"title":        fmt.Sprintf("api-test-test-case-change-%d", time.Now().UnixNano()),
-		"change_types": []string{"feature"},
+		"project_id": projectID,
+		"title":      fmt.Sprintf("api-test-test-case-change-%d", time.Now().UnixNano()),
+		"idea":       "Test case idea",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
+	if epicID != nil {
+		status = client.Post(t, "/api/v1/change/update-epic", map[string]any{"id": created.ID, "epic_id": *epicID}, &created)
+		require.Equal(t, http.StatusOK, status)
+	}
 	assert.Equal(t, int16(0), created.Completed)
 	return created.ID
 }

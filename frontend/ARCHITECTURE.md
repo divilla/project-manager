@@ -39,15 +39,15 @@ Direct route entry is handled separately from explicit selector changes. If a us
 
 Do not implement this as a loose global boolean. Keep the intended route in Pinia so the app shell can consume and clear it after the project refresh flow.
 
-## Change Bodies
+## Change Specs
 
-Change bodies are stored and edited as raw markdown. Backend change detail and mutation responses include sanitized `html` rendered through `backend/pkg/markdown`.
+Change specs are stored and edited as raw markdown. Backend change detail and mutation responses include sanitized `spec_html` rendered through `backend/pkg/markdown`.
 
-When a frontend screen needs rendered bodies for known change IDs but does not need full change detail records, use `POST /api/v1/change/rendered-bodies` with `{"ids":[...]}`. The response is scoped to rendered body fragments:
+When a frontend screen needs rendered specs and PR markdown for known change IDs but does not need full change detail records, use `POST /api/v1/change/rendered-artifacts` with `{"ids":[...]}`. The response is scoped to rendered artifact fragments:
 
 ```json
 {
-  "bodies": [{ "id": 1, "html": "<p>...</p>" }]
+  "artifacts": [{ "id": 1, "spec_html": "<p>...</p>", "pr_html": "<p>...</p>" }]
 }
 ```
 

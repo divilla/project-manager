@@ -31,6 +31,7 @@ const (
 	dropdownSelect  dropdownKind = "select"
 	dropdownConfirm dropdownKind = "confirm"
 	dropdownAgent   dropdownKind = "agent"
+	dropdownIdea    dropdownKind = "idea"
 )
 
 type selectorSource string
@@ -57,7 +58,8 @@ const (
 	detailEditPhase       detailEditField = "phase"
 	detailEditEpic        detailEditField = "epic"
 	detailEditTypes       detailEditField = "types"
-	detailEditRequirement detailEditField = "requirement"
+	detailEditIdea        detailEditField = "idea"
+	detailEditSpec        detailEditField = "spec"
 	detailEditPullRequest detailEditField = "pull request"
 	detailEditPRUrl       detailEditField = "pr url"
 	detailEditTestCase    detailEditField = "test case"
@@ -134,6 +136,28 @@ type changeSavedMsg struct {
 	reloadErr error
 }
 
+type changeCreatedForRewriteMsg struct {
+	change dto.Change
+	err    error
+}
+
+type changeIdeaUpdatedForRewriteMsg struct {
+	change dto.Change
+	err    error
+}
+
+type changeIdeaAgentEditSavedMsg struct {
+	change    dto.Change
+	err       error
+	reloadErr error
+}
+
+type agentSpecCreatedMsg struct {
+	change    dto.Change
+	err       error
+	reloadErr error
+}
+
 type changeDeletedMsg struct {
 	target State
 	err    error
@@ -142,6 +166,11 @@ type changeDeletedMsg struct {
 type agentRewriteFinishedMsg struct {
 	result agent.RewriteResult
 	err    error
+}
+
+type agentInitFinishedMsg struct {
+	repoRoot string
+	err      error
 }
 
 type agentCommandOutputMsg struct {
@@ -154,10 +183,6 @@ type optionCatalogLoadedMsg struct {
 	phases []dto.Option
 	types  []dto.Option
 	err    error
-}
-
-type agentInitFinishedMsg struct {
-	err error
 }
 
 type agentElapsedMsg time.Time

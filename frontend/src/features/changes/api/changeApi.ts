@@ -5,7 +5,7 @@ import type {
   ChangeDetail,
   ChangeListItem,
   ChangePhase,
-  ChangeRenderedBodiesResponse,
+  ChangeRenderedArtifactsResponse,
   ChangeType,
 } from '../model/change.types';
 
@@ -25,8 +25,8 @@ export function getChange(id: number): Promise<ChangeDetail> {
   return post<ChangeDetail>('/api/v1/change/get', { id });
 }
 
-export function getRenderedChangeBodies(ids: number[]): Promise<ChangeRenderedBodiesResponse> {
-  return post<ChangeRenderedBodiesResponse>('/api/v1/change/rendered-bodies', { ids });
+export function getRenderedChangeArtifacts(ids: number[]): Promise<ChangeRenderedArtifactsResponse> {
+  return post<ChangeRenderedArtifactsResponse>('/api/v1/change/rendered-artifacts', { ids });
 }
 
 export function createChange(input: ChangeCreateInput): Promise<Change> {
@@ -41,8 +41,12 @@ export function updateChangeTitle(id: number, title: string): Promise<Change> {
   return post<Change>('/api/v1/change/update-title', { id, title });
 }
 
-export function updateChangeBody(id: number, body: string): Promise<Change> {
-  return post<Change>('/api/v1/change/update-body', { id, body: body });
+export function updateChangeIdea(id: number, idea: string): Promise<Change> {
+  return post<Change>('/api/v1/change/update-idea', { id, idea });
+}
+
+export function updateChangeSpec(id: number, spec: string | null): Promise<Change> {
+  return post<Change>('/api/v1/change/update-spec', { id, spec });
 }
 
 export function updateChangeTypes(id: number, changeTypes: string[]): Promise<Change> {

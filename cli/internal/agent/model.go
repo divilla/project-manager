@@ -8,8 +8,8 @@ const (
 	StageIdle Stage = ""
 	// StageIdeaEntry means the user is editing the initial idea.
 	StageIdeaEntry Stage = "idea entry"
-	// StageReview means the user is reviewing the rewritten idea.
-	StageReview Stage = "review"
+	// StageCreateConfirmation means the user is confirming whether to create a Change.
+	StageCreateConfirmation Stage = "create confirmation"
 	// StageAIRunning means a Codex process is currently active.
 	StageAIRunning Stage = "AI running"
 )
@@ -40,7 +40,6 @@ type Model struct {
 	SessionID        string
 	RepoRoot         string
 	IdeaEntryContent string
-	ReviewContent    string
 	CommandOutput    string
 }
 

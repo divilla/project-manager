@@ -20,7 +20,21 @@ func NewRepo(pool *pgxpool.Pool) *Repo {
 
 // ChangePhases executes ChangePhases behavior.
 func (r *Repo) ChangePhases(ctx context.Context) ([]dto.ChangePhase, error) {
-	rows, err := r.pool.Query(ctx, "select slug, priority from public.change_phase order by priority, slug")
+	rows, err := r.pool.Query(ctx, `
+		select slug,
+		       priority,
+		       case slug
+		           when 'backlog' then '15'
+		           when 'progress' then '10'
+		           when 'review' then '11'
+		           when 'staging' then '12'
+		           when 'production' then '13'
+		           when 'rejected' then '9'
+		           else ''
+		       end as color
+		from public.change_phase
+		order by priority, slug
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +43,7 @@ func (r *Repo) ChangePhases(ctx context.Context) ([]dto.ChangePhase, error) {
 	items := make([]dto.ChangePhase, 0)
 	for rows.Next() {
 		var item dto.ChangePhase
-		if err := rows.Scan(&item.Slug, &item.Priority); err != nil {
+		if err := rows.Scan(&item.Slug, &item.Priority, &item.Color); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

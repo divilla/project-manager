@@ -21,11 +21,13 @@ func (r Renderer) RenderChange(change dto.Change) dto.Change {
 	if r.parser == nil || r.sanitizer == nil {
 		return change
 	}
-	if change.Body != "" {
-		change.HTML = r.sanitizer.Parse(r.parser.Parse(change.Body))
+	if change.Spec != nil && *change.Spec != "" {
+		rendered := r.sanitizer.Parse(r.parser.Parse(*change.Spec))
+		change.SpecHTML = &rendered
 	}
-	if change.PRBody != "" {
-		change.PRHtml = r.sanitizer.Parse(r.parser.Parse(change.PRBody))
+	if change.PRBody != nil && *change.PRBody != "" {
+		rendered := r.sanitizer.Parse(r.parser.Parse(*change.PRBody))
+		change.PRHtml = &rendered
 	}
 	return change
 }

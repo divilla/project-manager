@@ -63,11 +63,22 @@
       <q-toggle v-model="open" label="Open" :disable="loading || saving" />
 
       <q-input
-        v-model="body"
+        v-model="idea"
         outlined
         type="textarea"
-        label="Body"
-        class="change-body-input"
+        label="Idea"
+        class="change-artifact-input"
+        input-style="min-height: 240px"
+        :rules="requiredRules"
+        :disable="loading || saving"
+      />
+
+      <q-input
+        v-model="spec"
+        outlined
+        type="textarea"
+        label="Spec"
+        class="change-artifact-input"
         input-style="min-height: 600px"
         :disable="loading || saving"
       />
@@ -77,7 +88,7 @@
         outlined
         type="textarea"
         label="PR body"
-        class="change-body-input"
+        class="change-artifact-input"
         input-style="min-height: 240px"
         :disable="loading || saving"
       />
@@ -111,7 +122,8 @@ import {
   updateChangeEpic,
   updateChangeOpen,
   updateChangePhase,
-  updateChangeBody,
+  updateChangeIdea,
+  updateChangeSpec,
   updateChangePRBody,
   updateChangePRUrl,
   updateChangeTitle,
@@ -127,7 +139,8 @@ const { epics } = storeToRefs(changeCache);
 
 const loadedChange = ref<Change | null>(null);
 const title = ref('');
-const body = ref('');
+const idea = ref('');
+const spec = ref('');
 const prBody = ref('');
 const prUrl = ref('');
 const changeTypes = ref<string[]>([]);
@@ -175,9 +188,10 @@ async function loadEditContext() {
     phaseOptions.value = phases.map((phase) => ({ label: phase.slug, value: phase.slug }));
     loadedChange.value = detail.change;
     title.value = detail.change.title;
-    body.value = detail.change.body;
-    prBody.value = detail.change.pr_body;
-    prUrl.value = detail.change.pr_url;
+    idea.value = detail.change.idea;
+    spec.value = detail.change.spec || '';
+    prBody.value = detail.change.pr_body || '';
+    prUrl.value = detail.change.pr_url || '';
     changeTypes.value = [...detail.change.change_types];
     changePhase.value = detail.change.change_phase;
     epicId.value = detail.change.epic_id || null;
@@ -197,7 +211,8 @@ async function saveChangeFromPage() {
   if (saving.value || !loadedChange.value) return;
 
   const changeTitle = title.value.trim();
-  if (!changeTitle || !changeTypes.value.length) return;
+  const changeIdea = idea.value.trim();
+  if (!changeTitle || !changeIdea) return;
 
   saving.value = true;
   error.value = '';
@@ -207,14 +222,20 @@ async function saveChangeFromPage() {
     if (changeTitle !== change.title) {
       change = await updateChangeTitle(change.id, changeTitle);
     }
-    if (body.value.trim() !== change.body) {
-      change = await updateChangeBody(change.id, body.value.trim());
+    if (changeIdea !== change.idea) {
+      change = await updateChangeIdea(change.id, changeIdea);
     }
-    if (prBody.value.trim() !== change.pr_body) {
-      change = await updateChangePRBody(change.id, prBody.value.trim());
+    const nextSpec = spec.value.trim() || null;
+    if (nextSpec !== (change.spec || null)) {
+      change = await updateChangeSpec(change.id, nextSpec);
     }
-    if (prUrl.value.trim() !== change.pr_url) {
-      change = await updateChangePRUrl(change.id, prUrl.value.trim());
+    const nextPRBody = prBody.value.trim();
+    if (nextPRBody !== (change.pr_body || '')) {
+      change = await updateChangePRBody(change.id, nextPRBody);
+    }
+    const nextPRUrl = prUrl.value.trim();
+    if (nextPRUrl !== (change.pr_url || '')) {
+      change = await updateChangePRUrl(change.id, nextPRUrl);
     }
     if (!sameStringList(changeTypes.value, change.change_types)) {
       change = await updateChangeTypes(change.id, changeTypes.value);
