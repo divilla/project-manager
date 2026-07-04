@@ -14,10 +14,10 @@ my $branch = qx{git branch --show-current};
 chomp $branch;
 
 my $change_name = $branch;
-$change_name =~ s/^changes\///;
+$change_name =~ s/^change\///;
 
-$branch eq "changes/$change_name"
-    or fail("current branch is not a changes/<change-name> branch: $branch");
+$branch eq "change/$change_name"
+    or fail("current branch is not a change/<change-name> branch: $branch");
 $change_name =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/
     or fail("invalid change name from current branch: $change_name");
 
@@ -31,7 +31,7 @@ my $pr_url_file = "agent/prurls/$change_name";
 
 run_checked(qw(git add -A));
 run_checked("git", "commit", "-m", "Write PR for $change_name by agent");
-run_checked("git", "push", "origin", "changes/$change_name");
+run_checked("git", "push", "origin", "change/$change_name");
 
 make_path("agent/prurls");
 my $pr_url = run_capture_checked(
@@ -41,7 +41,7 @@ my $pr_url = run_capture_checked(
     "--base",
     "stage",
     "--head",
-    "$pr_author:changes/$change_name",
+    "$pr_author:change/$change_name",
     "--title",
     $pr_title,
     "--body-file",
@@ -51,7 +51,7 @@ write_file($pr_url_file, $pr_url);
 
 run_checked(qw(git add -A));
 run_checked("git", "commit", "-m", "Write PR URL for $change_name by agent");
-run_checked("git", "push", "origin", "changes/$change_name");
+run_checked("git", "push", "origin", "change/$change_name");
 
 sub extract_pr_title {
     my ($path) = @_;

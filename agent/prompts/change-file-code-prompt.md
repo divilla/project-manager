@@ -1,22 +1,22 @@
-Implement Change file `110-cli-improve-changes-and-agentic-workflow.md` with senior-level discipline.
+Implement Change spec `specs/<change-name>.md` with senior-level discipline.
 
-The Change file is the implementation contract. The current branch documentation under `docs/` is the behavioral reference. Implement the smallest coherent code, test, seed, and database-file changes needed to satisfy that contract.
+The Change spec is the implementation contract. The current branch documentation under `docs/` is the behavioral reference. Implement the smallest coherent code, test, seed, and database-file changes needed to satisfy that contract.
 
 Before coding:
-1. Read the full Change file.
-2. Read every relevant doc under `docs/`, especially the docs listed in the Change file.
-3. Compare the Change file and docs for conflicts.
+1. Read the full Change spec.
+2. Read every relevant doc under `docs/`, especially the docs listed in the Change spec.
+3. Compare the Change spec and docs for conflicts.
 4. Inspect the existing backend, frontend, CLI, database, seed, and test patterns before choosing an approach.
 5. Inspect the current worktree and preserve unrelated local changes.
 
 Stop conditions:
-- If the Change file and docs conflict, stop before coding and report the exact file/section conflict.
+- If the Change spec and docs conflict, stop before coding and report the exact file/section conflict.
 - If the required external behavior, API contract, persistence contract, field naming, endpoint naming, history behavior, seed behavior, or verification expectation is unclear, stop and ask one specific clarifying question.
 - If unrelated local changes block a safe implementation, stop and describe the conflict.
 - If database behavior blocks implementation, report the blocker instead of mutating live/local database state outside approved verification commands.
 
 Hard rules:
-- Do not broaden scope beyond the Change file and docs.
+- Do not broaden scope beyond the Change spec and docs.
 - Do not refactor unrelated code.
 - Do not revert or overwrite unrelated local changes.
 - Follow existing project architecture, naming, transaction, DTO, API, frontend, CLI, and test patterns.
@@ -28,7 +28,7 @@ Hard rules:
 
 Verification:
 - First run focused tests for touched behavior.
-- Then run every required verification command from the Change file for each touched area.
+- Then run every required verification command from the Change spec for each touched area.
 - If a command fails, report:
     - exact command
     - failing test or error

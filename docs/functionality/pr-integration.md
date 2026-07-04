@@ -1,10 +1,10 @@
 # PR Integration
 
 ## Purpose
-The product acts as a structured PR builder. A Change file defines the PR contract before implementation starts.
+The product acts as a structured PR builder. A Change spec defines the PR contract before implementation starts.
 
-## Change File
-A Change file records:
+## Change Spec
+A Change spec records:
 
 - goal
 - scope
@@ -21,14 +21,16 @@ A Change file records:
 Change branches use:
 
 ```text
-changes/<change-name>
+change/<change-name>
 ```
 
-The matching Change file lives at:
+The matching Change spec lives at:
 
 ```text
-agent/changes/<change-name>.md
+specs/<change-name>.md
 ```
+
+Workflow automation must reject `changes/<change-name>` as the active Change branch namespace. Application routes such as `/changes` and API paths such as `/api/v1/change/*` remain unchanged.
 
 ## Checkpoint Commits
 Planning checkpoints use:
@@ -45,4 +47,4 @@ Implement change <change-name>
 ```
 
 ## PR Body
-The Change file becomes the basis for the PR body. It should be complete enough that reviewers can understand intent, scope, evidence, and review focus without reconstructing context from chat.
+The Change spec becomes the basis for the PR body. It should be complete enough that reviewers can understand intent, scope, evidence, and review focus without reconstructing context from chat.

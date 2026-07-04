@@ -26,16 +26,16 @@ if [[ -z "$branch_name" ]]; then
     fail "cannot read current branch"
 fi
 
-if [[ ! "$branch_name" =~ ^changes/([0-9]+-[a-z0-9-]+)$ ]]; then
-    fail "current branch does not match ^changes/([0-9]+-[a-z0-9-]+)$: $branch_name"
+if [[ ! "$branch_name" =~ ^change/([0-9]+-[a-z0-9_-]+)$ ]]; then
+    fail "current branch does not match ^change/([0-9]+-[a-z0-9_-]+)$: $branch_name"
 fi
 
 change_name="${BASH_REMATCH[1]}"
-change_path="$repo_root/agent/changes/$change_name.md"
-rel_path="agent/changes/$change_name.md"
+change_path="$repo_root/specs/$change_name.md"
+rel_path="specs/$change_name.md"
 
 if [[ ! -f "$change_path" ]]; then
-    fail "change file does not exist: $change_path"
+    fail "spec file does not exist: $change_path"
 fi
 
 printf '%s\n' "$rel_path"

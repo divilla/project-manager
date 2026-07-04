@@ -15,7 +15,7 @@ type ParsedChange struct {
 	TestCases   []string
 }
 
-// ParseGeneratedChange extracts the title and Types metadata from a generated Change file.
+// ParseGeneratedChange extracts the title and Types metadata from a generated Change spec.
 func ParseGeneratedChange(spec string, validTypes []string) (ParsedChange, error) {
 	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")

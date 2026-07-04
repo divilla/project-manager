@@ -19,7 +19,7 @@ const (
 	DefaultWorkspaceDir = "/tmp/mch"
 	// IdeaFileName is the user-authored idea markdown file.
 	IdeaFileName = "initial-idea.md"
-	// GeneratedFileName is the generated Change markdown file.
+	// GeneratedFileName is the generated Change spec markdown file.
 	GeneratedFileName = "initial-change.md"
 	// CodexOutputName is the final text output file written by Codex exec.
 	CodexOutputName = "codex-output.txt"
@@ -27,7 +27,7 @@ const (
 	CodexRunLogName = "codex-run.jsonl"
 	// RewritePrompt is the Codex prompt for rewriting the idea draft.
 	RewritePrompt = "Use $change-idea-tmp."
-	// InitPrompt is the Codex prompt for generating the final Change file.
+	// InitPrompt is the Codex prompt for generating the final Change spec.
 	InitPrompt = "Use $change-spec-tmp."
 	// GenericError is shown when Codex output does not satisfy the flow contract.
 	GenericError = "something went wrong - please try again"

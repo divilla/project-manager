@@ -1,28 +1,33 @@
 # Agent Interaction
 
 ## Purpose
-Agents help refine planning, maintain documentation, implement scoped changes, and run verification. They operate against the Change file as the contract.
+Agents help refine planning, maintain documentation, implement scoped changes, and run verification. They operate against the Change spec as the contract.
 
 ## Commands
 Supported workflow prompts:
 
-- `new change <change-name-or-path>`
-- `commit change`
-- `implement change`
+- `make-change new <change-name-or-path>`
+- `make-change commit`
+- `make-change implement`
+- `make-change pr`
+
+Repository Change workflow branches use `change/<change-name>`. The matching Change spec lives at `specs/<change-name>.md`.
+
+Workflow prompts that operate on an existing Change must fail fast with a clear error when the current branch is not `change/<change-name>`.
 
 ## Planning Behavior
 During planning, the agent:
 
 - creates or checks out the matching branch
 - commits rough user edits
-- rewrites the Change file into the standard structure
+- rewrites the Change spec into the standard structure
 - updates or links relevant docs
 - commits the agent checkpoint
 
 ## Implementation Behavior
 During implementation, the agent:
 
-- reads the current Change file
+- reads the current Change spec
 - reads referenced docs
 - verifies readiness
 - changes only files needed for the Change

@@ -44,6 +44,8 @@ pnpm --dir frontend build
 Frontend checks should cover feature logic, visible component behavior, routing, and project-scoped refresh behavior. Change UI coverage should include title plus idea create flows, optional `spec`, optional PR fields, empty type arrays, unassigned reference rendering, and detail reload behavior.
 
 ## Documentation
-Documentation checks should list files, enforce the 300-line limit, and run the vocabulary checks from the active Change file.
+Documentation checks should list files, enforce the 300-line limit, and run the vocabulary checks from the active Change spec.
+
+For Change workflow branch or spec-path changes, documentation checks should confirm active behavior docs use `change/<change-name>` for repository workflow branches and `specs/<change-name>.md` for Change specs. Remaining `changes/` matches must be application routes, package paths, or historical research/spec context.
 
 Personal research under `docs/research` is not product documentation and is excluded from rewrite verification.

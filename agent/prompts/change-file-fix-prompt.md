@@ -1,6 +1,6 @@
 Implement all the review findings like a 10x senior engineer.
 
-Change contract: `agent/changes/110-cli-improve-changes-and-agentic-workflow.md`
+Change contract: `specs/<change-name>.md`
 
 Before coding:
 1. Read and use Change contract as the source of truth and implementation contract.
@@ -10,8 +10,8 @@ Before coding:
 
 Rules:
 - Implement only the requested review fixes.
-- Do not broaden scope beyond the Change file, docs, and review comments.
-- If the docs and Change file conflict, stop and report the conflict before coding.
+- Do not broaden scope beyond the Change spec, docs, and review comments.
+- If the docs and Change spec conflict, stop and report the conflict before coding.
 - If any implementation detail is unclear, do not guess or silently choose an approach. Stop and ask one specific clarifying question.
 - Preserve unrelated local changes.
 - Do not refactor unrelated code.
@@ -21,5 +21,5 @@ Rules:
 After implementation:
 1. Run the relevant focused tests.
 2. Run the required verification commands for every touched area.
-3. Update the Change file’s `Follow-Ups` section with a concise note about the review fixes applied.
+3. Update the Change spec’s `Follow-Ups` section with a concise note about the review fixes applied.
 4. Report which review comments were addressed, what changed, and which verification commands passed or failed.

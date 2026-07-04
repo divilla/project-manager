@@ -1,8 +1,7 @@
 # Changes into Specs to Docs
 
-- Changes branch is renamed to change, example: `change/<change-name>.md`
-- `agent/changes/` are renamed and moved: `docs/specs/`
-- Update skills
-- Update scripts
-- Update docs
-- move from 3 digits padded change to 6 digits
+- All change branches `changes/<change-name>` are renamed to change: `change/<change-name>` 
+- `agent/changes/` folder is renamed and moved to: `docs/specs/`
+- thoroughly search the docs and code and scripts and update to new naming
+- please be careful that `Change` still refers to `Change` and remains cornerstone of this app and process
+- only the `Change file` becomes `Change spec`

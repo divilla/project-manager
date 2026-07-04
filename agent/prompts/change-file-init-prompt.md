@@ -1,12 +1,12 @@
 Extract `<change-name>` from the current Git branch using this regex: 
 
-`^changes/([0-9]+-[a-z0-9-]+)$`
+`^change/([0-9]+-[a-z0-9_-]+)$`
 
-If the current branch does not match, stop and output one concise error explaining that the branch must be named `changes/<change-name>`.
+If the current branch does not match, stop and output one concise error explaining that the branch must be named `change/<change-name>`.
 
-Use `agent/ideas/<change-name>.md` to write a completed, implementation-ready Change specification to `agent/changes/<change-name>.md`. If that Change file already exists, overwrite it intentionally.
+Use `agent/ideas/<change-name>.md` to write a completed, implementation-ready Change spec to `specs/<change-name>.md`. If that Change spec already exists, overwrite it intentionally.
 
-Only write that Change file. Do not edit any other file, including `AGENTS.md`. Do not run migrations, mutate databases, edit files under `db/**`, or perform unrelated cleanup.
+Only write that Change spec. Do not edit any other file, including `AGENTS.md`. Do not run migrations, mutate databases, edit files under `db/**`, or perform unrelated cleanup.
 
 Use the template in `agent/prompts/change-file-structure.md` exactly. Do not add, remove, rename, or reorder sections.
 
@@ -15,8 +15,8 @@ Process:
 2. Read `agent/prompts/change-file-structure.md`.
 3. Use targeted search to find relevant docs under `docs/`; do not broadly read unrelated docs.
 4. Read only docs that materially affect this Change.
-5. Write the completed Change specification to `agent/changes/<change-name>.md`.
-6. Add and commit only `agent/changes/<change-name>.md`; do not include unrelated staged or unstaged changes. Use this commit message: `Init change <change-name> by agent`. After the commit succeeds, output exactly `Done.`
+5. Write the completed Change spec to `specs/<change-name>.md`.
+6. Add and commit only `specs/<change-name>.md`; do not include unrelated staged or unstaged changes. Use this commit message: `Write spec for <change-name> by agent`. After the commit succeeds, output exactly `Done.`
 
 Prioritize docs covering:
 - `mch`
@@ -58,7 +58,7 @@ The final Change must satisfy:
 - `Follow-Ups`: future work outside scope, or `- None.`.
 
 Stop without writing or committing if:
-- the branch name does not match `^changes/([0-9]+-[a-z0-9-]+)$`
+- the branch name does not match `^change/([0-9]+-[a-z0-9_-]+)$`
 - `agent/ideas/<change-name>.md` does not exist
 - `agent/prompts/change-file-structure.md` does not exist
 - clarification is required

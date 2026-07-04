@@ -13,14 +13,14 @@ my $branch = qx{git branch --show-current};
 chomp $branch;
 
 my $change_name = $branch;
-$change_name =~ s/^changes\///;
+$change_name =~ s/^change\///;
 
-$branch eq "changes/$change_name"
-    or fail("current branch is not a changes/<change-name> branch: $branch");
+$branch eq "change/$change_name"
+    or fail("current branch is not a change/<change-name> branch: $branch");
 $change_name =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/
     or fail("invalid change name from current branch: $change_name");
 
-my $change_branch = "changes/$change_name";
+my $change_branch = "change/$change_name";
 
 ensure_clean_worktree();
 run_checked(qw(git fetch origin));

@@ -1,12 +1,15 @@
 # AGENTS.md
 
 This file provides guidance to Agent when working with code in this repository. Use the
-`project-manager-change-workflow` skill for Change workflow prompts:
+`change-*` set of skills for Change workflow prompts:
 
-- `make-change new NAME`
-- `make-change commit`
-- `make-change implement`
-- `make-change pr`
+- `$change-spec`
+- `$change-verify`
+- `$change-docs`
+- `$change-code`
+- `$change-review`
+- `$change-fix`
+- `$change-pr`
 
 AGENTS.md file must never be altered unless there is an explicit prompt to override rule and make change in AGENTS.md.
 
@@ -35,14 +38,14 @@ AGENTS.md file must never be altered unless there is an explicit prompt to overr
 ### Changes
 
 - A Change is the basic unit of work in this workflow.
-- Change files are stored as `agent/changes/<change-name>.md`.
-- Change files must use the standard structure from the Change workflow:
+- Change specs are stored as `specs/<change-name>.md`.
+- Change specs must use the standard structure from the Change workflow:
   Goal, Scope, Requirements, Acceptance Criteria, Non-Goals, Design Notes,
   Relevant Specs, Verification, QA Test Cases, Review Focus, and Follow-Ups.
-- Change branches use `changes/<change-name>`.
-- If implementation or PR work starts on a branch other than `changes/<change-name>`, stop and alert the user.
+- Change branches use `change/<change-name>`.
+- If implementation or PR work starts on a branch other than `change/<change-name>`, stop and alert the user.
 - Change lifecycle: backlog -> branch/rejected -> pull-request -> stage/rejected -> master/rejected.
-- The Change file is the PR contract. Do not implement before the user says `make-change implement`.
+- The Change spec is the PR contract.
 - Keep implementation scoped to the active Change. Record useful out-of-scope work as Follow-Ups instead of expanding the PR.
 
 ## GitHub PR Reviews
@@ -53,11 +56,11 @@ When explicitly asked to review a PR, the agent must post the review comment wit
 
 When reviewing a PR, build fresh context from the repository instead of conversation memory:
 
-- Read the active Change file and linked docs.
+- Read the active Change spec and linked docs.
 - Inspect the full diff against the PR base branch.
 - Identify changed public contracts, data model changes, migrations, tests, docs, and workflows.
 - Run or inspect the listed verification commands when feasible.
-- Treat `agent/changes/<change-name>.md` as the PR contract; verify every Requirement and Acceptance Criteria item against the diff and tests.
+- Treat `specs/<change-name>.md` as the PR contract; verify every Requirement and Acceptance Criteria item against the diff and tests.
 
 Prioritize findings only. Focus on correctness bugs, behavioral regressions, data loss or migration risk, security or privacy issues, broken API/UI contracts, missing tests for changed behavior, and brittle tests that can pass while behavior is broken.
 

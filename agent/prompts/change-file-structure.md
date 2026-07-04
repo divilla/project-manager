@@ -1,6 +1,6 @@
-# Change file structure
+# Change spec structure
 
-Use this structure exactly for every Change file. Replace placeholders with content for the active Change. Keep sections concise, specific, and testable. Do not add, remove, rename, or reorder sections unless the user explicitly changes the Change workflow.
+Use this structure exactly for every Change spec. Replace placeholders with content for the active Change. Keep sections concise, specific, and testable. Do not add, remove, rename, or reorder sections unless the user explicitly changes the Change workflow.
 
 The first non-blank line must be the Change title as one H1. The first non-blank line after the title must be the type metadata line.
 
@@ -8,7 +8,7 @@ Select one or more backend type slugs that best describe the Change. Do not hard
 
 Format the metadata line exactly as `Types: <type-slugs>`, with selected backend slugs joined by `|` and no spaces.
 
-Do not wrap the generated Change file in a code block.
+Do not wrap the generated Change spec in a code block.
 
 # <Change Title>
 
@@ -50,7 +50,7 @@ Describe the single outcome this Change must deliver. Write this as the end stat
 
 ## Relevant Specs
 
-- `agent/changes/<change-name>.md`
+- `specs/<change-name>.md`
 - `docs/<path>.md`
 
 ## Verification

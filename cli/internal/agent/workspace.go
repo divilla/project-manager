@@ -40,7 +40,7 @@ func (w Workspace) IdeaPath() string {
 	return filepath.Join(w.Dir, IdeaFileName)
 }
 
-// GeneratedPath returns the generated Change file path.
+// GeneratedPath returns the generated Change spec path.
 func (w Workspace) GeneratedPath() string {
 	return filepath.Join(w.Dir, GeneratedFileName)
 }
@@ -100,7 +100,7 @@ func (w Workspace) ReadIdea() (string, error) {
 	return string(content), nil
 }
 
-// ReadGenerated reads the generated Change file contents.
+// ReadGenerated reads the generated Change spec contents.
 func (w Workspace) ReadGenerated() (string, error) {
 	content, err := os.ReadFile(w.GeneratedPath())
 	if err != nil {

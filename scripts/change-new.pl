@@ -13,7 +13,7 @@ my $change_name = $ARGV[0];
 $change_name =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/
     or fail("invalid change name: $change_name");
 
-my $branch = "changes/$change_name";
+my $branch = "change/$change_name";
 my $checkout_output = run_capture("git", "checkout", $branch);
 my $checkout_status = $?;
 
@@ -30,7 +30,7 @@ if ($checkout_status != 0) {
     print $checkout_output;
 }
 
-my $change_path = "agent/changes/$change_name.md";
+my $change_path = "specs/$change_name.md";
 run_checked("touch", $change_path);
 
 sub run_capture {

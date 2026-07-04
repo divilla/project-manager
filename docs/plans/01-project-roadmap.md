@@ -14,9 +14,9 @@
 - Completeness calculation for changes and epics.
 
 ## Phase 3: Documentation And PR Builder
-- Change-file workflow for PR planning.
+- Change spec workflow for PR planning.
 - Documentation generated from structured product sources.
-- PR body generation from Change files.
+- PR body generation from Change specs.
 - Review focus and verification capture.
 
 ## Phase 4: Agent Assistance

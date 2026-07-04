@@ -2,19 +2,19 @@
 
 Review the current branch against `origin/stage` as a 10x senior engineer.
 
-Change contract: `agent/changes/110-cli-improve-changes-and-agentic-workflow.md`
+Change contract: `specs/<change-name>.md`
 
 ## Review Steps
 
 1. Read and use the Change contract as the source of truth and implementation contract.
 2. Read and use the relevant branch documentation under `docs/` as the behavioral reference.
 3. Inspect the full diff against `origin/stage`.
-4. Verify behavior against the Change file and current docs, not assumptions.
+4. Verify behavior against the Change spec and current docs, not assumptions.
 5. Pay close attention to regressions from the latest fixes.
 
 ## Review Rules
 
-- Treat the Change file as the PR contract.
+- Treat the Change spec as the PR contract.
 - Treat current `docs/` changes as the behavioral reference.
 - Report only actionable findings.
 - Prioritize correctness bugs, data loss risks, duplicate writes, broken state transitions, contract violations, missing required tests, and user-visible regressions.

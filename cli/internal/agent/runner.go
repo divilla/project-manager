@@ -138,7 +138,7 @@ func captureCommandOutput(reader io.Reader, prefix string, output *bytes.Buffer,
 	}
 }
 
-// InitCommand builds the interactive Codex command that generates the final Change file.
+// InitCommand builds the interactive Codex command that generates the final Change spec.
 func (ProcessRunner) InitCommand(repoRoot string, sessionID string) *exec.Cmd {
 	cmd := exec.Command("codex", "resume", sessionID, InitPrompt)
 	cmd.Dir = repoRoot

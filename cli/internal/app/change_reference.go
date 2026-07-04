@@ -9,6 +9,7 @@ import (
 )
 
 const defaultGitRemote = "origin"
+const changeBranchPrefix = "change/"
 
 var branchZeroPaddingPattern = regexp.MustCompile(`/0+`)
 
@@ -52,7 +53,7 @@ func reconcileChangeBranchWithRunner(ctx context.Context, run gitCommandRunner, 
 		return fmt.Errorf("git repository root is required")
 	}
 
-	branch := "changes/" + slug
+	branch := changeBranchPrefix + slug
 	if localBranch(ctx, run, repoRoot, branch) != "" {
 		_, err := gitOutput(ctx, run, repoRoot, "checkout", branch)
 		return err
@@ -109,7 +110,7 @@ func firstLocalBranch(ctx context.Context, run gitCommandRunner, repoRoot string
 }
 
 func firstLocalChangeBranchForRef(ctx context.Context, run gitCommandRunner, repoRoot string, ref string) string {
-	output, err := gitOutput(ctx, run, repoRoot, "branch", "--list", "--format=%(refname:short)", "changes/*")
+	output, err := gitOutput(ctx, run, repoRoot, "branch", "--list", "--format=%(refname:short)", changeBranchPrefix+"*")
 	if err != nil {
 		return ""
 	}
@@ -126,7 +127,7 @@ func fetchRemoteBranch(ctx context.Context, run gitCommandRunner, repoRoot strin
 }
 
 func firstRemoteChangeBranchForRef(ctx context.Context, run gitCommandRunner, repoRoot string, ref string) string {
-	output, err := gitOutput(ctx, run, repoRoot, "ls-remote", "--heads", defaultGitRemote, "refs/heads/changes/*")
+	output, err := gitOutput(ctx, run, repoRoot, "ls-remote", "--heads", defaultGitRemote, "refs/heads/"+changeBranchPrefix+"*")
 	if err != nil {
 		return ""
 	}
@@ -163,7 +164,7 @@ func firstRemoteBranch(ctx context.Context, run gitCommandRunner, repoRoot strin
 }
 
 func firstBranchMatchingRef(output string, ref string) string {
-	matchPattern := regexp.MustCompile(`^changes/` + regexp.QuoteMeta(ref) + `-`)
+	matchPattern := regexp.MustCompile(`^` + regexp.QuoteMeta(changeBranchPrefix) + regexp.QuoteMeta(ref) + `-`)
 	for _, line := range strings.Split(output, "\n") {
 		branch := strings.TrimSpace(strings.TrimPrefix(line, "*"))
 		if branch == "" {

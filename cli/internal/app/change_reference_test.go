@@ -42,9 +42,9 @@ func TestChangeReferenceCommandReferencesBranchAndReloads(t *testing.T) {
 		switch strings.Join(args, " ") {
 		case "rev-parse --show-toplevel":
 			return "/repo", nil
-		case "branch --list --format=%(refname:short) changes/3-new-change":
-			return "changes/3-new-change", nil
-		case "checkout changes/3-new-change":
+		case "branch --list --format=%(refname:short) change/3-new-change":
+			return "change/3-new-change", nil
+		case "checkout change/3-new-change":
 			return "", nil
 		default:
 			return "", nil
@@ -66,7 +66,7 @@ func TestChangeReferenceCommandReferencesBranchAndReloads(t *testing.T) {
 	assert.Equal(t, dto.Change{ID: "12", Ref: "3", Slug: "3-new-change", Title: "New Change"}, got.changeList.Detail)
 	assert.Equal(t, []int{12}, client.changeReferenceIDs)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Contains(t, gitCalls, []string{"checkout", "changes/3-new-change"})
+	assert.Contains(t, gitCalls, []string{"checkout", "change/3-new-change"})
 	assert.Empty(t, got.err)
 }
 
@@ -102,7 +102,7 @@ func TestChangeReferenceCommandGitFailureKeepsReferencedChangeLoaded(t *testing.
 		switch strings.Join(args, " ") {
 		case "rev-parse --show-toplevel":
 			return "/repo", nil
-		case "checkout -b changes/3-new-change":
+		case "checkout -b change/3-new-change":
 			return "", errors.New("checkout failed")
 		default:
 			return "", nil
@@ -136,72 +136,72 @@ func TestReconcileChangeBranchPaths(t *testing.T) {
 		{
 			name: "local exact",
 			outputs: map[string]string{
-				"rev-parse\x00--show-toplevel":                                       "/repo",
-				"branch\x00--list\x00--format=%(refname:short)\x00changes/003-title": "changes/003-title",
+				"rev-parse\x00--show-toplevel":                                      "/repo",
+				"branch\x00--list\x00--format=%(refname:short)\x00change/003-title": "change/003-title",
 			},
 			want: [][]string{
-				{"checkout", "changes/003-title"},
+				{"checkout", "change/003-title"},
 			},
 		},
 		{
 			name: "local padded prefix rename",
 			outputs: map[string]string{
-				"rev-parse\x00--show-toplevel":                               "/repo",
-				"branch\x00--list\x00--format=%(refname:short)\x00changes/*": "changes/030-wrong-title\nchanges/003-old-title",
+				"rev-parse\x00--show-toplevel":                              "/repo",
+				"branch\x00--list\x00--format=%(refname:short)\x00change/*": "change/030-wrong-title\nchange/003-old-title",
 			},
 			want: [][]string{
-				{"checkout", "changes/003-old-title"},
-				{"branch", "-m", "changes/003-title"},
+				{"checkout", "change/003-old-title"},
+				{"branch", "-m", "change/003-title"},
 			},
 		},
 		{
 			name: "local raw prefix fallback rename",
 			outputs: map[string]string{
-				"rev-parse\x00--show-toplevel":                               "/repo",
-				"branch\x00--list\x00--format=%(refname:short)\x00changes/*": "changes/3-old-title",
+				"rev-parse\x00--show-toplevel":                              "/repo",
+				"branch\x00--list\x00--format=%(refname:short)\x00change/*": "change/3-old-title",
 			},
 			want: [][]string{
-				{"checkout", "changes/3-old-title"},
-				{"branch", "-m", "changes/003-title"},
+				{"checkout", "change/3-old-title"},
+				{"branch", "-m", "change/003-title"},
 			},
 		},
 		{
 			name: "remote exact",
 			outputs: map[string]string{
-				"rev-parse\x00--show-toplevel":                                   "/repo",
-				"ls-remote\x00--heads\x00origin\x00refs/heads/changes/003-title": "abc refs/heads/changes/003-title",
+				"rev-parse\x00--show-toplevel":                                  "/repo",
+				"ls-remote\x00--heads\x00origin\x00refs/heads/change/003-title": "abc refs/heads/change/003-title",
 			},
 			want: [][]string{
-				{"fetch", "origin", "refs/heads/changes/003-title:refs/remotes/origin/changes/003-title"},
-				{"checkout", "-b", "changes/003-title", "--track", "origin/changes/003-title"},
+				{"fetch", "origin", "refs/heads/change/003-title:refs/remotes/origin/change/003-title"},
+				{"checkout", "-b", "change/003-title", "--track", "origin/change/003-title"},
 			},
 		},
 		{
 			name: "remote padded prefix rename",
 			outputs: map[string]string{
-				"rev-parse\x00--show-toplevel":                           "/repo",
-				"ls-remote\x00--heads\x00origin\x00refs/heads/changes/*": "abc refs/heads/changes/030-wrong-title\ndef refs/heads/changes/003-old-title",
+				"rev-parse\x00--show-toplevel":                          "/repo",
+				"ls-remote\x00--heads\x00origin\x00refs/heads/change/*": "abc refs/heads/change/030-wrong-title\ndef refs/heads/change/003-old-title",
 			},
 			want: [][]string{
-				{"fetch", "origin", "refs/heads/changes/003-old-title:refs/remotes/origin/changes/003-old-title"},
-				{"checkout", "-b", "changes/003-old-title", "--track", "origin/changes/003-old-title"},
-				{"branch", "-m", "changes/003-title"},
-				{"push", "origin", "changes/003-title"},
-				{"push", "origin", "--delete", "changes/003-old-title"},
+				{"fetch", "origin", "refs/heads/change/003-old-title:refs/remotes/origin/change/003-old-title"},
+				{"checkout", "-b", "change/003-old-title", "--track", "origin/change/003-old-title"},
+				{"branch", "-m", "change/003-title"},
+				{"push", "origin", "change/003-title"},
+				{"push", "origin", "--delete", "change/003-old-title"},
 			},
 		},
 		{
 			name: "remote raw prefix fallback rename",
 			outputs: map[string]string{
-				"rev-parse\x00--show-toplevel":                           "/repo",
-				"ls-remote\x00--heads\x00origin\x00refs/heads/changes/*": "abc refs/heads/changes/3-old-title",
+				"rev-parse\x00--show-toplevel":                          "/repo",
+				"ls-remote\x00--heads\x00origin\x00refs/heads/change/*": "abc refs/heads/change/3-old-title",
 			},
 			want: [][]string{
-				{"fetch", "origin", "refs/heads/changes/3-old-title:refs/remotes/origin/changes/3-old-title"},
-				{"checkout", "-b", "changes/3-old-title", "--track", "origin/changes/3-old-title"},
-				{"branch", "-m", "changes/003-title"},
-				{"push", "origin", "changes/003-title"},
-				{"push", "origin", "--delete", "changes/3-old-title"},
+				{"fetch", "origin", "refs/heads/change/3-old-title:refs/remotes/origin/change/3-old-title"},
+				{"checkout", "-b", "change/3-old-title", "--track", "origin/change/3-old-title"},
+				{"branch", "-m", "change/003-title"},
+				{"push", "origin", "change/003-title"},
+				{"push", "origin", "--delete", "change/3-old-title"},
 			},
 		},
 		{
@@ -210,7 +210,7 @@ func TestReconcileChangeBranchPaths(t *testing.T) {
 				"rev-parse\x00--show-toplevel": "/repo",
 			},
 			want: [][]string{
-				{"checkout", "-b", "changes/003-title"},
+				{"checkout", "-b", "change/003-title"},
 			},
 		},
 	}
@@ -237,11 +237,11 @@ func TestReconcileChangeBranchPaths(t *testing.T) {
 func TestReconcileChangeBranchRemoteFetchFailureSkipsCheckout(t *testing.T) {
 	runner := &fakeGitRunner{
 		outputs: map[string]string{
-			"rev-parse\x00--show-toplevel":                                   "/repo",
-			"ls-remote\x00--heads\x00origin\x00refs/heads/changes/003-title": "abc refs/heads/changes/003-title",
+			"rev-parse\x00--show-toplevel":                                  "/repo",
+			"ls-remote\x00--heads\x00origin\x00refs/heads/change/003-title": "abc refs/heads/change/003-title",
 		},
 		errs: map[string]error{
-			"fetch\x00origin\x00refs/heads/changes/003-title:refs/remotes/origin/changes/003-title": errors.New("fetch failed"),
+			"fetch\x00origin\x00refs/heads/change/003-title:refs/remotes/origin/change/003-title": errors.New("fetch failed"),
 		},
 	}
 
