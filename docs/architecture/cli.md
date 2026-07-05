@@ -16,7 +16,7 @@ The prototype stores its local config under `cli-proto/.config`. It may persist 
 ## Reference TUI
 The `cli/` module contains the reference `mch` TUI. Its architecture, package boundaries, style tokens, state model, and test strategy are documented in `docs/architecture/mch.md`. The executable remains `mch`; `cli/` is only the source directory name.
 
-`mch` owns the interactive AI-assisted `/new-change` flow from the Change list. The flow may use local temporary files under `/tmp/mch` and Codex CLI process handoff, but saved product data must still be created through supported backend APIs. Change reference assignment and branch reconciliation start from the backend `POST /api/v1/change/reference` response; `mch` must not assign `ref` or `slug` locally.
+`mch` owns the interactive AI-assisted `/new-change` flow from the Change list. The flow may use local temporary files under `/tmp/mch` and Codex CLI process handoff, but saved product data must still be created through supported backend APIs. Change Flow assignment, Run controls, claim reset, and branch reconciliation controls are not supported by the CLI until a dedicated CLI Change adds them; `mch` must not assign `ref`, `slug`, Flow snapshot fields, or Run state locally.
 
 Repository Change workflow automation uses `change/<change-name>` branches and Change specs under `specs/<change-name>.md`. This does not rename application routes, API paths, packages, or product data that use the Change concept.
 

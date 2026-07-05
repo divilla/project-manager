@@ -15,7 +15,7 @@ A change is the primary unit of delivery and PR construction. It has a fixed str
 
 Important fields:
 
-- `ref`: optional project-scoped numeric reference allocated by the backend reference flow.
+- `ref`: optional project-scoped numeric reference allocated by backend Flow assignment.
 - `slug`: optional backend-owned branch identifier generated from the Change reference and title.
 - `title`: short human-readable name.
 - `idea`: required user intent captured when the Change is created and replaceable by an agent rewrite.
@@ -27,10 +27,25 @@ Important fields:
 - `change_phase`: current workflow phase.
 - `change_types`: zero or more classification slugs.
 - `epic_id`: optional link to one epic.
+- `flow_stages`: ordered Flow Steps copied onto the Change when Flow is assigned.
+- `flow_stage_modes`: ordered per-Step execution modes copied onto the Change when Flow is assigned.
+- `run_claim_id`: active Worker claim for the current Run, when claimed.
+- `run_flow_stage`: current Flow Step for the Run, when started.
+- `run_task_step`: current Task Step within the Run, when started.
+- `run_task_status`: current Task status, when started.
+- `run_error`: latest Run or active Task error, empty when no current error is recorded.
+- `run_is_completed`: whether the latest Run completed.
 
 `ref` is unique only inside its project. Two projects may both have a change with the same `ref`, but a single project must not.
 
-Users and clients cannot set or edit `ref` or `slug`. New changes may have no assigned `ref` or `slug`; clients must render that state without deriving identity locally. The backend assigns or refreshes them only through the Change reference flow and returns them on Change responses.
+Users and clients cannot set or edit `ref`, `slug`, Flow snapshot fields, or Run state fields directly. New changes may have no assigned `ref`, `slug`, or Flow snapshot; clients must render that state without deriving identity locally. The backend assigns or refreshes identity only through Flow assignment and returns it on Change responses.
+
+## Flow and Run
+A Flow is a reusable automation definition for moving a Change through ordered Steps. A Step is one named stage inside that Flow. A Run is one execution attempt of the Flow copied onto a Change. A Task performs one Step within a Run. A Worker is the executor, tool, or process that performs the Task.
+
+Default Flow Steps are ordered as `idea`, `spec`, `ready`, `docs`, `code`, `polish`, `pr`, `review`, `fix`, `sync`, `merge`, `stage`, and `master`.
+
+Stage modes are `skip`, `prompt`, and `exec`. Task statuses are `queued`, `running`, `paused`, `stopped`, `waiting`, `completed`, and `failed`. Task steps are `none`, `entry`, `prompt`, `agent`, `exit`, and `done`.
 
 ## Test Case
 A test case is a binary Definition of Done item for a change. It must be concrete, verifiable, and small enough to evaluate independently. Its `scenario` describes the condition that must be true.

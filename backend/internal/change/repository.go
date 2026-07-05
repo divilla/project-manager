@@ -35,7 +35,10 @@ type (
 		UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error)
 		UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error)
 		UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) (dto.Change, error)
-		Reference(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error)
+		AssignFlow(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error)
+		StartRun(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error)
+		UpdateRun(ctx context.Context, req dto.ChangeUpdateRunRequest) (dto.ChangeRunUpdateResponse, error)
+		ResetClaim(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error)
 		Delete(ctx context.Context, req dto.ChangeIDRequest) error
 	}
 )
@@ -56,6 +59,16 @@ const changeDetailColumns = `
 	pr_body,
 	pr_url,
 	agent_edit,
+	flow_stages,
+	flow_stage_modes,
+	run_claim_id,
+	run_flow_stage,
+	run_task_step,
+	run_task_status,
+	run_error,
+	run_is_completed,
+	run_started_at,
+	run_updated_at,
 	open,
 	done_tc,
 	total_tc,
@@ -414,18 +427,89 @@ func (r *Repo) UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) 
 	return finishMutation(ctx, tx, req.ID)
 }
 
-// Reference executes Reference behavior.
-func (r *Repo) Reference(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
+// AssignFlow executes AssignFlow behavior.
+func (r *Repo) AssignFlow(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return dto.Change{}, err
 	}
 	defer tx.Rollback(ctx)
 
-	if _, err := tx.Exec(ctx, "call public.sp_change_ref_update($1)", req.ID); err != nil {
+	if _, err := tx.Exec(ctx, "call public.sp_change_assign_flow($1)", req.ID); err != nil {
 		return dto.Change{}, err
 	}
 	return finishMutation(ctx, tx, req.ID)
+}
+
+// StartRun executes StartRun behavior.
+func (r *Repo) StartRun(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return dto.ChangeRunClaimResponse{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := getState(ctx, tx, req.ID); err != nil {
+		return dto.ChangeRunClaimResponse{}, err
+	}
+	var claimID pgtype.UUID
+	if err := tx.QueryRow(ctx, "select public.fn_change_start_run($1)", req.ID).Scan(&claimID); err != nil {
+		return dto.ChangeRunClaimResponse{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return dto.ChangeRunClaimResponse{}, err
+	}
+	return claimResponse(claimID), nil
+}
+
+// UpdateRun executes UpdateRun behavior.
+func (r *Repo) UpdateRun(ctx context.Context, req dto.ChangeUpdateRunRequest) (dto.ChangeRunUpdateResponse, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return dto.ChangeRunUpdateResponse{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var claimID pgtype.UUID
+	if err := claimID.Scan(req.RunClaimID); err != nil {
+		return dto.ChangeRunUpdateResponse{}, ErrInvalidInput
+	}
+	var changeID pgtype.Int8
+	err = tx.QueryRow(ctx, `
+		select public.fn_change_update_run($1, $2, $3, $4, $5, $6, $7)
+	`, req.ID, claimID, req.RunFlowStage, req.RunTaskStep, req.RunTaskStatus, req.RunError, req.RunIsCompleted).Scan(&changeID)
+	if err != nil {
+		return dto.ChangeRunUpdateResponse{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return dto.ChangeRunUpdateResponse{}, err
+	}
+	if !changeID.Valid {
+		return dto.ChangeRunUpdateResponse{}, nil
+	}
+	value := int(changeID.Int64)
+	return dto.ChangeRunUpdateResponse{ChangeID: &value}, nil
+}
+
+// ResetClaim executes ResetClaim behavior.
+func (r *Repo) ResetClaim(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return dto.ChangeRunClaimResponse{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := getState(ctx, tx, req.ID); err != nil {
+		return dto.ChangeRunClaimResponse{}, err
+	}
+	var claimID pgtype.UUID
+	if err := tx.QueryRow(ctx, "select public.fn_change_reset_claim($1)", req.ID).Scan(&claimID); err != nil {
+		return dto.ChangeRunClaimResponse{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return dto.ChangeRunClaimResponse{}, err
+	}
+	return claimResponse(claimID), nil
 }
 
 // Delete executes Delete behavior.
@@ -551,10 +635,16 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	var spec pgtype.Text
 	var prBody pgtype.Text
 	var prURL pgtype.Text
+	var runClaimID pgtype.UUID
+	var runStartedAt pgtype.Timestamptz
+	var runUpdatedAt pgtype.Timestamptz
 	err := row.Scan(
 		&change.ID, &ref, &change.Version, &slug, &change.ProjectID,
 		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
 		&change.Idea, &spec, &prBody, &prURL, &change.AgentEdit,
+		&change.FlowStages, &change.FlowStageModes, &runClaimID, &change.RunFlowStage,
+		&change.RunTaskStep, &change.RunTaskStatus, &change.RunError, &change.RunIsCompleted,
+		&runStartedAt, &runUpdatedAt,
 		&change.Open, &change.DoneTC,
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
 	)
@@ -588,6 +678,18 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	if prURL.Valid {
 		value := prURL.String
 		change.PRUrl = &value
+	}
+	if runClaimID.Valid {
+		value := runClaimID.String()
+		change.RunClaimID = &value
+	}
+	if runStartedAt.Valid {
+		value := runStartedAt.Time
+		change.RunStartedAt = &value
+	}
+	if runUpdatedAt.Valid {
+		value := runUpdatedAt.Time
+		change.RunUpdatedAt = &value
 	}
 	return change, nil
 }
@@ -750,6 +852,14 @@ func recalculateEpics(ctx context.Context, tx pgx.Tx, values ...*int) error {
 		}
 	}
 	return nil
+}
+
+func claimResponse(claimID pgtype.UUID) dto.ChangeRunClaimResponse {
+	if !claimID.Valid {
+		return dto.ChangeRunClaimResponse{}
+	}
+	value := claimID.String()
+	return dto.ChangeRunClaimResponse{ClaimID: &value}
 }
 
 func equalIntPointers(left, right *int) bool {

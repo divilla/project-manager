@@ -43,7 +43,7 @@ begin
     _idea := coalesce(nullif(trim(_spec), ''), format('# %s', trim(_title)));
 
     select public.fn_change_insert(_project_id, _title, _idea) into _id;
-    call public.sp_change_ref_update(_id);
+    call public.sp_change_assign_flow(_id);
 
     update public.change
     set

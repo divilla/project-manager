@@ -246,16 +246,45 @@ func (s *Service) UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenReques
 	return s.renderer.RenderChange(change), nil
 }
 
-// ReferenceChange executes ReferenceChange behavior.
-func (s *Service) ReferenceChange(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
+// AssignFlow executes AssignFlow behavior.
+func (s *Service) AssignFlow(ctx context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
 	if req.ID <= 0 {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.Reference(ctx, req)
+	change, err := s.repo.AssignFlow(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}
 	return s.renderer.RenderChange(change), nil
+}
+
+// StartRun executes StartRun behavior.
+func (s *Service) StartRun(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
+	if req.ID <= 0 {
+		return dto.ChangeRunClaimResponse{}, ErrInvalidInput
+	}
+	return s.repo.StartRun(ctx, req)
+}
+
+// UpdateRun executes UpdateRun behavior.
+func (s *Service) UpdateRun(ctx context.Context, req dto.ChangeUpdateRunRequest) (dto.ChangeRunUpdateResponse, error) {
+	req.RunClaimID = strings.TrimSpace(req.RunClaimID)
+	req.RunFlowStage = strings.TrimSpace(req.RunFlowStage)
+	req.RunTaskStep = strings.TrimSpace(req.RunTaskStep)
+	req.RunTaskStatus = strings.TrimSpace(req.RunTaskStatus)
+	req.RunError = strings.TrimSpace(req.RunError)
+	if req.ID <= 0 || req.RunClaimID == "" {
+		return dto.ChangeRunUpdateResponse{}, ErrInvalidInput
+	}
+	return s.repo.UpdateRun(ctx, req)
+}
+
+// ResetClaim executes ResetClaim behavior.
+func (s *Service) ResetClaim(ctx context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
+	if req.ID <= 0 {
+		return dto.ChangeRunClaimResponse{}, ErrInvalidInput
+	}
+	return s.repo.ResetClaim(ctx, req)
 }
 
 // DeleteChange executes DeleteChange behavior.

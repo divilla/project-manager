@@ -18,6 +18,8 @@ History-bearing change data includes:
 - modified
 - deleted
 
+Change history does not store Flow snapshot or Run state fields, including `flow_stages`, `flow_stage_modes`, or any `run_*` column.
+
 ## Epic History
 Before updating or deleting an epic, the backend records the current epic row in `epic_history`.
 

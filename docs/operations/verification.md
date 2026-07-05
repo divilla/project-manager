@@ -9,7 +9,7 @@ make test
 make api-test
 ```
 
-Backend checks should cover service logic, repository behavior where feasible, API contracts, history behavior, and health diagnostics. Change API coverage should include title plus idea creation, missing or blank title and idea validation, null optional artifacts, empty `change_types`, unassigned `ref` and `slug`, reference assignment, and repeated reference calls that preserve the existing `ref`.
+Backend checks should cover service logic, repository behavior where feasible, API contracts, history behavior, and health diagnostics. Change API coverage should include title plus idea creation, missing or blank title and idea validation, null optional artifacts, empty `change_types`, unassigned `ref` and `slug`, Flow assignment, repeated Flow assignment that preserves the existing `ref` and copied Flow arrays, removal of the old `/api/v1/change/reference` route, Run claiming, duplicate claim handling, stale claim rejection, completed Run handling, invalid Run IDs and claim IDs, informational Run values, and Change detail response field shapes.
 
 After every backend code change, agents must run `make lint` from `backend` and fix all findings before handoff. `make lint` may rewrite imports or formatting; review and include those intentional changes with the backend code change.
 
@@ -30,7 +30,7 @@ go build -o /tmp/mch ./cmd/mch
 
 After every `mch` code change, agents must run `make lint` from `cli` and fix all findings before handoff. `make lint` may rewrite imports or formatting; review and include those intentional changes with the `mch` code change.
 
-Changes to the `mch` AI-assisted `/new-change` and idea edit flows should also be verified with tests that fake editor, backend, Codex execution, and Git execution. Coverage should include temporary planning files, `/resume`, `/clear`, and `/cancel`, unparsable idea titles with `error parsing title:`, `/edit`, and `/cancel`, raw idea previews before parse errors and confirmation prompts, `Create Change?` No as a no-op, create-before-rewrite behavior, update-before-rewrite behavior, rewrite failures, title plus idea create payload fields, `update-idea-agent-edit` saves, backend save failures, `/reference` branch checkout and rename paths, and refreshed detail navigation.
+Changes to the `mch` AI-assisted `/new-change` and idea edit flows should also be verified with tests that fake editor, backend, Codex execution, and Git execution. Coverage should include temporary planning files, `/resume`, `/clear`, and `/cancel`, unparsable idea titles with `error parsing title:`, `/edit`, and `/cancel`, raw idea previews before parse errors and confirmation prompts, `Create Change?` No as a no-op, create-before-rewrite behavior, update-before-rewrite behavior, rewrite failures, title plus idea create payload fields, `update-idea-agent-edit` saves, backend save failures, absence of unsupported Flow assignment and branch reconciliation commands, and refreshed detail navigation.
 
 ## Frontend
 From the repository root:

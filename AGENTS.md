@@ -145,7 +145,13 @@ Always use core external packages for all the relevant code built. Warn when cor
 
 - Go code uses tabs for indentation (per .editorconfig)
 - Follows standard Go conventions and formatting
-- Uses gofmt, golint, and staticcheck for code quality
+- Uses goimports, golint, and staticcheck for code quality
+
+## Layer Boundaries
+
+API handlers must contain the minimum code required to work with Echo and HTTP concerns only. Handler code may bind request bodies, read Echo context, access `http.Request` or `http.Response` data, choose HTTP status codes, and encode responses. Echo context, `http.Request`, `http.Response`, and other transport-specific objects must never leak into the service layer. All validation, normalization, authorization decisions, business rules, orchestration, and application behavior must move to the service layer unless the code exists only because it directly uses Echo or HTTP objects.
+
+Repositories must contain the minimum code required to work with database access only. Repository code may execute SQL, call database functions or procedures, manage driver-specific scanning, map database rows and driver types into plain Go values or DTOs, and hide database errors behind domain errors where appropriate. Database drivers, driver-specific types, SQL rows, transactions, and query builders must never be accessible from the service layer. Any business rule, comparison, validation, orchestration, or endpoint-specific behavior must move to the service layer unless the code exists only because it directly uses database drivers.
 
 ## Testing
 

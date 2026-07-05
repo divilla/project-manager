@@ -31,6 +31,16 @@ func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdateOpen(context.Background(), dto.ChangeUpdateOpenRequest{ID: 2})
 	require.ErrorIs(t, err, ErrInvalidInput)
+	_, err = service.AssignFlow(context.Background(), dto.ChangeIDRequest{})
+	require.ErrorIs(t, err, ErrInvalidInput)
+	_, err = service.StartRun(context.Background(), dto.ChangeIDRequest{})
+	require.ErrorIs(t, err, ErrInvalidInput)
+	_, err = service.UpdateRun(context.Background(), dto.ChangeUpdateRunRequest{ID: 2, RunClaimID: "   "})
+	require.ErrorIs(t, err, ErrInvalidInput)
+	_, err = service.UpdateRun(context.Background(), dto.ChangeUpdateRunRequest{RunClaimID: "00000000-0000-0000-0000-000000000001"})
+	require.ErrorIs(t, err, ErrInvalidInput)
+	_, err = service.ResetClaim(context.Background(), dto.ChangeIDRequest{})
+	require.ErrorIs(t, err, ErrInvalidInput)
 	badURL := "javascript:alert(1)"
 	_, err = service.UpdatePRUrl(context.Background(), dto.ChangeUpdatePRUrlRequest{ID: 2, PRUrl: &badURL})
 	require.ErrorIs(t, err, ErrInvalidInput)
@@ -110,9 +120,58 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, repo.open)
 	assert.True(t, *repo.open)
+	_, err = service.AssignFlow(context.Background(), dto.ChangeIDRequest{ID: 2})
+	require.NoError(t, err)
+	assert.Equal(t, 2, repo.id)
+	_, err = service.StartRun(context.Background(), dto.ChangeIDRequest{ID: 2})
+	require.NoError(t, err)
+	assert.Equal(t, 2, repo.id)
+	_, err = service.UpdateRun(context.Background(), dto.ChangeUpdateRunRequest{
+		ID:             2,
+		RunClaimID:     " 00000000-0000-0000-0000-000000000001 ",
+		RunFlowStage:   " docs ",
+		RunTaskStep:    " agent ",
+		RunTaskStatus:  " running ",
+		RunError:       " latest error ",
+		RunIsCompleted: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, dto.ChangeUpdateRunRequest{
+		ID:             2,
+		RunClaimID:     "00000000-0000-0000-0000-000000000001",
+		RunFlowStage:   "docs",
+		RunTaskStep:    "agent",
+		RunTaskStatus:  "running",
+		RunError:       "latest error",
+		RunIsCompleted: true,
+	}, repo.updateRunReq)
+	_, err = service.ResetClaim(context.Background(), dto.ChangeIDRequest{ID: 2})
+	require.NoError(t, err)
+	assert.Equal(t, 2, repo.id)
 	err = service.DeleteChange(context.Background(), dto.ChangeIDRequest{ID: 2})
 	require.NoError(t, err)
 	assert.Equal(t, 2, repo.id)
+}
+
+func TestServicePropagatesRunOperationErrors(t *testing.T) {
+	repo := &fakeChangeRepository{err: ErrNotFound}
+	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
+
+	_, err := service.AssignFlow(context.Background(), dto.ChangeIDRequest{ID: 2})
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = service.StartRun(context.Background(), dto.ChangeIDRequest{ID: 2})
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = service.UpdateRun(context.Background(), dto.ChangeUpdateRunRequest{
+		ID:             2,
+		RunClaimID:     "00000000-0000-0000-0000-000000000001",
+		RunFlowStage:   "docs",
+		RunTaskStep:    "agent",
+		RunTaskStatus:  "running",
+		RunIsCompleted: false,
+	})
+	require.ErrorIs(t, err, ErrNotFound)
+	_, err = service.ResetClaim(context.Background(), dto.ChangeIDRequest{ID: 2})
+	require.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestServiceRendersChangeSpecHTML(t *testing.T) {
@@ -174,20 +233,31 @@ type fakeChangeRepository struct {
 	updatePRBodyReq        dto.ChangeUpdatePRBodyRequest
 	updatePRUrlReq         dto.ChangeUpdatePRUrlRequest
 	updateAgentEditReq     dto.ChangeUpdateAgentEditRequest
+	updateRunReq           dto.ChangeUpdateRunRequest
+	err                    error
 }
 
 func (r *fakeChangeRepository) List(_ context.Context, projectID int) ([]dto.ChangeListItem, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
 	r.projectID = projectID
 	return []dto.ChangeListItem{}, nil
 }
 
 func (r *fakeChangeRepository) Get(_ context.Context, id int) (dto.ChangeDetail, error) {
+	if r.err != nil {
+		return dto.ChangeDetail{}, r.err
+	}
 	r.id = id
 	spec := "**Change**"
 	return dto.ChangeDetail{Change: dto.Change{ID: id, Spec: &spec}}, nil
 }
 
 func (r *fakeChangeRepository) Artifacts(_ context.Context, ids []int) ([]dto.Change, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
 	r.specIDs = ids
 	changes := make([]dto.Change, 0, len(ids))
 	for _, id := range ids {
@@ -198,71 +268,140 @@ func (r *fakeChangeRepository) Artifacts(_ context.Context, ids []int) ([]dto.Ch
 }
 
 func (r *fakeChangeRepository) Create(_ context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.createReq = req
 	return dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, Idea: req.Idea}, nil
 }
 
 func (r *fakeChangeRepository) UpdateChangeTypes(_ context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.updateTypesReq = req
 	return dto.Change{ID: req.ID, ChangeTypes: req.ChangeTypes}, nil
 }
 
 func (r *fakeChangeRepository) UpdateTitle(_ context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.updateTitleReq = req
 	return dto.Change{ID: req.ID, Title: req.Title}, nil
 }
 
 func (r *fakeChangeRepository) UpdateIdea(_ context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.updateIdeaReq = req
 	return dto.Change{ID: req.ID, Idea: req.Idea}, nil
 }
 
 func (r *fakeChangeRepository) UpdateIdeaAgentEdit(_ context.Context, req dto.ChangeUpdateIdeaAgentEditRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.updateIdeaAgentEditReq = req
 	return dto.Change{ID: req.ID, Idea: req.Idea, AgentEdit: true}, nil
 }
 
 func (r *fakeChangeRepository) UpdateSpec(_ context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.updateSpecReq = req
 	return dto.Change{ID: req.ID, Spec: req.Spec}, nil
 }
 
 func (r *fakeChangeRepository) UpdatePRBody(_ context.Context, req dto.ChangeUpdatePRBodyRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.updatePRBodyReq = req
 	return dto.Change{ID: req.ID, PRBody: req.PRBody}, nil
 }
 
 func (r *fakeChangeRepository) UpdatePRUrl(_ context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.updatePRUrlReq = req
 	return dto.Change{ID: req.ID, PRUrl: req.PRUrl}, nil
 }
 
 func (r *fakeChangeRepository) UpdateAgentEdit(_ context.Context, req dto.ChangeUpdateAgentEditRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.updateAgentEditReq = req
 	return dto.Change{ID: req.ID, AgentEdit: *req.AgentEdit}, nil
 }
 
 func (r *fakeChangeRepository) UpdateEpic(_ context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.id = req.ID
 	return dto.Change{ID: req.ID, EpicID: req.EpicID}, nil
 }
 
 func (r *fakeChangeRepository) UpdatePhase(_ context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.id, r.phase = req.ID, req.ChangePhase
 	return dto.Change{ID: req.ID, ChangePhase: req.ChangePhase}, nil
 }
 
 func (r *fakeChangeRepository) UpdateOpen(_ context.Context, req dto.ChangeUpdateOpenRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.id, r.open = req.ID, req.Open
 	return dto.Change{ID: req.ID, Open: *req.Open}, nil
 }
 
 func (r *fakeChangeRepository) Delete(_ context.Context, req dto.ChangeIDRequest) error {
+	if r.err != nil {
+		return r.err
+	}
 	r.id = req.ID
 	return nil
 }
 
-func (r *fakeChangeRepository) Reference(_ context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
+func (r *fakeChangeRepository) AssignFlow(_ context.Context, req dto.ChangeIDRequest) (dto.Change, error) {
+	if r.err != nil {
+		return dto.Change{}, r.err
+	}
 	r.id = req.ID
 	return dto.Change{ID: req.ID}, nil
+}
+
+func (r *fakeChangeRepository) StartRun(_ context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
+	if r.err != nil {
+		return dto.ChangeRunClaimResponse{}, r.err
+	}
+	r.id = req.ID
+	claimID := "00000000-0000-0000-0000-000000000001"
+	return dto.ChangeRunClaimResponse{ClaimID: &claimID}, nil
+}
+
+func (r *fakeChangeRepository) UpdateRun(_ context.Context, req dto.ChangeUpdateRunRequest) (dto.ChangeRunUpdateResponse, error) {
+	if r.err != nil {
+		return dto.ChangeRunUpdateResponse{}, r.err
+	}
+	r.updateRunReq = req
+	changeID := req.ID
+	return dto.ChangeRunUpdateResponse{ChangeID: &changeID}, nil
+}
+
+func (r *fakeChangeRepository) ResetClaim(_ context.Context, req dto.ChangeIDRequest) (dto.ChangeRunClaimResponse, error) {
+	if r.err != nil {
+		return dto.ChangeRunClaimResponse{}, r.err
+	}
+	r.id = req.ID
+	claimID := "00000000-0000-0000-0000-000000000002"
+	return dto.ChangeRunClaimResponse{ClaimID: &claimID}, nil
 }

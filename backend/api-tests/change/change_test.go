@@ -32,27 +32,37 @@ type changeOption struct {
 }
 
 type change struct {
-	ID          int      `json:"id"`
-	Version     int16    `json:"version"`
-	Ref         *int32   `json:"ref"`
-	Slug        *string  `json:"slug"`
-	ProjectID   int      `json:"project_id"`
-	EpicID      *int     `json:"epic_id"`
-	EpicName    *string  `json:"epic_name"`
-	ChangePhase string   `json:"change_phase"`
-	ChangeTypes []string `json:"change_types"`
-	Title       string   `json:"title"`
-	Idea        string   `json:"idea"`
-	Spec        *string  `json:"spec"`
-	SpecHTML    *string  `json:"spec_html"`
-	PRBody      *string  `json:"pr_body"`
-	PRHtml      *string  `json:"pr_html"`
-	PRUrl       *string  `json:"pr_url"`
-	AgentEdit   bool     `json:"agent_edit"`
-	Open        bool     `json:"open"`
-	DoneTC      int16    `json:"done_tc"`
-	TotalTC     int16    `json:"total_tc"`
-	Completed   int16    `json:"completed"`
+	ID             int      `json:"id"`
+	Version        int16    `json:"version"`
+	Ref            *int32   `json:"ref"`
+	Slug           *string  `json:"slug"`
+	ProjectID      int      `json:"project_id"`
+	EpicID         *int     `json:"epic_id"`
+	EpicName       *string  `json:"epic_name"`
+	ChangePhase    string   `json:"change_phase"`
+	ChangeTypes    []string `json:"change_types"`
+	Title          string   `json:"title"`
+	Idea           string   `json:"idea"`
+	Spec           *string  `json:"spec"`
+	SpecHTML       *string  `json:"spec_html"`
+	PRBody         *string  `json:"pr_body"`
+	PRHtml         *string  `json:"pr_html"`
+	PRUrl          *string  `json:"pr_url"`
+	AgentEdit      bool     `json:"agent_edit"`
+	FlowStages     []string `json:"flow_stages"`
+	FlowStageModes []string `json:"flow_stage_modes"`
+	RunClaimID     *string  `json:"run_claim_id"`
+	RunFlowStage   string   `json:"run_flow_stage"`
+	RunTaskStep    string   `json:"run_task_step"`
+	RunTaskStatus  string   `json:"run_task_status"`
+	RunError       string   `json:"run_error"`
+	RunIsCompleted bool     `json:"run_is_completed"`
+	RunStartedAt   *string  `json:"run_started_at"`
+	RunUpdatedAt   *string  `json:"run_updated_at"`
+	Open           bool     `json:"open"`
+	DoneTC         int16    `json:"done_tc"`
+	TotalTC        int16    `json:"total_tc"`
+	Completed      int16    `json:"completed"`
 }
 
 type detail struct {
@@ -76,10 +86,24 @@ type renderedArtifacts struct {
 	} `json:"artifacts"`
 }
 
-type referenceResult struct {
+type runClaimResponse struct {
+	ClaimID *string `json:"claim_id"`
+}
+
+type runUpdateResponse struct {
+	ChangeID *int `json:"change_id"`
+}
+
+type assignFlowResult struct {
 	status int
 	change change
 	err    error
+}
+
+type startRunResult struct {
+	status   int
+	response runClaimResponse
+	err      error
 }
 
 func TestChangeCRUDAndOptions(t *testing.T) {
@@ -142,6 +166,16 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.NotContains(t, listedFields[0], "spec_html")
 	assert.NotContains(t, listedFields[0], "pr_body")
 	assert.NotContains(t, listedFields[0], "pr_url")
+	assert.NotContains(t, listedFields[0], "flow_stages")
+	assert.NotContains(t, listedFields[0], "flow_stage_modes")
+	assert.NotContains(t, listedFields[0], "run_claim_id")
+	assert.NotContains(t, listedFields[0], "run_flow_stage")
+	assert.NotContains(t, listedFields[0], "run_task_step")
+	assert.NotContains(t, listedFields[0], "run_task_status")
+	assert.NotContains(t, listedFields[0], "run_error")
+	assert.NotContains(t, listedFields[0], "run_is_completed")
+	assert.NotContains(t, listedFields[0], "run_started_at")
+	assert.NotContains(t, listedFields[0], "run_updated_at")
 	assert.NotContains(t, listedFields[0], "version")
 	assert.NotContains(t, listedFields[0], "created")
 
@@ -155,24 +189,30 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.Nil(t, fetched.Change.SpecHTML)
 
 	var referenced change
-	status = client.Post(t, "/api/v1/change/reference", map[string]any{"id": created.ID}, &referenced)
+	status = client.Post(t, "/api/v1/change/assign-flow", map[string]any{"id": created.ID}, &referenced)
 	require.Equal(t, http.StatusOK, status)
 	require.NotNil(t, referenced.Ref)
 	require.NotNil(t, referenced.Slug)
+	require.NotEmpty(t, referenced.FlowStages)
+	require.NotEmpty(t, referenced.FlowStageModes)
 	assert.Equal(t, idea, referenced.Idea)
 
 	firstRef := *referenced.Ref
 	firstSlug := *referenced.Slug
+	firstFlowStages := append([]string(nil), referenced.FlowStages...)
+	firstFlowStageModes := append([]string(nil), referenced.FlowStageModes...)
 	var projectAfterFirstReference project
 	status = client.Post(t, "/api/v1/project/get", map[string]any{"id": projectID}, &projectAfterFirstReference)
 	require.Equal(t, http.StatusOK, status)
 
-	status = client.Post(t, "/api/v1/change/reference", map[string]any{"id": created.ID}, &referenced)
+	status = client.Post(t, "/api/v1/change/assign-flow", map[string]any{"id": created.ID}, &referenced)
 	require.Equal(t, http.StatusOK, status)
 	require.NotNil(t, referenced.Ref)
 	require.NotNil(t, referenced.Slug)
 	assert.Equal(t, firstRef, *referenced.Ref)
 	assert.Equal(t, firstSlug, *referenced.Slug)
+	assert.Equal(t, firstFlowStages, referenced.FlowStages)
+	assert.Equal(t, firstFlowStageModes, referenced.FlowStageModes)
 	var projectAfterSecondReference project
 	status = client.Post(t, "/api/v1/project/get", map[string]any{"id": projectID}, &projectAfterSecondReference)
 	require.Equal(t, http.StatusOK, status)
@@ -194,7 +234,7 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.Equal(t, firstRef, *updated.Ref)
 	assert.Equal(t, firstSlug, *updated.Slug)
 
-	status = client.Post(t, "/api/v1/change/reference", map[string]any{"id": created.ID}, &referenced)
+	status = client.Post(t, "/api/v1/change/assign-flow", map[string]any{"id": created.ID}, &referenced)
 	require.Equal(t, http.StatusOK, status)
 	require.NotNil(t, referenced.Ref)
 	require.NotNil(t, referenced.Slug)
@@ -204,6 +244,9 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	status = client.Post(t, "/api/v1/project/get", map[string]any{"id": projectID}, &projectAfterSlugRefresh)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, projectAfterSecondReference.LastRef, projectAfterSlugRefresh.LastRef)
+
+	status = client.Post(t, "/api/v1/change/reference", map[string]any{"id": created.ID}, nil)
+	require.Equal(t, http.StatusNotFound, status)
 
 	status = client.Post(t, "/api/v1/change/update-idea", map[string]any{
 		"id":   created.ID,
@@ -314,7 +357,7 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, status)
 }
 
-func TestChangeReferenceConcurrentRequestsPreserveSingleRef(t *testing.T) {
+func TestChangeAssignFlowConcurrentRequestsPreserveSingleRef(t *testing.T) {
 	client := shared.NewClient(t)
 
 	projectID := createProject(t, client)
@@ -334,15 +377,15 @@ func TestChangeReferenceConcurrentRequestsPreserveSingleRef(t *testing.T) {
 
 	const requestCount = 12
 	start := make(chan struct{})
-	results := make(chan referenceResult, requestCount)
+	results := make(chan assignFlowResult, requestCount)
 	var wg sync.WaitGroup
 	for range requestCount {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			<-start
-			status, referenced, err := postChangeReference(client.BaseURL(), created.ID)
-			results <- referenceResult{status: status, change: referenced, err: err}
+			status, referenced, err := postChangeAssignFlow(client.BaseURL(), created.ID)
+			results <- assignFlowResult{status: status, change: referenced, err: err}
 		}()
 	}
 	close(start)
@@ -370,12 +413,12 @@ func TestChangeReferenceConcurrentRequestsPreserveSingleRef(t *testing.T) {
 	assert.Equal(t, projectBefore.LastRef+1, projectAfter.LastRef)
 }
 
-func postChangeReference(baseURL string, changeID int) (int, change, error) {
+func postChangeAssignFlow(baseURL string, changeID int) (int, change, error) {
 	payload, err := json.Marshal(map[string]any{"id": changeID})
 	if err != nil {
 		return 0, change{}, err
 	}
-	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/change/reference", bytes.NewReader(payload))
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/change/assign-flow", bytes.NewReader(payload))
 	if err != nil {
 		return 0, change{}, err
 	}
@@ -396,6 +439,277 @@ func postChangeReference(baseURL string, changeID int) (int, change, error) {
 		return res.StatusCode, change{}, err
 	}
 	return res.StatusCode, referenced, nil
+}
+
+func TestChangeStartRunConcurrentRequestsPreserveSingleClaim(t *testing.T) {
+	client := shared.NewClient(t)
+
+	projectID := createProject(t, client)
+	defer shared.CleanupProject(t, client, projectID)
+
+	var created change
+	status := client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id": projectID,
+		"title":      "Concurrent run claim",
+		"idea":       "Claim the run once.",
+	}, &created)
+	require.Equal(t, http.StatusCreated, status)
+
+	var assigned change
+	status = client.Post(t, "/api/v1/change/assign-flow", map[string]any{"id": created.ID}, &assigned)
+	require.Equal(t, http.StatusOK, status)
+
+	const requestCount = 12
+	start := make(chan struct{})
+	results := make(chan startRunResult, requestCount)
+	var wg sync.WaitGroup
+	for range requestCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			status, response, err := postChangeStartRun(client.BaseURL(), created.ID)
+			results <- startRunResult{status: status, response: response, err: err}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+
+	var winningClaim string
+	claimedCount := 0
+	noClaimCount := 0
+	for result := range results {
+		require.NoError(t, result.err)
+		require.Equal(t, http.StatusOK, result.status)
+		if result.response.ClaimID == nil {
+			noClaimCount++
+			continue
+		}
+		claimedCount++
+		require.NotEmpty(t, *result.response.ClaimID)
+		winningClaim = *result.response.ClaimID
+	}
+	require.Equal(t, 1, claimedCount)
+	assert.Equal(t, requestCount-1, noClaimCount)
+
+	var fetched detail
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, fetched.Change.RunClaimID)
+	assert.Equal(t, winningClaim, *fetched.Change.RunClaimID)
+	assert.NotNil(t, fetched.Change.RunStartedAt)
+}
+
+func postChangeStartRun(baseURL string, changeID int) (int, runClaimResponse, error) {
+	payload, err := json.Marshal(map[string]any{"id": changeID})
+	if err != nil {
+		return 0, runClaimResponse{}, err
+	}
+	req, err := http.NewRequest(http.MethodPost, baseURL+"/api/v1/change/start-run", bytes.NewReader(payload))
+	if err != nil {
+		return 0, runClaimResponse{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return 0, runClaimResponse{}, err
+	}
+	defer res.Body.Close()
+
+	var response runClaimResponse
+	if res.StatusCode != http.StatusOK {
+		return res.StatusCode, response, nil
+	}
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+		return res.StatusCode, runClaimResponse{}, err
+	}
+	return res.StatusCode, response, nil
+}
+
+func TestChangeRunLifecycle(t *testing.T) {
+	client := shared.NewClient(t)
+
+	projectID := createProject(t, client)
+	defer shared.CleanupProject(t, client, projectID)
+
+	var created change
+	status := client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id": projectID,
+		"title":      "Run lifecycle",
+		"idea":       "Run lifecycle idea.",
+	}, &created)
+	require.Equal(t, http.StatusCreated, status)
+
+	var assigned change
+	status = client.Post(t, "/api/v1/change/assign-flow", map[string]any{"id": created.ID}, &assigned)
+	require.Equal(t, http.StatusOK, status)
+	require.NotEmpty(t, assigned.FlowStages)
+	require.NotEmpty(t, assigned.FlowStageModes)
+
+	var started runClaimResponse
+	status = client.Post(t, "/api/v1/change/start-run", map[string]any{"id": created.ID}, &started)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, started.ClaimID)
+	require.NotEmpty(t, *started.ClaimID)
+
+	var fetched detail
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, fetched.Change.RunClaimID)
+	assert.Equal(t, *started.ClaimID, *fetched.Change.RunClaimID)
+	assert.NotNil(t, fetched.Change.RunStartedAt)
+
+	var detailFields map[string]any
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &detailFields)
+	require.Equal(t, http.StatusOK, status)
+	changeFields, ok := detailFields["change"].(map[string]any)
+	require.True(t, ok)
+	for _, field := range []string{
+		"flow_stages",
+		"flow_stage_modes",
+		"run_claim_id",
+		"run_flow_stage",
+		"run_task_step",
+		"run_task_status",
+		"run_error",
+		"run_is_completed",
+		"run_started_at",
+		"run_updated_at",
+	} {
+		assert.Contains(t, changeFields, field)
+	}
+
+	var duplicateStart runClaimResponse
+	status = client.Post(t, "/api/v1/change/start-run", map[string]any{"id": created.ID}, &duplicateStart)
+	require.Equal(t, http.StatusOK, status)
+	assert.Nil(t, duplicateStart.ClaimID)
+
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, fetched.Change.RunClaimID)
+	assert.Equal(t, *started.ClaimID, *fetched.Change.RunClaimID)
+
+	var runUpdate runUpdateResponse
+	status = client.Post(t, "/api/v1/change/update-run", map[string]any{
+		"id":               created.ID,
+		"run_claim_id":     " " + *started.ClaimID + " ",
+		"run_flow_stage":   " idea ",
+		"run_task_step":    " agent ",
+		"run_task_status":  " running ",
+		"run_error":        " latest error ",
+		"run_is_completed": false,
+	}, &runUpdate)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, runUpdate.ChangeID)
+	assert.Equal(t, created.ID, *runUpdate.ChangeID)
+
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "idea", fetched.Change.RunFlowStage)
+	assert.Equal(t, "agent", fetched.Change.RunTaskStep)
+	assert.Equal(t, "running", fetched.Change.RunTaskStatus)
+	assert.Equal(t, "latest error", fetched.Change.RunError)
+	assert.False(t, fetched.Change.RunIsCompleted)
+	assert.NotNil(t, fetched.Change.RunUpdatedAt)
+
+	var reset runClaimResponse
+	status = client.Post(t, "/api/v1/change/reset-claim", map[string]any{"id": created.ID}, &reset)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, reset.ClaimID)
+	require.NotEqual(t, *started.ClaimID, *reset.ClaimID)
+
+	var staleUpdate runUpdateResponse
+	status = client.Post(t, "/api/v1/change/update-run", map[string]any{
+		"id":               created.ID,
+		"run_claim_id":     *started.ClaimID,
+		"run_flow_stage":   "docs",
+		"run_task_step":    "done",
+		"run_task_status":  "completed",
+		"run_error":        "",
+		"run_is_completed": true,
+	}, &staleUpdate)
+	require.Equal(t, http.StatusOK, status)
+	assert.Nil(t, staleUpdate.ChangeID)
+
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "idea", fetched.Change.RunFlowStage)
+	assert.Equal(t, "agent", fetched.Change.RunTaskStep)
+	assert.Equal(t, "running", fetched.Change.RunTaskStatus)
+	assert.Equal(t, "latest error", fetched.Change.RunError)
+	assert.False(t, fetched.Change.RunIsCompleted)
+	require.NotNil(t, fetched.Change.RunClaimID)
+	assert.Equal(t, *reset.ClaimID, *fetched.Change.RunClaimID)
+
+	var informationalUpdate runUpdateResponse
+	status = client.Post(t, "/api/v1/change/update-run", map[string]any{
+		"id":               created.ID,
+		"run_claim_id":     *reset.ClaimID,
+		"run_flow_stage":   "worker-local-stage",
+		"run_task_step":    "worker-local-step",
+		"run_task_status":  "worker-local-status",
+		"run_error":        "",
+		"run_is_completed": false,
+	}, &informationalUpdate)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, informationalUpdate.ChangeID)
+	assert.Equal(t, created.ID, *informationalUpdate.ChangeID)
+
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "worker-local-stage", fetched.Change.RunFlowStage)
+	assert.Equal(t, "worker-local-step", fetched.Change.RunTaskStep)
+	assert.Equal(t, "worker-local-status", fetched.Change.RunTaskStatus)
+	assert.False(t, fetched.Change.RunIsCompleted)
+
+	var completed runUpdateResponse
+	status = client.Post(t, "/api/v1/change/update-run", map[string]any{
+		"id":               created.ID,
+		"run_claim_id":     *reset.ClaimID,
+		"run_flow_stage":   "docs",
+		"run_task_step":    "done",
+		"run_task_status":  "completed",
+		"run_error":        "",
+		"run_is_completed": true,
+	}, &completed)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, completed.ChangeID)
+	assert.Equal(t, created.ID, *completed.ChangeID)
+
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	assert.Nil(t, fetched.Change.RunClaimID)
+	assert.Equal(t, "docs", fetched.Change.RunFlowStage)
+	assert.Equal(t, "done", fetched.Change.RunTaskStep)
+	assert.Equal(t, "completed", fetched.Change.RunTaskStatus)
+	assert.Empty(t, fetched.Change.RunError)
+	assert.True(t, fetched.Change.RunIsCompleted)
+	assert.NotNil(t, fetched.Change.RunUpdatedAt)
+
+	status = client.Post(t, "/api/v1/change/update-run", map[string]any{
+		"id":               created.ID,
+		"run_claim_id":     "",
+		"run_flow_stage":   "docs",
+		"run_task_step":    "done",
+		"run_task_status":  "completed",
+		"run_error":        "",
+		"run_is_completed": true,
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/change/update-run", map[string]any{
+		"id":               created.ID,
+		"run_claim_id":     "not-a-uuid",
+		"run_flow_stage":   "docs",
+		"run_task_step":    "done",
+		"run_task_status":  "completed",
+		"run_error":        "",
+		"run_is_completed": true,
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, status)
 }
 
 func TestChangeListOrdersByModifiedDescending(t *testing.T) {
