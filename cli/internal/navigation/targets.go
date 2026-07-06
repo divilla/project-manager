@@ -14,6 +14,7 @@ func ReturnTargets() map[State]State {
 		ChangesHelpState:     ChangesListState,
 		EpicsHelpState:       EpicsListState,
 		ProjectsHelpState:    ProjectsListState,
+		ConfigState:          MainState,
 	}
 }
 

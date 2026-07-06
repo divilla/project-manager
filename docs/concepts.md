@@ -45,7 +45,7 @@ A Flow is a reusable automation definition for moving a Change through ordered S
 
 Default Flow Steps are ordered as `idea`, `spec`, `ready`, `docs`, `code`, `polish`, `pr`, `review`, `fix`, `sync`, `merge`, `stage`, and `master`.
 
-Stage modes are `skip`, `prompt`, and `exec`. Task statuses are `queued`, `running`, `paused`, `stopped`, `waiting`, `completed`, and `failed`. Task steps are `none`, `entry`, `prompt`, `agent`, `exit`, and `done`.
+Default Flow Step modes are `skip`, `prompt`, and `exec`. The default repository Flow help config includes those stage modes; task statuses `queued`, `running`, `paused`, `stopped`, `waiting`, `completed`, and `failed`; and task steps `none`, `entry`, `prompt`, `agent`, `exit`, and `done`. These help options are configuration data rather than validation lists for custom help display.
 
 ## Test Case
 A test case is a binary Definition of Done item for a change. It must be concrete, verifiable, and small enough to evaluate independently. Its `scenario` describes the condition that must be true.

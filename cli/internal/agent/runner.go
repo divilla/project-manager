@@ -56,10 +56,11 @@ func (ProcessRunner) ResolveRepoRoot(ctx context.Context) (string, error) {
 // Rewrite runs Codex in JSON event mode and captures output/session data.
 func (ProcessRunner) Rewrite(ctx context.Context, repoRoot string, sessionID string, workspace Workspace, progress RewriteProgress) (RewriteResult, error) {
 	args := []string{"exec"}
+	prompt := RewritePrompt(workspace)
 	if sessionID == "" {
-		args = append(args, "--json", "-C", repoRoot, "-o", workspace.OutputPath(), RewritePrompt)
+		args = append(args, "--json", "-C", repoRoot, "-o", workspace.OutputPath(), prompt)
 	} else {
-		args = append(args, "resume", "-o", workspace.OutputPath(), sessionID, RewritePrompt)
+		args = append(args, "resume", "-o", workspace.OutputPath(), sessionID, prompt)
 	}
 	cmd := exec.CommandContext(ctx, "codex", args...)
 	cmd.Dir = repoRoot

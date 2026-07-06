@@ -1,5 +1,7 @@
 package agent
 
+import "fmt"
+
 // Stage identifies where the user is in an agent-assisted workflow.
 type Stage string
 
@@ -15,8 +17,6 @@ const (
 )
 
 const (
-	// DefaultWorkspaceDir is the temporary workspace for agent planning files.
-	DefaultWorkspaceDir = "/tmp/mch"
 	// IdeaFileName is the user-authored idea markdown file.
 	IdeaFileName = "initial-idea.md"
 	// GeneratedFileName is the generated Change spec markdown file.
@@ -25,13 +25,18 @@ const (
 	CodexOutputName = "codex-output.txt"
 	// CodexRunLogName is the JSON event log file for the initial Codex exec.
 	CodexRunLogName = "codex-run.jsonl"
-	// RewritePrompt is the Codex prompt for rewriting the idea draft.
-	RewritePrompt = "Use $change-idea-tmp."
+	// RewritePromptSkill is the Codex skill for rewriting the idea draft.
+	RewritePromptSkill = "$change-idea-tmp"
 	// InitPrompt is the Codex prompt for generating the final Change spec.
 	InitPrompt = "Use $change-spec-tmp."
 	// GenericError is shown when Codex output does not satisfy the flow contract.
 	GenericError = "something went wrong - please try again"
 )
+
+// RewritePrompt returns the Codex prompt for rewriting the configured idea file.
+func RewritePrompt(workspace Workspace) string {
+	return fmt.Sprintf("Use %s. The configured temp_dir is %q. Read and replace %q.", RewritePromptSkill, workspace.Dir, workspace.IdeaPath())
+}
 
 // Model stores agent-assisted workflow state.
 type Model struct {
@@ -41,11 +46,6 @@ type Model struct {
 	RepoRoot         string
 	IdeaEntryContent string
 	CommandOutput    string
-}
-
-// NewModel returns an idle agent model for the default workspace.
-func NewModel() Model {
-	return Model{Workspace: Workspace{Dir: DefaultWorkspaceDir}}
 }
 
 // NewModelWithWorkspace returns an idle agent model for a specific workspace.

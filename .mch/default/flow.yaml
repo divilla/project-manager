@@ -1,0 +1,116 @@
+version: 1
+slug: default
+name: Default Change Automation
+description: Default repository Flow for moving a Change from idea capture through master promotion.
+
+help: help.yaml
+makefile: Makefile
+
+steps:
+  - slug: idea
+    help: capture or refine the initial change idea
+    mode: prompt
+    prompt: prompts/change-idea.md
+    entry: make idea-entry
+    exec: make idea-exec
+    exit: make idea-exit
+
+  - slug: spec
+    help: create the implementation-ready spec
+    mode: exec
+    prompt: prompts/change-spec.md
+    entry: make spec-entry
+    exec: make spec-exec
+    exit: make spec-exit
+
+  - slug: ready
+    help: mark the change as ready for execution
+    mode: exec
+    prompt: prompts/change-verify.md
+    entry: make ready-entry
+    exec: make ready-exec
+    exit: make ready-exit
+
+  - slug: docs
+    help: update required documentation before implementation
+    mode: exec
+    prompt: prompts/change-docs.md
+    entry: make docs-entry
+    exec: make docs-exec
+    exit: make docs-exit
+
+  - slug: code
+    help: implement the change
+    mode: exec
+    prompt: prompts/change-code.md
+    entry: make code-entry
+    exec: make code-exec
+    exit: make code-exit
+
+  - slug: polish
+    help: user-guided refinement after coding
+    mode: prompt
+    prompt: prompts/polish.md
+    entry: make polish-entry
+    exec: make polish-exec
+    exit: make polish-exit
+
+  - slug: pr
+    help: create or update the pull request
+    mode: exec
+    prompt: prompts/change-pr.md
+    entry: make pr-entry
+    exec: make pr-exec
+    exit: make pr-exit
+
+  - slug: review
+    help: review the PR/change against the spec
+    mode: exec
+    prompt: prompts/change-review.md
+    entry: make review-entry
+    exec: make review-exec
+    exit: make review-exit
+
+  - slug: fix
+    help: address review findings
+    mode: exec
+    prompt: prompts/change-fix.md
+    entry: make fix-entry
+    exec: make fix-exec
+    exit: make fix-exit
+
+  - slug: sync
+    help: align spec, QA cases, and docs with final code changes
+    mode: exec
+    prompt: prompts/change-docs-post-code.md
+    entry: make sync-entry
+    exec: make sync-exec
+    exit: make sync-exit
+
+  - slug: merge
+    help: merge the change branch
+    mode: exec
+    prompt: prompts/merge.md
+    entry: make merge-entry
+    exec: make merge-exec
+    exit: make merge-exit
+
+  - slug: stage
+    help: promote or merge into the stage branch
+    mode: exec
+    prompt: prompts/stage.md
+    entry: make stage-entry
+    exec: make stage-exec
+    exit: make stage-exit
+
+  - slug: master
+    help: promote or merge into the master branch
+    mode: exec
+    prompt: prompts/master.md
+    entry: make master-entry
+    exec: make master-exec
+    exit: make master-exit
+
+utility_prompts:
+  change-idea-tmp: prompts/idea.md
+  change-spec-tmp: prompts/spec.md

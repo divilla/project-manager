@@ -30,6 +30,7 @@ const (
 	ChangesHelpState           = navigation.ChangesHelpState
 	EpicsHelpState             = navigation.EpicsHelpState
 	ProjectsHelpState          = navigation.ProjectsHelpState
+	ConfigState                = navigation.ConfigState
 	FindInputState             = navigation.FindInputState
 	CommandDropDownState       = navigation.CommandDropDownState
 	ListSelectionDropDownState = navigation.ListSelectionDropDownState

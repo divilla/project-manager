@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 
+	httpclient "mch/pkg/client"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
@@ -30,7 +32,11 @@ func Run(args []string, out io.Writer) error {
 		return err
 	}
 
+	cfg, err := loadRepositoryConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load repository configuration: %w", err)
+	}
 	lipgloss.SetColorProfile(termenv.ANSI256)
-	_, err := tea.NewProgram(NewModel(), tea.WithOutput(out)).Run()
+	_, err = tea.NewProgram(newModelWithConfig(httpclient.NewHTTPClient(cfg.BackendURL), cfg), tea.WithOutput(out)).Run()
 	return err
 }

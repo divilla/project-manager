@@ -30,6 +30,7 @@ var commandsByState = map[State][]string{
 	ProjectDetailsState:  projects.DetailCommands(),
 	ProjectCreateState:   {"/editor", "/save", "/cancel"},
 	ProjectUpdateState:   {"/editor", "/save", "/cancel"},
+	ConfigState:          {"/return"},
 	MainHelpState:        help.Commands(),
 	ChangesHelpState:     help.Commands(),
 	EpicsHelpState:       help.Commands(),

@@ -28,6 +28,7 @@ const (
 	ChangesHelpState           State = "ChangesHelpState"
 	EpicsHelpState             State = "EpicsHelpState"
 	ProjectsHelpState          State = "ProjectsHelpState"
+	ConfigState                State = "ConfigState"
 	FindInputState             State = "FindInput"
 	CommandDropDownState       State = "CommandDropDown"
 	ListSelectionDropDownState State = "ListSelectionDropDown"

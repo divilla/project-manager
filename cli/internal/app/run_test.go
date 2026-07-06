@@ -425,6 +425,25 @@ func TestRunVersionPrintsVersion(t *testing.T) {
 	assert.Contains(t, got, Version)
 }
 
+func TestRunReturnsVerboseConfigErrorBeforeStartingTUI(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, exec.Command("git", "init", root).Run())
+	previous, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(root))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(previous))
+	})
+	var out bytes.Buffer
+
+	err = Run(nil, &out)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to load repository configuration")
+	assert.Contains(t, err.Error(), filepath.Join(root, ".mch", "config.yaml"))
+	assert.Empty(t, out.String())
+}
+
 func TestNewModelStartupState(t *testing.T) {
 	m := NewModel()
 
@@ -434,7 +453,7 @@ func TestNewModelStartupState(t *testing.T) {
 }
 
 func TestShellChromeRendersTitleAndCurrentProjectInFooter(t *testing.T) {
-	m := newModelWithConfig(&fakeClient{}, appConfig{BackendURL: defaultBackendURL, ProjectID: 7}, "")
+	m := newModelWithConfig(&fakeClient{}, testAppConfig(appConfig{ProjectID: 7}))
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.width = 180
 
@@ -471,7 +490,7 @@ func TestStartupTriggersProjectSelectionWhenProjectIDIsUnset(t *testing.T) {
 
 func TestStartupSkipsProjectSelectionWhenProjectIDIsSaved(t *testing.T) {
 	client := &fakeClient{gotProject: dto.Project{ID: "7", Name: "Project Seven"}}
-	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, ProjectID: 7}, "")
+	m := newModelWithConfig(client, testAppConfig(appConfig{ProjectID: 7}))
 	m.width = 120
 
 	require.NotNil(t, m.Init())
@@ -1066,8 +1085,9 @@ func TestProjectsLoadFailureAndEmptyListAreDeterministic(t *testing.T) {
 }
 
 func TestProjectCreateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".config", "config.yaml")
-	require.NoError(t, saveAppConfig(path, appConfig{BackendURL: defaultBackendURL, ProjectID: 99}))
+	path := filepath.Join(t.TempDir(), ".mch", "config.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, saveAppConfig(path, testAppConfig(appConfig{ProjectID: 99})))
 	client := &fakeClient{
 		createdProject: dto.Project{ID: "7"},
 		gotProject: dto.Project{
@@ -1078,7 +1098,7 @@ func TestProjectCreateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testin
 			Modified:    "2026-06-29T11:04:59Z",
 		},
 	}
-	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, ProjectID: 99}, path)
+	m := newModelWithConfig(client, testAppConfig(appConfig{ProjectID: 99, ConfigPath: path}))
 	m.state = ProjectCreateState
 	m.input.SetValue("  New\nProject  ")
 
@@ -1095,7 +1115,7 @@ func TestProjectCreateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testin
 	assert.Equal(t, []int{7}, client.getIDs)
 	assert.Equal(t, client.gotProject, got.projectList.Detail)
 	assert.Equal(t, "99", got.currentProject.ID)
-	loaded, err := loadAppConfig(path)
+	loaded, err := loadConfigFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, 99, loaded.ProjectID)
 	view := stripANSI(got.View())
@@ -1119,8 +1139,9 @@ func TestProjectCreateValidationDoesNotCallBackend(t *testing.T) {
 }
 
 func TestProjectUpdateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".config", "config.yaml")
-	require.NoError(t, saveAppConfig(path, appConfig{BackendURL: defaultBackendURL, ProjectID: 99}))
+	path := filepath.Join(t.TempDir(), ".mch", "config.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, saveAppConfig(path, testAppConfig(appConfig{ProjectID: 99})))
 	client := &fakeClient{
 		updatedProject: dto.Project{ID: "7"},
 		gotProject: dto.Project{
@@ -1131,7 +1152,7 @@ func TestProjectUpdateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testin
 			Modified:    "2026-06-29T13:04:59Z",
 		},
 	}
-	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, ProjectID: 99}, path)
+	m := newModelWithConfig(client, testAppConfig(appConfig{ProjectID: 99, ConfigPath: path}))
 	m.state = ProjectDetailsState
 	m.projectList.Detail = dto.Project{ID: "7", Name: "Old Project", ChangeCount: 2}
 
@@ -1151,7 +1172,7 @@ func TestProjectUpdateSavePersistsFetchesDetailsAndDoesNotMutateConfig(t *testin
 	assert.Equal(t, []int{7}, client.getIDs)
 	assert.Equal(t, client.gotProject, got.projectList.Detail)
 	assert.Equal(t, "99", got.currentProject.ID)
-	loaded, err := loadAppConfig(path)
+	loaded, err := loadConfigFile(path)
 	require.NoError(t, err)
 	assert.Equal(t, 99, loaded.ProjectID)
 }
@@ -1567,6 +1588,20 @@ func TestNewChangeCreatesWorkspaceAndOpensIdeaEditor(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join(workspaceDir, agent.IdeaFileName))
 	require.NoError(t, err)
 	assert.Empty(t, string(content))
+}
+
+func TestNewChangeUsesConfiguredTempDirForWorkspace(t *testing.T) {
+	workspaceDir := filepath.Join(t.TempDir(), "configured-temp")
+	m := newModelWithConfig(&fakeClient{}, testAppConfig(appConfig{TempDir: workspaceDir}))
+	m.state = ChangesListState
+	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
+
+	got, cmd := sendCommand(m, "/new-change")
+
+	require.NotNil(t, cmd)
+	assert.Equal(t, CreateIdeaState, got.state)
+	assert.Equal(t, workspaceDir, got.agentFlow.Workspace.Dir)
+	require.FileExists(t, filepath.Join(workspaceDir, agent.IdeaFileName))
 }
 
 func TestNewChangeReplacesRegularWorkspaceFile(t *testing.T) {
@@ -2063,6 +2098,31 @@ func TestAgentRewriteSuccessSavesIdeaAgentEditAndRemovesTempIdea(t *testing.T) {
 	exists, err := workspace.IdeaExists()
 	require.NoError(t, err)
 	assert.False(t, exists)
+}
+
+func TestAgentRewriteSaveFailureStopsRunningState(t *testing.T) {
+	workspace := agent.Workspace{Dir: t.TempDir()}
+	require.NoError(t, workspace.WriteIdea("# Rewritten Change\n\nRewritten idea"))
+	client := &fakeClient{changeUpdateErr: errors.New("Internal Server Error")}
+	m := NewModelWithClient(client)
+	m.state = RewriteIdeaState
+	m.changeList.Detail = dto.Change{ID: "12", Title: "Draft", Idea: "# Draft\n\nInitial"}
+	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
+	m.agentFlow.Stage = agent.StageAIRunning
+
+	got, cmd := m.Update(agentRewriteFinishedMsg{result: agent.RewriteResult{RepoRoot: "/repo", SessionID: "session-1", Output: "Done."}})
+	model := got.(Model)
+	require.NotNil(t, cmd)
+	model = applyMsg(model, cmd())
+
+	assert.Equal(t, ChangeDetailsState, model.state)
+	assert.Equal(t, "Internal Server Error", model.err)
+	assert.Equal(t, "save failed", model.status)
+	assert.False(t, model.agentFlow.Active())
+	assert.Equal(t, agent.StageIdle, model.agentFlow.Stage)
+	assert.Zero(t, model.agentElapsed)
+	view := stripANSI(model.View())
+	assert.NotContains(t, view, "Agent running:")
 }
 
 func TestAgentSpecCreateCommandPersistsGeneratedSpecPath(t *testing.T) {
@@ -3619,12 +3679,15 @@ func TestSelectorDropdownsLoadAndReturn(t *testing.T) {
 }
 
 func TestSelectProjectPersistsProjectIDToConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".config", "config.yaml")
-	require.NoError(t, saveAppConfig(path, appConfig{BackendURL: defaultBackendURL}))
+	root := t.TempDir()
+	path := filepath.Join(root, ".mch", "config.yaml")
+	legacyPath := filepath.Join(root, "cli", ".config", "config.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, saveAppConfig(path, testAppConfig(appConfig{})))
 	client := &fakeClient{
 		projects: []dto.Option{{ID: "7", Label: "Project Seven"}},
 	}
-	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL}, path)
+	m := newModelWithConfig(client, testAppConfig(appConfig{ConfigPath: path}))
 
 	got, cmd := sendCommand(m, "/select-project")
 	require.NotNil(t, cmd)
@@ -3633,9 +3696,11 @@ func TestSelectProjectPersistsProjectIDToConfig(t *testing.T) {
 
 	assert.Equal(t, MainState, got.state)
 	assert.Equal(t, "7", got.currentProject.ID)
-	loaded, err := loadAppConfig(path)
+	loadedFile, err := loadConfigFile(path)
 	require.NoError(t, err)
-	assert.Equal(t, 7, loaded.ProjectID)
+	assert.Equal(t, 7, loadedFile.ProjectID)
+	_, statErr := os.Stat(legacyPath)
+	assert.True(t, os.IsNotExist(statErr))
 }
 
 func TestSelectorFailureAndEscapePreservePreviousState(t *testing.T) {
@@ -3837,6 +3902,70 @@ func TestCommandDropdownFiltersAndExecutesSelection(t *testing.T) {
 	got, _ = sendKey(got, tea.KeyEnter)
 
 	assert.Equal(t, EpicsListState, got.state)
+}
+
+func TestConfigCommandRendersResolvedConfigWithoutBackendCalls(t *testing.T) {
+	client := &fakeClient{}
+	cfg := testAppConfig(appConfig{ProjectID: 7, TempDir: "/tmp/custom-mch"})
+	m := newModelWithConfig(client, cfg)
+	m.width = 160
+
+	got, cmd := sendCommand(m, "/config")
+
+	require.Nil(t, cmd)
+	assert.Equal(t, ConfigState, got.state)
+	assert.Zero(t, client.listCalls)
+	assert.Zero(t, client.rowListCalls)
+	assert.Zero(t, client.changeListCalls)
+	view := stripANSI(got.View())
+	assert.Contains(t, view, "ConfigScreen")
+	assert.Contains(t, view, "repository_root: /repo")
+	assert.Contains(t, view, "config_path: /repo/.mch/config.yaml")
+	assert.Contains(t, view, "backend_url: http://localhost:8080")
+	assert.Contains(t, view, "temp_dir: /tmp/custom-mch")
+	assert.Contains(t, view, "project_id: 7")
+	assert.Contains(t, view, "flow_dir: /repo/.mch/default")
+	assert.Contains(t, view, "slug: idea")
+	assert.Contains(t, view, "prompt: prompts/change-idea.md")
+	assert.Contains(t, view, "entry: make idea-entry")
+	assert.Contains(t, view, "exec: make idea-exec")
+	assert.Contains(t, view, "exit: make idea-exit")
+	assert.Contains(t, view, "stage_modes:")
+	assert.Contains(t, view, "task_statuses:")
+	assert.Contains(t, view, "task_steps:")
+}
+
+func TestConfigViewReturnsWithoutSavingOrCallingBackend(t *testing.T) {
+	root := t.TempDir()
+	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /tmp/custom-mch\n"+"project_id: 5\n")
+	cfg, err := loadAppConfig(root)
+	require.NoError(t, err)
+	before, err := os.ReadFile(cfg.ConfigPath)
+	require.NoError(t, err)
+	client := &fakeClient{}
+	m := newModelWithConfig(client, cfg)
+
+	got, _ := sendCommand(m, "/config")
+	got, cmd := sendCommand(got, "/return")
+	require.Nil(t, cmd)
+	assert.Equal(t, MainState, got.state)
+
+	got, _ = sendCommand(m, "/config")
+	got, cmd = sendKey(got, tea.KeyEsc)
+	require.Nil(t, cmd)
+	assert.Equal(t, MainState, got.state)
+
+	got, _ = sendCommand(m, "/config")
+	got, cmd = sendKey(got, tea.KeyCtrlC)
+	require.Nil(t, cmd)
+	assert.Equal(t, MainState, got.state)
+
+	after, err := os.ReadFile(cfg.ConfigPath)
+	require.NoError(t, err)
+	assert.Equal(t, string(before), string(after))
+	assert.Zero(t, client.listCalls)
+	assert.Zero(t, client.rowListCalls)
+	assert.Zero(t, client.changeListCalls)
 }
 
 func TestCommandDropdownPreservesUnderlyingScreenForEveryCommandState(t *testing.T) {

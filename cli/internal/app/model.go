@@ -2,6 +2,7 @@ package app
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"mch/internal/agent"
@@ -241,9 +242,8 @@ type Model struct {
 
 // NewModel creates the default mch model using local config and HTTP backend access.
 func NewModel() Model {
-	configPath := resolveConfigPath(defaultConfigPath)
-	cfg, err := loadAppConfig(configPath)
-	m := newModelWithConfig(httpclient.NewHTTPClient(cfg.BackendURL), cfg, configPath)
+	cfg, err := loadRepositoryConfig()
+	m := newModelWithConfig(httpclient.NewHTTPClient(cfg.BackendURL), cfg)
 	if err != nil {
 		m.err = err.Error()
 	}
@@ -252,10 +252,10 @@ func NewModel() Model {
 
 // NewModelWithClient creates a model with an injected backend client for tests.
 func NewModelWithClient(client appClient) Model {
-	return newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL}, "")
+	return newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, TempDir: "configured-test-temp"})
 }
 
-func newModelWithConfig(client appClient, cfg appConfig, configPath string) Model {
+func newModelWithConfig(client appClient, cfg appConfig) Model {
 	input := textarea.New()
 	input.Placeholder = defaultInputPlaceholder
 	input.Prompt = "> "
@@ -286,20 +286,21 @@ func newModelWithConfig(client appClient, cfg appConfig, configPath string) Mode
 			ID: strconv.Itoa(cfg.ProjectID),
 		}
 	}
+	agentWorkspace := strings.TrimSpace(cfg.TempDir)
 
 	return Model{
 		input:          input,
 		state:          MainState,
 		width:          80,
 		height:         24,
-		agentFlow:      agent.NewModel(),
+		agentFlow:      agent.NewModelWithWorkspace(agentWorkspace),
 		agentRunner:    agent.NewProcessRunner(),
-		agentWorkspace: agent.DefaultWorkspaceDir,
+		agentWorkspace: agentWorkspace,
 		agentSpinner:   spin,
 		currentProject: currentProject,
 		client:         client,
 		appConfig:      cfg,
-		configPath:     configPath,
+		configPath:     cfg.ConfigPath,
 		status:         "MainState",
 	}
 }

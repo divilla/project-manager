@@ -32,3 +32,5 @@ If no project exists, project-scoped features show an empty state and direct the
 Project deletion is blocked when changes exist. The backend owns the final safety check; the frontend can only explain or disable actions ahead of time.
 
 CLI planning commands that create project-scoped data require a valid numeric current project ID. If no valid current project is available, they must stop before opening planning editors, running Codex, or calling create endpoints.
+
+For `mch`, the current project ID is committed repository and branch configuration in `.mch/config.yaml`, not user-local CLI state. Missing `project_id` and `project_id: 0` are valid no-selection states; selecting a project from `mch` persists the selected numeric ID back to `.mch/config.yaml`.

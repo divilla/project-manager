@@ -16,12 +16,14 @@ The prototype stores its local config under `cli-proto/.config`. It may persist 
 ## Reference TUI
 The `cli/` module contains the reference `mch` TUI. Its architecture, package boundaries, style tokens, state model, and test strategy are documented in `docs/architecture/mch.md`. The executable remains `mch`; `cli/` is only the source directory name.
 
-`mch` owns the interactive AI-assisted `/new-change` flow from the Change list. The flow may use local temporary files under `/tmp/mch` and Codex CLI process handoff, but saved product data must still be created through supported backend APIs. Change Flow assignment, Run controls, claim reset, and branch reconciliation controls are not supported by the CLI until a dedicated CLI Change adds them; `mch` must not assign `ref`, `slug`, Flow snapshot fields, or Run state locally.
+`mch` owns the interactive AI-assisted `/new-change` flow from the Change list. The flow uses the committed repository-root `.mch/config.yaml` for `backend_url`, `temp_dir`, and numeric `project_id`, and uses `.mch/default` as the active Flow profile. Saved product data must still be created through supported backend APIs. Change Flow assignment, Run controls, claim reset, and branch reconciliation controls are not supported by the CLI until a dedicated CLI Change adds them; `mch` must not assign `ref`, `slug`, Flow snapshot fields, or Run state locally.
+
+`mch` resolves the current Git repository root before loading configuration, so starting from the root or a nested directory uses the same `.mch` tree. The Main screen includes `/config`, which opens a read-only view of resolved in-memory CLI and Flow configuration without calling backend APIs, reading raw YAML for rendering, executing hooks, or saving local files.
 
 Repository Change workflow automation uses `change/<change-name>` branches and Change specs under `specs/<change-name>.md`. This does not rename application routes, API paths, packages, or product data that use the Change concept.
 
 ## Current Project
-Current project selection is user-specific application state. CLI commands that operate on project-scoped data should read the same user setting as the app or require an explicit project option.
+For `mch`, current project selection is committed repository and branch configuration stored as numeric `project_id` in `.mch/config.yaml`. Missing `project_id` and `project_id: 0` mean no current project is selected. CLI commands that operate on project-scoped data must use a valid configured project ID or require an explicit project option.
 
 ## Agent Use
 Agents can use CLI commands when commands are deterministic, documented, and return structured output. Prefer JSON output for commands intended for automation.

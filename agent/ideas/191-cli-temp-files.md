@@ -1,4 +1,4 @@
-# Agent Stages and Tasks Backend
+# CLI Agent Stages and Tasks Config
 
 Input:  /tmp/mch/input.md
 Output: /tmp/mch/output.md

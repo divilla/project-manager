@@ -90,7 +90,8 @@ func TestFormatCommandOutputHumanizesJSONLines(t *testing.T) {
 }
 
 func TestCodexPromptsUseExpectedSkills(t *testing.T) {
-	assert.Equal(t, "Use $change-idea-tmp.", RewritePrompt)
+	workspace := Workspace{Dir: "/tmp/custom-mch"}
+	assert.Equal(t, `Use $change-idea-tmp. The configured temp_dir is "/tmp/custom-mch". Read and replace "/tmp/custom-mch/initial-idea.md".`, RewritePrompt(workspace))
 	assert.Equal(t, "Use $change-spec-tmp.", InitPrompt)
 }
 

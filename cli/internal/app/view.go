@@ -46,6 +46,10 @@ func (m Model) View() string {
 			lines = append(lines, details)
 		}
 	}
+	if m.state == ConfigState {
+		lines = append(lines, "")
+		lines = append(lines, m.configView(width))
+	}
 	if m.state == FindInputState {
 		lines = append(lines, "")
 		lines = append(lines, m.inputBand(width))
@@ -106,6 +110,10 @@ func (m Model) agentRunningView(width int) string {
 	return styles.Default.InputBand.Width(width).Render(strings.Join(lines, "\n"))
 }
 
+func (m Model) configView(width int) string {
+	return styles.Default.InputBand.Width(width).Render(renderResolvedConfig(m.appConfig))
+}
+
 func (m Model) changeFiltersLine(table string) string {
 	line := changeFilterLabel("/filter-phase ") + changeFilterValue(m.changeFilters().Phase.Label) +
 		"   " + changeFilterLabel("/filter-type ") + changeFilterValue(m.changeFilters().Type.Label) +
@@ -150,6 +158,8 @@ func (m Model) helpText() string {
 		return "<return> save  |  <ctrl+c> delete prompt  |  <esc> cancel"
 	case FindInputState:
 		return "<return> search  |  <ctrl+c> delete prompt  |  <esc> cancel"
+	case ConfigState:
+		return "/return  |  <esc> or <ctrl+c> return"
 	case ProjectsListState, EpicsListState:
 		return "<return> view  |  </> command"
 	case ProjectDetailsState, EpicDetailsState, TestCaseDetailsState:
@@ -285,6 +295,7 @@ func screenTitle(state State) string {
 		ChangesHelpState:           help.ChangesTitle(),
 		EpicsHelpState:             help.EpicsTitle(),
 		ProjectsHelpState:          help.ProjectsTitle(),
+		ConfigState:                "ConfigScreen - Title: Config",
 		FindInputState:             help.FindInputTitle(),
 		CommandDropDownState:       "CommandDropDownScreen - Title: Commands",
 		ListSelectionDropDownState: "ListSelectionDropDownScreen - Title: Select Item",

@@ -163,7 +163,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "load failed"
 		}
 		if msg.source == ChangesListState && m.agentFlow.Active() {
-			m.agentFlow = agent.NewModel()
+			m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
 		}
 		m.detailEditField = ""
 		m.activeTestCase = dto.TestCase{}
@@ -196,6 +196,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.err != nil {
+			m.agentFlow.Stage = agent.StageIdle
+			m.agentElapsed = 0
+			if m.changeList.Detail.ID != "" {
+				m.state = ChangeDetailsState
+			}
 			m.err = msg.err.Error()
 			m.status = "save failed"
 			return m, nil
@@ -716,6 +721,8 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 		return m.arrive(ProjectsListState, string(ProjectsListState))
 	case "/select-project":
 		return m.beginSelector(SelectProjectDropDown)
+	case "/config":
+		return m.arrive(ConfigState, string(ConfigState))
 	case "/help":
 		m.state = helpStateFor(source)
 	case "/find":
