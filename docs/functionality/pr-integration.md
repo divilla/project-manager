@@ -21,29 +21,29 @@ A Change spec records:
 Change branches use:
 
 ```text
-change/<change-name>
+change/<change-slug>
 ```
 
 The matching Change spec lives at:
 
 ```text
-specs/<change-name>.md
+specs/<change-slug>.md
 ```
 
-Workflow automation must reject `changes/<change-name>` as the active Change branch namespace. Application routes such as `/changes` and API paths such as `/api/v1/change/*` remain unchanged.
+Workflow automation must reject `changes/<change-slug>` as the active Change branch namespace. Application routes such as `/changes` and API paths such as `/api/v1/change/*` remain unchanged.
 
 ## Checkpoint Commits
 Planning checkpoints use:
 
 ```text
-Change <change-name> edit by user
-Change <change-name> edit by agent
+Change <change-slug> edit by user
+Change <change-slug> edit by agent
 ```
 
 Implementation uses:
 
 ```text
-Implement change <change-name>
+Implement change <change-slug>
 ```
 
 ## PR Body

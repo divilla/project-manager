@@ -128,7 +128,7 @@ Types: feature|test
 ## Relevant Specs
 
 - ` + "`/tmp/mch/initial-change.md`" + `
-- ` + "`agent/prompts/change-file-structure.md`" + `
+- ` + "`.mch/default/prompts/spec-file-structure.md`" + `
 - ` + "`docs/architecture/mch.md`" + `
 
 ## Verification
@@ -163,7 +163,7 @@ func TestExtractQATestCasesFromSpecFragment(t *testing.T) {
 	spec := `## Relevant Specs
 
 - ` + "`/tmp/mch/initial-change.md`" + `
-- ` + "`agent/prompts/change-file-structure.md`" + `
+- ` + "`.mch/default/prompts/spec-file-structure.md`" + `
 
 ## Verification
 

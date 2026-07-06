@@ -2,7 +2,7 @@
 
 Review the current branch against `origin/stage` as a 10x senior engineer.
 
-Change contract: `specs/<change-name>.md`
+Change contract: `specs/<change-slug>.md`
 
 ## Review Steps
 

@@ -1,18 +1,18 @@
 # Changes Into Specs To Docs
 
 ## Summary
-- Moves repository Change specs from `agent/changes/<change-name>.md` to repo-root `specs/<change-name>.md` without changing the moved spec contents.
-- Renames the active repository workflow branch namespace from `changes/<change-name>` to `change/<change-name>` across workflow scripts, agent prompts, repository guidance, and `mch` branch reconciliation.
+- Moves repository Change specs from `agent/changes/<change-slug>.md` to repo-root `specs/<change-slug>.md` without changing the moved spec contents.
+- Renames the active repository workflow branch namespace from `changes/<change-slug>` to `change/<change-slug>` across workflow scripts, agent prompts, repository guidance, and `mch` branch reconciliation.
 - Adds `scripts/rename-branches.pl` with dry-run support to migrate existing local and remote `changes/` branches to `change/` branches while creating replacement remote refs before deleting old ones.
 
 ## Behavior
-- Active workflow scripts now derive the Change name only from `change/<change-name>` branches, push `change/<change-name>`, and use `specs/<change-name>.md` for Change specs.
-- `scripts/extract.sh` now returns `specs/<change-name>.md` and rejects non-`change/` branches with a clear branch-pattern error.
+- Active workflow scripts now derive the Change name only from `change/<change-slug>` branches, push `change/<change-slug>`, and use `specs/<change-slug>.md` for Change specs.
+- `scripts/extract.sh` now returns `specs/<change-slug>.md` and rejects non-`change/` branches with a clear branch-pattern error.
 - `mch` `/reference` now checks, checks out, renames, creates, pushes, and deletes `change/<slug>` and `change/<ref>-*` branches instead of `changes/...` branches.
 - Product-facing Change terminology remains unchanged: frontend `/changes` routes, backend `/api/v1/change/*` paths, package names, and domain object names are not renamed.
 
 ## Docs
-- Updates `AGENTS.md`, workflow prompts, PR integration docs, agent interaction docs, verification docs, CLI architecture, and `mch` architecture to describe Change specs under `specs/` and `change/<change-name>` workflow branches.
+- Updates `AGENTS.md`, workflow prompts, PR integration docs, agent interaction docs, verification docs, CLI architecture, and `mch` architecture to describe Change specs under `specs/` and `change/<change-slug>` workflow branches.
 - Keeps old `changes/` and `agent/changes/` references only where they are historical, part of the migration helper, or unrelated product route/package names.
 
 ## Verification
@@ -28,7 +28,7 @@
 ## References
 - `specs/113-changes-into-specs-to-docs.md`
 - `AGENTS.md`
-- `agent/prompts/change-file-structure.md`
+- `.mch/default/prompts/spec-file-structure.md`
 - `docs/architecture/cli.md`
 - `docs/architecture/mch.md`
 - `docs/functionality/agent-interaction.md`

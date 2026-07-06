@@ -33,7 +33,7 @@
 
 ## References
 - `agent/changes/111-cli-agent-integration.md`
-- `agent/prompts/change-file-structure.md`
+- `.mch/default/prompts/spec-file-structure.md`
 - `agent/prompts/change-file-init-prompt.md`
 - `docs/architecture/mch.md`
 - `docs/architecture/backend-api.md`

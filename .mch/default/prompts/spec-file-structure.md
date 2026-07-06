@@ -1,10 +1,14 @@
-# Spec file structure
+# Spec File Structure
 
-Use this structure exactly for every Change Spec. Replace placeholders with the Spec content. Keep sections concise, specific, and testable. Do not add, remove, rename, or reorder sections unless the user explicitly changes the Spec workflow.
+Use this structure exactly for every Spec file. Replace placeholders with concrete spec content. Keep sections concise, specific, and testable.
+
+A Spec belongs to a Change, but when referring to the file or artifact, call it `Spec` or `spec`, not `Change`. Use `Change` only when referring to the parent workflow item, branch, lifecycle, or implementation effort.
+
+Do not add, remove, rename, or reorder sections unless the user explicitly changes the Spec workflow.
 
 The first non-blank line must be the Spec title as one H1. The first non-blank line after the title must be the type metadata line.
 
-Select one or more backend type slugs that best describe the Change. Do not hardcode, invent, or assume allowed type slugs. Use the type options supplied by the active workflow context; if no current type options are supplied, retrieve them from `POST /api/v1/options/change-types-list` when the environment supports backend access, otherwise stop and ask for valid backend type slugs.
+Select one or more backend type slugs that best describe the parent Change. Do not hardcode, invent, or assume allowed type slugs. Use the type options supplied by the active workflow context. If no current type options are supplied, retrieve them from `POST /api/v1/options/change-types-list` when the environment supports backend access. Otherwise, stop and ask for valid backend type slugs.
 
 Format the metadata line exactly as `Types: <type-slugs>`, with selected backend slugs joined by `|` and no spaces.
 
@@ -16,7 +20,7 @@ Types: <type-slugs>
 
 ## Goal
 
-Describe the single outcome this Change must deliver. Write this as the end state the user should observe, not as a list of implementation tasks.
+Describe the single outcome this Spec must define. Write this as the end state the user should observe, not as a list of implementation tasks.
 
 ## Scope
 
@@ -27,14 +31,19 @@ Describe the single outcome this Change must deliver. Write this as the end stat
 ## Requirements
 
 ### Docs
+
 ### DB
+
 ### Backend
+
 ### Frontend
+
 ### CLI
+
 ### Other
 
-- Requirements are divided into Docs, DB, Backend, Frontend, CLI and Other sections
-- Only sections with items are visible
+- Divide requirements into Docs, DB, Backend, Frontend, CLI, and Other sections.
+- Include only sections that have items.
 - State testable requirements using product vocabulary from `docs`.
 - Include expected behavior, important boundaries, and failure handling where relevant.
 - Write requirements as obligations the implementation must satisfy.
@@ -42,14 +51,19 @@ Describe the single outcome this Change must deliver. Write this as the end stat
 ## Acceptance Criteria
 
 ### Docs
+
 ### DB
+
 ### Backend
+
 ### Frontend
+
 ### CLI
+
 ### Other
 
-- Acceptance Criterias are divided into Docs, DB, Backend, Frontend, CLI and Other sections
-- Only sections with items are visible
+- Divide acceptance criteria into Docs, DB, Backend, Frontend, CLI, and Other sections.
+- Include only sections that have items.
 - Define observable success conditions for this Spec.
 - Include routes, commands, API behavior, UI states, persistence behavior, generated files, or workflow outcomes when relevant.
 - Make each criterion verifiable by inspection, automated tests, or a concrete manual check.
@@ -68,7 +82,7 @@ Describe the single outcome this Change must deliver. Write this as the end stat
 
 ## Relevant Specs
 
-- `specs/<change-name>.md`
+- `specs/<change-slug>.md`
 - `docs/<path>.md`
 
 ## Verification
@@ -80,12 +94,15 @@ Describe the single outcome this Change must deliver. Write this as the end stat
 ## QA Test Cases
 
 ### Backend
+
 ### Frontend
+
 ### CLI
+
 ### Other
 
-- QA Test Cases are divided into Backend, Frontend, CLI and Other sections
-- Only sections with items are visible
+- Divide QA test cases into Backend, Frontend, CLI, and Other sections.
+- Include only sections that have items.
 - List the manual or product-level scenarios QA should test.
 - Cover happy paths, validation failures, command or backend failures, cancellation or no-op paths, persistence behavior, and important boundary cases when relevant.
 - Keep QA scenarios distinct from automated Verification commands.

@@ -17,7 +17,7 @@ my $change_name = $branch;
 $change_name =~ s/^change\///;
 
 $branch eq "change/$change_name"
-    or fail("current branch is not a change/<change-name> branch: $branch");
+    or fail("current branch is not a change/<change-slug> branch: $branch");
 $change_name =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/
     or fail("invalid change name from current branch: $change_name");
 

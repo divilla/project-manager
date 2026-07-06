@@ -1,4 +1,4 @@
-Using Change spec `specs/<change-name>.md` as the source of truth, update or create only the documentation needed to precisely describe the desired external behavior for this Change.
+Using Change spec `specs/<change-slug>.md` as the source of truth, update or create only the documentation needed to precisely describe the desired external behavior for this Change.
 
 Before editing anything:
 1. Read the Change spec.
@@ -11,7 +11,7 @@ Documentation rules:
 - Keep docs concise, product-focused, and testable.
 - Describe intended external behavior, user-visible/API-visible contracts, persistence constraints, validation behavior, and verification expectations.
 - Do not describe implementation internals unless they are part of the observable product or API contract.
-- Resolve conflicts between existing docs and the Change spec in favor of `specs/<change-name>.md`.
+- Resolve conflicts between existing docs and the Change spec in favor of `specs/<change-slug>.md`.
 - Preserve established project vocabulary.
 - Keep each doc under the repository’s documented line limit.
 - Do not create duplicate documentation if an existing doc is the right home for the behavior.

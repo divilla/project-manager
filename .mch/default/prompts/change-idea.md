@@ -9,15 +9,15 @@ Rewrite the active Change idea into clear Markdown while preserving the user's i
 
 If the user asks only to explain, discuss, summarize, or review the idea without rewriting it, answer normally and do not edit files.
 
-Extract `<change-name>` from the current Git branch using `^change/([0-9]+-[a-z0-9-_]+)$`.
+Extract `<change-slug>` from the current Git branch using `^change/([0-9]+-[a-z0-9-_]+)$`.
 
-If the branch does not match, stop with: `Branch must be change/<change-name>.`
+If the branch does not match, stop with: `Branch must be change/<change-slug>.`
 
-If `agent/ideas/<change-name>.md` does not exist, stop with one concise error.
+If `agent/ideas/<change-slug>.md` does not exist, stop with one concise error.
 
 ## Instructions
 
-Read `agent/ideas/<change-name>.md`.
+Read `agent/ideas/<change-slug>.md`.
 
 Rewrite the idea in place:
 

@@ -20,7 +20,7 @@ The `cli/` module contains the reference `mch` TUI. Its architecture, package bo
 
 `mch` resolves the current Git repository root before loading configuration, so starting from the root or a nested directory uses the same `.mch` tree. The Main screen includes `/config`, which opens a read-only view of resolved in-memory CLI and Flow configuration without calling backend APIs, reading raw YAML for rendering, executing hooks, or saving local files.
 
-Repository Change workflow automation uses `change/<change-name>` branches and Change specs under `specs/<change-name>.md`. This does not rename application routes, API paths, packages, or product data that use the Change concept.
+Repository Change workflow automation uses `change/<change-slug>` branches, ideas under `agent/ideas/<change-slug>.md`, and Change specs under `specs/<change-slug>.md`. The spec structure template is `.mch/default/prompts/spec-file-structure.md`. This does not rename application routes, API paths, packages, or product data that use the Change concept.
 
 ## Current Project
 For `mch`, current project selection is committed repository and branch configuration stored as numeric `project_id` in `.mch/config.yaml`. Missing `project_id` and `project_id: 0` mean no current project is selected. CLI commands that operate on project-scoped data must use a valid configured project ID or require an explicit project option.

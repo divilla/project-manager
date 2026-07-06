@@ -15,7 +15,7 @@ Read `AGENTS.md` first when present. Repository instructions override this skill
 Identify the Change spec:
 
 - If the user names a Change spec, use that file.
-- Otherwise, derive `<change-name>` from the current branch:
+- Otherwise, derive `<change-slug>` from the current branch:
 
   ```bash
   git branch --show-current
@@ -30,19 +30,19 @@ Identify the Change spec:
   If it does not match, stop with exactly:
 
   ```text
-  The branch must be named change/change-name>.
+  The branch must be named change/<change-slug>.
   ```
 
 - Require:
 
   ```text
-  specs/<change-name>.md
+  specs/<change-slug>.md
   ```
 
   If the file does not exist, stop with exactly:
 
   ```text
-  Missing specs/<change-name>.md.
+  Missing specs/<change-slug>.md.
   ```
 
 This is a verification/review skill. Do not edit, format, stage, commit, reset, restore, migrate, seed, post PR comments, or otherwise mutate tracked files, database files, fixtures, snapshots, generated artifacts, or application data.

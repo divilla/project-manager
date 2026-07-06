@@ -9,17 +9,17 @@ Implement only review-fix work for the active Change.
 
 If the user explicitly says not to implement findings, or asks only to ignore, explain, discuss, review, document, or summarize findings, stop and answer without making changes.
 
-Extract `<change-name>` from the current Git branch using `^change/([0-9]+-[a-z0-9-_]+)$`.
+Extract `<change-slug>` from the current Git branch using `^change/([0-9]+-[a-z0-9-_]+)$`.
 
-If the branch does not match, stop with: `Branch must be change/change-name>.`
+If the branch does not match, stop with: `Branch must be change/<change-slug>.`
 
-If `specs/<change-name>.md` does not exist, stop with one concise error.
+If `specs/<change-slug>.md` does not exist, stop with one concise error.
 
 ## Gather Findings
 
 Use exactly one findings source:
 
-- When the user asks to fix PR comments or review findings from the PR, read PR comments for the current branch PR with `gh pr view change/change-name> --json url,comments`. If `gh` fails, report it as a blocker. Treat the latest comment as the comment with the newest `createdAt` timestamp. Stop if there is no PR, no comments, or the latest comment body is exactly `No blocking issues found.`
+- When the user asks to fix PR comments or review findings from the PR, read PR comments for the current branch PR with `gh pr view change/<change-slug> --json url,comments`. If `gh` fails, report it as a blocker. Treat the latest comment as the comment with the newest `createdAt` timestamp. Stop if there is no PR, no comments, or the latest comment body is exactly `No blocking issues found.`
 - For pasted review findings in the conversation, use those findings.
 - For a local review artifact explicitly named by the user, read that artifact.
 
@@ -32,7 +32,7 @@ Only fix actionable review-finding comments: comments with finding-style content
 ## Before Editing
 
 1. Read `AGENTS.md` and obey it.
-2. Read `specs/<change-name>.md`; treat it as the implementation contract.
+2. Read `specs/<change-slug>.md`; treat it as the implementation contract.
 3. Read linked or relevant docs under `docs/`; treat docs as the behavioral source of truth.
 4. Inspect and remember starting `git status`, unstaged diff, and staged diff.
 5. Stop if pre-existing staged changes are not explicitly part of the supplied findings.
@@ -56,7 +56,7 @@ Only fix actionable review-finding comments: comments with finding-style content
 
 1. Inspect changes introduced by this fix; remove accidental unrelated edits or leave pre-existing unrelated edits unstaged.
 2. Run focused tests for changed behavior.
-3. Run applicable commands listed in `specs/<change-name>.md` under `Verification`.
+3. Run applicable commands listed in `specs/<change-slug>.md` under `Verification`.
 4. Run required verification commands for touched areas.
 5. If any required verification fails, is skipped, or is infeasible, do not stage or commit; report the blocker.
 6. If any later edit, format, generated update, or staging correction changes review-fix content, rerun affected focused tests before committing.
@@ -65,7 +65,7 @@ Only fix actionable review-finding comments: comments with finding-style content
 9. Inspect staged diff and confirm it is limited to review-fix changes.
 10. Inspect remaining unstaged diff and confirm it contains no review-fix changes that should be committed.
 11. Commit only when all findings are resolved, no finding is blocked, required verification passed, staged review-fix changes exist, and staged diff is limited to review-fix changes.
-12. Use commit subject: `Fix review findings for <change-name>`.
+12. Use commit subject: `Fix review findings for <change-slug>`.
 
 ## Final Report
 

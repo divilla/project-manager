@@ -11,14 +11,14 @@ Draft a reviewer-focused GitHub PR body for the current Change. Do not create, u
 
 - Read repository instructions first when `AGENTS.md` is present. Follow repository instructions when they are stricter than this skill.
 - Do not edit code, docs, tests, database files, fixtures, snapshots, generated artifacts, or application data.
-- Only create or update the PR draft file at `agent/prs/<change-name>.md`. Creating `agent/prs/` for that file is allowed.
+- Only create or update the PR draft file at `agent/prs/<change-slug>.md`. Creating `agent/prs/` for that file is allowed.
 - Do not stage, commit, reset, restore, format, migrate, seed, or mutate any database.
 - Do not post PR comments.
 
 ## Identify The Change
 
 - If the user names a Change spec or Change name, use it.
-- Otherwise derive `<change-name>` from the current branch:
+- Otherwise derive `<change-slug>` from the current branch:
 
   ```bash
   git branch --show-current
@@ -33,13 +33,13 @@ Draft a reviewer-focused GitHub PR body for the current Change. Do not create, u
 - If the branch does not match, stop with exactly:
 
   ```text
-  The branch must be named change/change-name>.
+  The branch must be named change/<change-slug>.
   ```
 
-- Require `specs/<change-name>.md`. If it does not exist, stop with exactly:
+- Require `specs/<change-slug>.md`. If it does not exist, stop with exactly:
 
   ```text
-  Missing specs/<change-name>.md.
+  Missing specs/<change-slug>.md.
   ```
 
 ## Build Context
@@ -71,7 +71,7 @@ Report the exact conflict with file paths and the specific Change requirement or
 
 ## Draft Requirements
 
-Write the PR body to `agent/prs/<change-name>.md`.
+Write the PR body to `agent/prs/<change-slug>.md`.
 
 The first line must be the title, formatted exactly:
 
@@ -96,7 +96,7 @@ Use this structure unless the repository gives a stricter PR template:
 - ...
 
 ## References
-- `specs/<change-name>.md`
+- `specs/<change-slug>.md`
 - ...
 ```
 
@@ -111,7 +111,7 @@ Omit `## Behavior` only when the branch has no externally observable behavior or
 - Do not claim verification passed unless the exact command was run in this branch and the result is known.
 - If verification was not run, say `Not run` and give the reason if known.
 - If verification failed, include the exact command and the relevant failure summary. Do not soften or reinterpret failures as passing.
-- Include a `References` section listing `specs/<change-name>.md` and every relevant docs file used to understand or validate the branch.
+- Include a `References` section listing `specs/<change-slug>.md` and every relevant docs file used to understand or validate the branch.
 
 ## Final Response
 

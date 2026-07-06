@@ -1,6 +1,6 @@
 Implement all the review findings like a 10x senior engineer.
 
-Change contract: `specs/<change-name>.md`
+Change contract: `specs/<change-slug>.md`
 
 Before coding:
 1. Read and use Change contract as the source of truth and implementation contract.

@@ -52,6 +52,6 @@ Documentation checks should list files, enforce the 300-line limit, and run the 
 
 For CLI config Changes, documentation checks should confirm active docs describe repository-root `.mch/config.yaml`, `.mch/default` Flow loading, `/config`, `temp_dir`, and no active `cli/.config/config.yaml` contract.
 
-For Change workflow branch or spec-path changes, documentation checks should confirm active behavior docs use `change/<change-name>` for repository workflow branches and `specs/<change-name>.md` for Change specs. Remaining `changes/` matches must be application routes, package paths, or historical research/spec context.
+For Change workflow branch or spec-path changes, documentation checks should confirm active behavior docs use `change/<change-slug>` for repository workflow branches, `agent/ideas/<change-slug>.md` for ideas, `specs/<change-slug>.md` for Change specs, and `.mch/default/prompts/spec-file-structure.md` for the spec structure template. Remaining `changes/` matches must be application routes, package paths, or historical research/spec context.
 
 Personal research under `docs/research` is not product documentation and is excluded from rewrite verification.

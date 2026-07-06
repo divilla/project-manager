@@ -1,4 +1,4 @@
-Implement Change spec `specs/<change-name>.md` with senior-level discipline.
+Implement Change spec `specs/<change-slug>.md` with senior-level discipline.
 
 The Change spec is the implementation contract. The current branch documentation under `docs/` is the behavioral reference. Implement the smallest coherent code, test, seed, and database-file changes needed to satisfy that contract.
 

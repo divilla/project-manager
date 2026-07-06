@@ -6,14 +6,21 @@ Agents help refine planning, maintain documentation, implement scoped changes, a
 ## Commands
 Supported workflow prompts:
 
-- `make-change new <change-name-or-path>`
+- `make-change new <change-slug-or-path>`
 - `make-change commit`
 - `make-change implement`
 - `make-change pr`
 
-Repository Change workflow branches use `change/<change-name>`. The matching Change spec lives at `specs/<change-name>.md`.
+Repository Change workflow branches use `change/<change-slug>`. The matching idea and Change spec live at `agent/ideas/<change-slug>.md` and `specs/<change-slug>.md`.
 
-Workflow prompts that operate on an existing Change must fail fast with a clear error when the current branch is not `change/<change-name>`.
+Workflow prompts that operate on an existing Change must fail fast with a clear error when the current branch is not `change/<change-slug>`.
+
+## Change Artifacts
+A Change is the full delivery flow. Its artifacts include the branch, idea, spec, docs, code, PR body, PR, review, and follow-up fixes.
+
+The Change, Idea, and Spec share one title. When the idea title changes through an agent-assisted idea workflow, the Change title is updated with it. When the spec title changes through a supported spec edit workflow, the Idea and Change titles are updated with it.
+
+The canonical Change spec structure template is `.mch/default/prompts/spec-file-structure.md`. Active workflow prompts and agent instructions must use that path, not legacy prompt locations under `agent/prompts`.
 
 ## Planning Behavior
 During planning, the agent:

@@ -13,26 +13,26 @@ Before review:
   ```bash
   git branch --show-current
   ```
-- The branch must match, extracted text is `<change-name>`:
+- The branch must match, extracted text is `<change-slug>`:
   ```text
   ^change/([0-9]+\-[0-9a-z-_]+)$
   ```
 - If it does not match, stop with this exact error:
   ```text
-  The branch must be named change/change-name>.
+  The branch must be named change/<change-slug>.
   ```
-- Derive `<change-name>` from the branch and require:
+- Derive `<change-slug>` from the branch and require:
   ```text
-  specs/<change-name>.md
+  specs/<change-slug>.md
   ```
 - If the file does not exist, stop with this exact error:
   ```text
-  Missing specs/<change-name>.md.
+  Missing specs/<change-slug>.md.
   ```
 
 This is a review skill. Do not edit, format, stage, commit, reset, restore, migrate, seed, or otherwise mutate tracked files, database files, fixtures, snapshots, generated artifacts, or application data while reviewing.
 
-Respect `AGENTS.md`: treat `specs/<change-name>.md` as the PR contract, do not mutate database state, do not edit files, and do not post a PR comment.
+Respect `AGENTS.md`: treat `specs/<change-slug>.md` as the PR contract, do not mutate database state, do not edit files, and do not post a PR comment.
 
 Review process:
 - Read the active Change spec under `specs/`.

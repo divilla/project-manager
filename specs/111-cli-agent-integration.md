@@ -87,7 +87,7 @@ Make `/new-change` in `mch` run an AI-assisted planning flow that turns a user's
 
 - `docs/architecture/mch.md` defines AI-assisted workflow ownership under `cli/internal/agent`; use that package boundary for this planning flow and future agent documentation-writing, implementation, and review flows instead of `internal/planning`.
 - `docs/architecture/backend-api.md` is authoritative for the backend route and payload; use `POST /api/v1/change/create`, not the idea draft's `/api/v3/change/create`.
-- The generated Change file's `Types:` line comes from `agent/prompts/change-file-structure.md` and supplies the backend `change_types` required by Change create.
+- The generated Change file's `Types:` line comes from `.mch/default/prompts/spec-file-structure.md` and supplies the backend `change_types` required by Change create.
 - The backend owns `ref`, `slug`, default phase, `agent_edit`, `open`, and project reference allocation.
 - The existing `mch` editor behavior should be reused so terminal process handling, editor fallback, and screen restoration stay consistent.
 - Codex process execution should be abstracted enough for tests to use fake command runners instead of launching real Codex.
@@ -95,7 +95,7 @@ Make `/new-change` in `mch` run an AI-assisted planning flow that turns a user's
 
 ## Relevant Specs
 
-- `agent/prompts/change-file-structure.md`
+- `.mch/default/prompts/spec-file-structure.md`
 - `docs/architecture/mch.md`
 - `docs/architecture/backend-api.md`
 - `docs/architecture/cli.md`

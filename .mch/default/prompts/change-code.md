@@ -3,13 +3,13 @@ name: change-code
 description: Implement code according to active change file
 ---
 
-Extract `<change-name>` from the current Git branch using this regex: `^change/([0-9]+-[a-z0-9-_]+)$`
+Extract `<change-slug>` from the current Git branch using this regex: `^change/([0-9]+-[a-z0-9-_]+)$`
 
-If the current branch does not match, stop and output one concise error explaining that the branch must be named `change/<change-name>`.
+If the current branch does not match, stop and output one concise error explaining that the branch must be named `change/<change-slug>`.
 
-Stop without editing if `specs/<change-name>.md` does not exist.
+Stop without editing if `specs/<change-slug>.md` does not exist.
 
-Implement Change spec `specs/<change-name>.md` with senior-level discipline.
+Implement Change spec `specs/<change-slug>.md` with senior-level discipline.
 
 The Change spec is the implementation contract. The current branch documentation under `docs/` is the behavioral reference. Implement the smallest coherent code, test, seed, and database-file changes needed to satisfy that contract.
 
