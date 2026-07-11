@@ -15,6 +15,7 @@ export interface ChangeType {
 
 export interface ChangeListItem {
   id: number;
+  ref_uuid: string;
   ref: number | null;
   slug: string | null;
   project_id: number;
@@ -34,11 +35,11 @@ export interface ChangeListItem {
 export interface Change extends ChangeListItem {
   version: number;
   idea: string;
-  spec: string | null;
-  spec_html: string | null;
-  pr_body: string | null;
-  pr_html: string | null;
-  pr_url: string | null;
+  spec: string;
+  spec_html: string;
+  pr: string;
+  pr_html: string;
+  pr_url: string;
   created: string;
 }
 

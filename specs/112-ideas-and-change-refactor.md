@@ -8,7 +8,7 @@ Change creation and reference assignment are refactored so a Change starts from 
 
 ## Scope
 
-- Update the Change artifact model around shared `title`, required `idea`, optional `spec`, optional `pr_body`, and optional `pr_url`.
+- Update the Change artifact model around shared `title`, required `idea`, optional `spec`, optional `pr`, and optional `pr_url`.
 - Add `change.idea`, empty `change_types` defaults, optional ref/slug state, and the new reference-assignment persistence path to canonical initialization data.
 - Add a backend Change reference endpoint that assigns missing `ref` and `slug` through `sp_change_ref_update` without depending on update flows.
 - Use the edited `internal/dto/change.go` structs as the reference contract, then update backend services, repositories, API handlers, validation, and history behavior to match those DTOs.
@@ -22,7 +22,7 @@ Change creation and reference assignment are refactored so a Change starts from 
 - A Change must require only `project_id`, `title`, and `idea` at creation time.
 - `idea` must store the user idea at creation time, store the rewritten idea after a successful agent rewrite save, and be returned by Change detail APIs and clients.
 - `spec`, replacing the former Change body requirement role, must be optional and default to null until generated or edited.
-- `pr_body` and `pr_url` must be optional and default to null until supplied.
+- `pr` and `pr_url` must be optional and default to null until supplied.
 - `change_phase` must remain mandatory and must default to `backlog` when clients do not provide a phase.
 - `change_types` must remain part of the Change contract, but create and update flows must allow no selected types; omitted types must default to an empty array at the API, client, and storage boundaries.
 - `epic_id` must be optional and default to null when no epic is selected.
@@ -59,7 +59,7 @@ Change creation and reference assignment are refactored so a Change starts from 
 
 - Creating a Change through the backend succeeds with only a valid `project_id`, `title`, and `idea`, and the response shows default `backlog` phase with null optional fields where omitted.
 - Creating a Change with missing or blank `title` or `idea` returns a validation error and does not persist a Change.
-- Creating a Change with omitted `change_types`, `epic_id`, `spec`, `pr_body`, or `pr_url` persists an empty `change_types` array and null optional artifacts, then returns them consistently in detail responses.
+- Creating a Change with omitted `change_types`, `epic_id`, `spec`, `pr`, or `pr_url` persists an empty `change_types` array and null optional artifacts, then returns them consistently in detail responses.
 - New Changes can exist before reference assignment with unassigned ref and slug values, and list/detail clients render that state without deriving identity locally.
 - `POST /api/v1/change/reference` assigns ref and slug to an unreferenced Change, returns refreshed Change data, and preserves all existing artifact fields.
 - Repeating `POST /api/v1/change/reference` for the same Change does not advance the project reference counter; if the title changed, the refreshed slug is returned and branch reconciliation renames or checks out the matching branch.
@@ -81,7 +81,7 @@ Change creation and reference assignment are refactored so a Change starts from 
 
 - Completing the future `Write Spec with Agent?` Yes path that generates and saves a spec.
 - Renaming repository `agent/changes/` files or moving Change specifications to another folder.
-- Changing PR publication behavior beyond keeping `pr_body` and `pr_url` optional artifacts.
+- Changing PR publication behavior beyond keeping `pr` and `pr_url` optional artifacts.
 - Allowing clients to submit arbitrary `ref` or `slug` values.
 - Adding foreign keys or introducing new project-wide locking protocols.
 - Reworking unrelated Change lifecycle phases, option ordering, epics, test case completeness, or project selection behavior.

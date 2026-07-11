@@ -26,78 +26,78 @@ import (
 )
 
 type fakeClient struct {
-	projects                       []dto.Option
-	projectRows                    []dto.Project
-	createdProject                 dto.Project
-	updatedProject                 dto.Project
-	gotProject                     dto.Project
-	changeRows                     []dto.Change
-	createdChange                  dto.Change
-	gotChange                      dto.Change
-	epics                          []dto.Option
-	phases                         []dto.Option
-	types                          []dto.Option
-	err                            error
-	createErr                      error
-	updateErr                      error
-	getErr                         error
-	changeCreateErr                error
-	changeReferenceErr             error
-	changeUpdateErr                error
-	changeGetErr                   error
-	changeDeleteErr                error
-	epicErr                        error
-	projectID                      string
-	listCalls                      int
-	rowListCalls                   int
-	changeListCalls                int
-	changeCreateCalls              int
-	changeReferenceCalls           int
-	changeTitleUpdateCalls         int
-	changeIdeaUpdateCalls          int
-	changeIdeaAgentEditUpdateCalls int
-	changeSpecUpdateCalls          int
-	changePRUpdateCalls            int
-	changeTypesUpdateCalls         int
-	changePhaseUpdateCalls         int
-	changeOpenUpdateCalls          int
-	changeEpicUpdateCalls          int
-	testCaseCreateCalls            int
-	testCaseUpdateCalls            int
-	testCaseDoneCalls              int
-	testCaseDeleteCalls            int
-	changeDeleteCalls              int
-	changeGetCalls                 int
-	createCalls                    int
-	updateCalls                    int
-	getCalls                       int
-	phaseCalls                     int
-	typeCalls                      int
-	epicCalls                      int
-	createNames                    []string
-	updateIDs                      []int
-	updateNames                    []string
-	getIDs                         []int
-	changeListProjectIDs           []string
-	changeCreateInputs             []dto.ChangeCreateInput
-	changeReferenceIDs             []int
-	changeTitleUpdates             []string
-	changeIdeaUpdates              []string
-	changeIdeaAgentEditUpdates     []string
-	changeSpecUpdates              []string
-	changePRUpdates                []string
-	changeTypesUpdates             [][]string
-	changePhaseUpdates             []string
-	changeOpenUpdates              []bool
-	changeEpicUpdates              []*int
-	testCaseCreateInputs           []dto.TestCase
-	testCaseUpdateInputs           []dto.TestCase
-	testCaseDoneUpdates            []bool
-	testCaseDoneIDs                []int
-	testCaseDeleteIDs              []int
-	changeDeleteIDs                []int
-	changeGetIDs                   []int
-	requestOrder                   []string
+	projects               []dto.Option
+	projectRows            []dto.Project
+	createdProject         dto.Project
+	updatedProject         dto.Project
+	gotProject             dto.Project
+	changeRows             []dto.Change
+	createdChange          dto.Change
+	gotChange              dto.Change
+	epics                  []dto.Option
+	phases                 []dto.Option
+	types                  []dto.Option
+	err                    error
+	createErr              error
+	updateErr              error
+	getErr                 error
+	changeCreateErr        error
+	changeReferenceErr     error
+	changeUpdateErr        error
+	changeGetErr           error
+	changeDeleteErr        error
+	epicErr                error
+	projectID              string
+	listCalls              int
+	rowListCalls           int
+	changeListCalls        int
+	changeCreateCalls      int
+	changeReferenceCalls   int
+	changeTitleUpdateCalls int
+	changeIdeaUpdateCalls  int
+	changeSpecUpdateCalls  int
+	changePRUpdateCalls    int
+	changePRUrlUpdateCalls int
+	changeTypesUpdateCalls int
+	changePhaseUpdateCalls int
+	changeOpenUpdateCalls  int
+	changeEpicUpdateCalls  int
+	testCaseCreateCalls    int
+	testCaseUpdateCalls    int
+	testCaseDoneCalls      int
+	testCaseDeleteCalls    int
+	changeDeleteCalls      int
+	changeGetCalls         int
+	createCalls            int
+	updateCalls            int
+	getCalls               int
+	phaseCalls             int
+	typeCalls              int
+	epicCalls              int
+	createNames            []string
+	updateIDs              []int
+	updateNames            []string
+	getIDs                 []int
+	changeListProjectIDs   []string
+	changeCreateInputs     []dto.ChangeCreateInput
+	changeReferenceIDs     []int
+	changeTitleUpdates     []string
+	changeIdeaUpdates      []string
+	changeSpecUpdates      []string
+	changePRUpdates        []string
+	changePRUrlUpdates     []string
+	changeTypesUpdates     [][]string
+	changePhaseUpdates     []string
+	changeOpenUpdates      []bool
+	changeEpicUpdates      []*int
+	testCaseCreateInputs   []dto.TestCase
+	testCaseUpdateInputs   []dto.TestCase
+	testCaseDoneUpdates    []bool
+	testCaseDoneIDs        []int
+	testCaseDeleteIDs      []int
+	changeDeleteIDs        []int
+	changeGetIDs           []int
+	requestOrder           []string
 }
 
 type fakeAgentRunner struct {
@@ -248,49 +248,38 @@ func (f *fakeClient) UpdateChangeTitle(id int, title string) (dto.Change, error)
 	return dto.Change{ID: fmt.Sprint(id), Title: title}, nil
 }
 
-func (f *fakeClient) UpdateChangeIdea(id int, idea string) (dto.Change, error) {
+func (f *fakeClient) UpdateChangeIdea(id int, idea string, agentEdit bool) (dto.Change, error) {
+	f.requestOrder = append(f.requestOrder, "change/update-idea")
 	f.changeIdeaUpdateCalls++
 	f.changeIdeaUpdates = append(f.changeIdeaUpdates, idea)
 	if f.changeUpdateErr != nil {
 		return dto.Change{}, f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), Idea: idea}, nil
+	return dto.Change{ID: fmt.Sprint(id), Idea: idea, AgentEdit: agentEdit}, nil
 }
 
-func (f *fakeClient) UpdateChangeIdeaAgentEdit(id int, idea string) (dto.Change, error) {
-	f.requestOrder = append(f.requestOrder, "change/update-idea-agent-edit")
-	f.changeIdeaAgentEditUpdateCalls++
-	f.changeIdeaAgentEditUpdates = append(f.changeIdeaAgentEditUpdates, idea)
-	if f.changeUpdateErr != nil {
-		return dto.Change{}, f.changeUpdateErr
-	}
-	return dto.Change{ID: fmt.Sprint(id), Idea: idea, AgentEdit: true}, nil
-}
-
-func (f *fakeClient) UpdateChangeSpec(id int, spec *string) (dto.Change, error) {
+func (f *fakeClient) UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error) {
 	f.requestOrder = append(f.requestOrder, "change/update-spec")
 	f.changeSpecUpdateCalls++
-	value := ""
-	if spec != nil {
-		value = *spec
-	}
-	f.changeSpecUpdates = append(f.changeSpecUpdates, value)
+	f.changeSpecUpdates = append(f.changeSpecUpdates, spec)
 	if f.changeUpdateErr != nil {
 		return dto.Change{}, f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), Spec: value}, nil
+	return dto.Change{ID: fmt.Sprint(id), Spec: spec, AgentEdit: agentEdit}, nil
 }
 
-func (f *fakeClient) UpdateChangePRBody(id int, prBody string) (dto.Change, error) {
+func (f *fakeClient) UpdateChangePR(id int, pr string, agentEdit bool) (dto.Change, error) {
 	f.changePRUpdateCalls++
-	f.changePRUpdates = append(f.changePRUpdates, prBody)
+	f.changePRUpdates = append(f.changePRUpdates, pr)
 	if f.changeUpdateErr != nil {
 		return dto.Change{}, f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), PRBody: prBody}, nil
+	return dto.Change{ID: fmt.Sprint(id), PR: pr, AgentEdit: agentEdit}, nil
 }
 
 func (f *fakeClient) UpdateChangePRUrl(id int, prURL string) (dto.Change, error) {
+	f.changePRUrlUpdateCalls++
+	f.changePRUrlUpdates = append(f.changePRUrlUpdates, prURL)
 	if f.changeUpdateErr != nil {
 		return dto.Change{}, f.changeUpdateErr
 	}
@@ -1288,6 +1277,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 		},
 		gotChange: dto.Change{
 			ID:          "11",
+			RefUUID:     "11111111-2222-4333-8444-555555555555",
 			Ref:         "3",
 			Slug:        "change-three",
 			Title:       "Backend Change",
@@ -1296,7 +1286,7 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 			EpicID:      "5",
 			EpicName:    "Epic Five",
 			Spec:        "# Backend Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nBody.",
-			PRBody:      "Pull request summary.",
+			PR:          "Pull request summary.",
 			PRUrl:       "https://github.com/divilla/project-manager/pull/107",
 			AgentEdit:   true,
 			Open:        true,
@@ -1349,15 +1339,19 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 	rawView := got.View()
 	view = stripANSI(rawView)
 	assert.Contains(t, view, "ChangeDetailsScreen")
+	assert.Contains(t, view, "ID │ 11")
+	assert.Contains(t, view, "Ref UUID │ 11111111-2222-4333-8444-555555555555")
 	assert.Contains(t, view, "Ref │ 000003")
 	assert.Contains(t, view, "Slug │ change-three")
 	assert.Contains(t, view, "Phase │ backlog")
 	assert.Contains(t, view, "Epic │ Epic Five")
 	assert.Contains(t, view, "Types │ feature|test")
 	assert.Contains(t, view, "Title │ Backend Change")
-	assert.Contains(t, view, "Spec │ # Backend Change")
 	assert.Contains(t, view, "───────────┼")
 	assert.NotContains(t, view, "Epic Five                                                                                              \n───────────┼")
+	assert.Less(t, strings.Index(view, "ID │ 11"), strings.Index(view, "Ref UUID │ 11111111-2222-4333-8444-555555555555"))
+	assert.Less(t, strings.Index(view, "Ref UUID │ 11111111-2222-4333-8444-555555555555"), strings.Index(view, "Ref │ 000003"))
+	assert.Less(t, strings.Index(view, "Ref │ 000003"), strings.Index(view, "Slug │ change-three"))
 	assert.Less(t, strings.Index(view, "Slug │ change-three"), strings.Index(view, "Phase │ backlog"))
 	assert.Less(t, strings.Index(view, "Phase │ backlog"), strings.Index(view, "Epic │ Epic Five"))
 	assert.Less(t, strings.Index(view, "Epic │ Epic Five"), strings.Index(view, "Types │ feature|test"))
@@ -1367,7 +1361,12 @@ func TestChangesCommandLoadsAndRendersBackendRows(t *testing.T) {
 
 	got, _ = sendKey(got, tea.KeyPgDown)
 	view = stripANSI(got.View())
+	assert.Contains(t, view, "Spec │ # Backend Change")
 	assert.Contains(t, view, "PR │ Pull request summary.")
+	assert.Less(t, strings.Index(view, "Spec │ # Backend Change"), strings.Index(view, "PR │ Pull request summary."))
+
+	got, _ = sendKey(got, tea.KeyPgDown)
+	view = stripANSI(got.View())
 	assert.Contains(t, view, "PR URL │ https://github.com/divilla/project-manager/pull/107")
 	assert.Contains(t, view, "Agent Edit │ ✔")
 	assert.Contains(t, view, "Complete │ 0/0 - 0%")
@@ -2089,8 +2088,8 @@ func TestAgentRewriteSuccessSavesIdeaAgentEditAndRemovesTempIdea(t *testing.T) {
 	require.NotNil(t, cmd)
 	model = applyMsg(model, cmd())
 
-	assert.Equal(t, []string{"# Rewritten Change\n\nRewritten idea"}, client.changeIdeaAgentEditUpdates)
-	assert.Equal(t, []string{"change/update-idea-agent-edit", "change/get"}, client.requestOrder)
+	assert.Equal(t, []string{"# Rewritten Change\n\nRewritten idea"}, client.changeIdeaUpdates)
+	assert.Equal(t, []string{"change/update-idea", "change/get"}, client.requestOrder)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.Equal(t, ChangeDetailsState, model.state)
 	assert.Equal(t, client.gotChange, model.changeList.Detail)
@@ -2708,6 +2707,7 @@ func TestChangeDetailsTableSelectionMovesAcrossAllRows(t *testing.T) {
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
 		ID:          "11",
+		RefUUID:     "11111111-2222-4333-8444-555555555555",
 		Ref:         "3",
 		Slug:        "change-three",
 		Title:       "Backend Change",
@@ -2715,30 +2715,88 @@ func TestChangeDetailsTableSelectionMovesAcrossAllRows(t *testing.T) {
 		ChangeTypes: []string{"feature", "test"},
 		EpicName:    "Epic Five",
 		Spec:        "Spec",
-		PRBody:      "Pull request body",
+		PR:          "Pull request body",
 		PRUrl:       "https://example.test/pr",
 	})
 
-	assert.Equal(t, 0, m.changeList.DetailSelected)
+	assert.Equal(t, -2, m.changeList.DetailSelected)
 
 	got, _ := sendKey(m, tea.KeyUp)
+	assert.Equal(t, -2, got.changeList.DetailSelected)
+
+	got, _ = sendKey(got, tea.KeyDown)
+	assert.Equal(t, -1, got.changeList.DetailSelected)
+
+	got, _ = sendKey(got, tea.KeyEnter)
+	assert.Equal(t, ChangeDetailsState, got.state)
+	assert.Equal(t, "selected Ref UUID", got.status)
+
+	got, _ = sendKey(got, tea.KeyDown)
 	assert.Equal(t, 0, got.changeList.DetailSelected)
 
 	got, _ = sendKey(got, tea.KeyDown)
 	assert.Equal(t, 1, got.changeList.DetailSelected)
 
-	got, _ = sendKey(got, tea.KeyEnter)
-	assert.Equal(t, ChangeDetailsState, got.state)
-	assert.Equal(t, "selected Slug", got.status)
-
 	got, _ = sendKey(got, tea.KeyDown)
 	assert.Equal(t, 2, got.changeList.DetailSelected)
+}
+
+func TestChangeDetailsCopySelectedField(t *testing.T) {
+	var copied []string
+	previousWriteClipboard := writeClipboard
+	writeClipboard = func(value string) error {
+		copied = append(copied, value)
+		return nil
+	}
+	defer func() {
+		writeClipboard = previousWriteClipboard
+	}()
+
+	m := NewModel()
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{
+		ID:      "11",
+		RefUUID: "11111111-2222-4333-8444-555555555555",
+		Ref:     "3",
+		Title:   "Backend Change",
+	})
+
+	got, cmd := sendKeyMsg(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ctrl+shift+c")})
+	require.NotNil(t, cmd)
+	assert.Equal(t, "copying ID", got.status)
+
+	got = applyMsg(got, cmd())
+	assert.Equal(t, []string{"11"}, copied)
+	assert.Equal(t, "copied ID", got.status)
 
 	got, _ = sendKey(got, tea.KeyDown)
-	assert.Equal(t, 3, got.changeList.DetailSelected)
+	got, cmd = sendKeyMsg(got, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ctrl+insert")})
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
 
-	got, _ = sendKey(got, tea.KeyDown)
-	assert.Equal(t, 4, got.changeList.DetailSelected)
+	assert.Equal(t, []string{"11", "11111111-2222-4333-8444-555555555555"}, copied)
+	assert.Equal(t, "copied Ref UUID", got.status)
+}
+
+func TestChangeDetailsCopyReportsClipboardFailure(t *testing.T) {
+	previousWriteClipboard := writeClipboard
+	writeClipboard = func(string) error {
+		return errors.New("clipboard unavailable")
+	}
+	defer func() {
+		writeClipboard = previousWriteClipboard
+	}()
+
+	m := NewModel()
+	m.state = ChangeDetailsState
+	m.changeList = m.changeList.WithDetail(dto.Change{ID: "11", Title: "Backend Change"})
+
+	got, cmd := sendKeyMsg(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ctrl+insert")})
+	require.NotNil(t, cmd)
+	got = applyMsg(got, cmd())
+
+	assert.Equal(t, "copy failed", got.status)
+	assert.Equal(t, "clipboard unavailable", got.err)
 }
 
 func TestChangeDetailsPhaseSelectionSavesAndReloads(t *testing.T) {
@@ -2919,12 +2977,13 @@ func TestChangeDetailsTitleCancelDoesNotSave(t *testing.T) {
 
 func TestChangeDetailsSpecSelectionOpensEditorAndSavesResult(t *testing.T) {
 	longBody := strings.Repeat("spec line\n", 40)
+	editedSpec := "Edited plain-text spec without a Markdown heading"
 	client := &fakeClient{
 		gotChange: dto.Change{
 			ID:    "12",
 			Ref:   "3",
 			Title: "Backend Change",
-			Spec:  "Edited spec",
+			Spec:  editedSpec,
 		},
 	}
 	m := NewModelWithClient(client)
@@ -2945,15 +3004,15 @@ func TestChangeDetailsSpecSelectionOpensEditorAndSavesResult(t *testing.T) {
 	assert.Zero(t, got.input.CharLimit)
 	assert.Equal(t, "editor", got.status)
 
-	updated, saveCmd := got.Update(editorFinishedMsg{source: ChangeDetailsState, content: "Edited spec"})
+	updated, saveCmd := got.Update(editorFinishedMsg{source: ChangeDetailsState, content: editedSpec})
 	got = updated.(Model)
 	require.NotNil(t, saveCmd)
-	assert.Equal(t, "Edited spec", got.input.Value())
+	assert.Equal(t, editedSpec, got.input.Value())
 	got = applyCommand(got, saveCmd)
 
-	assert.Equal(t, []string{"Edited spec"}, client.changeSpecUpdates)
+	assert.Equal(t, []string{editedSpec}, client.changeSpecUpdates)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Equal(t, "Edited spec", got.changeList.Detail.Spec)
+	assert.Equal(t, editedSpec, got.changeList.Detail.Spec)
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 7, got.changeList.DetailSelected)
 	assert.Empty(t, got.detailEditField)
@@ -2963,19 +3022,19 @@ func TestChangeDetailsSpecSelectionOpensEditorAndSavesResult(t *testing.T) {
 func TestChangeDetailsPullRequestSelectionOpensEditorAndSavesResult(t *testing.T) {
 	client := &fakeClient{
 		gotChange: dto.Change{
-			ID:     "12",
-			Ref:    "3",
-			Title:  "Backend Change",
-			PRBody: "Edited pull request body",
+			ID:    "12",
+			Ref:   "3",
+			Title: "Backend Change",
+			PR:    "Edited pull request body",
 		},
 	}
 	m := NewModelWithClient(client)
 	m.state = ChangeDetailsState
 	m.changeList = m.changeList.WithDetail(dto.Change{
-		ID:     "12",
-		Ref:    "3",
-		Title:  "Backend Change",
-		PRBody: "Original pull request body",
+		ID:    "12",
+		Ref:   "3",
+		Title: "Backend Change",
+		PR:    "Original pull request body",
 	})
 	m.changeList.DetailSelected = 8
 
@@ -2994,11 +3053,55 @@ func TestChangeDetailsPullRequestSelectionOpensEditorAndSavesResult(t *testing.T
 
 	assert.Equal(t, []string{"Edited pull request body"}, client.changePRUpdates)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Equal(t, "Edited pull request body", got.changeList.Detail.PRBody)
+	assert.Equal(t, "Edited pull request body", got.changeList.Detail.PR)
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, 8, got.changeList.DetailSelected)
 	assert.Empty(t, got.detailEditField)
 	assert.Empty(t, got.input.Value())
+}
+
+func TestChangeDetailsRejectsInvalidArtifactSavesBeforeBackend(t *testing.T) {
+	tests := []struct {
+		name      string
+		field     detailEditField
+		value     string
+		wantError string
+	}{
+		{
+			name:      "empty spec",
+			field:     detailEditSpec,
+			value:     "   ",
+			wantError: "spec is required",
+		},
+		{
+			name:      "empty pr",
+			field:     detailEditPullRequest,
+			value:     "   ",
+			wantError: "PR is required",
+		},
+		{
+			name:      "empty pr url",
+			field:     detailEditPRUrl,
+			value:     "   ",
+			wantError: "PR URL is required",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &fakeClient{}
+			cmd := changeDetailTextUpdateCommand(client, ChangeDetailsState, dto.Change{ID: "12"}, tt.field, tt.value)
+			require.NotNil(t, cmd)
+			msg := cmd()
+			saved, ok := msg.(changeSavedMsg)
+			require.True(t, ok)
+			require.Error(t, saved.err)
+			assert.Equal(t, tt.wantError, saved.err.Error())
+			assert.Zero(t, client.changeSpecUpdateCalls)
+			assert.Zero(t, client.changePRUpdateCalls)
+			assert.Zero(t, client.changePRUrlUpdateCalls)
+			assert.Zero(t, client.changeGetCalls)
+		})
+	}
 }
 
 func TestChangeDetailsTypesSelectionAddsUnselectedType(t *testing.T) {
@@ -3407,7 +3510,7 @@ func TestChangeDetailsTableTruncatesLongSpecAndPullRequestRows(t *testing.T) {
 		ChangePhase: "backlog",
 		EpicName:    "Epic Five",
 		Spec:        strings.Repeat("spec content ", 180),
-		PRBody:      "pull request start\n" + strings.Repeat("pull request middle ", 120) + "\npull request end",
+		PR:          "pull request start\n" + strings.Repeat("pull request middle ", 120) + "\npull request end",
 		PRUrl:       "https://example.test/pr",
 	})
 

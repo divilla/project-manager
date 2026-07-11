@@ -1,11 +1,9 @@
 package app
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,11 +24,11 @@ func TestAppConfigLoadsRepositoryMCHConfigFlowAndHelp(t *testing.T) {
 	assert.Equal(t, 7, cfg.ProjectID)
 	assert.Equal(t, filepath.Join(root, ".mch", "default"), cfg.FlowDir)
 	assert.Equal(t, "default", cfg.Flow.Slug)
-	require.Len(t, cfg.Flow.Steps, len(defaultFlowStageSlugs))
-	assert.Equal(t, "idea", cfg.Flow.Steps[0].Slug)
-	assert.Equal(t, "make idea-entry", cfg.Flow.Steps[0].Entry)
-	assert.Equal(t, "make idea-exec", cfg.Flow.Steps[0].Exec)
-	assert.Equal(t, "make idea-exit", cfg.Flow.Steps[0].Exit)
+	require.Len(t, cfg.Flow.Steps, 3)
+	assert.Equal(t, "idea-write", cfg.Flow.Steps[0].Slug)
+	assert.Equal(t, "edit", cfg.Flow.Steps[0].Mode)
+	assert.Equal(t, "idea-review", cfg.Flow.Steps[1].Slug)
+	assert.Equal(t, "make idea-review-exec", cfg.Flow.Steps[1].Exec)
 	assert.Equal(t, []string{"skip", "prompt", "exec"}, flowOptionSlugs(cfg.FlowHelp.StageModes))
 	assert.Equal(t, []string{"queued", "running", "paused", "stopped", "waiting", "completed", "failed"}, flowOptionSlugs(cfg.FlowHelp.TaskStatuses))
 	assert.Equal(t, []string{"none", "entry", "prompt", "agent", "exit", "done"}, flowOptionSlugs(cfg.FlowHelp.TaskSteps))
@@ -109,12 +107,12 @@ func TestAppConfigErrorsWithoutFallbackToLegacyConfig(t *testing.T) {
 func TestAppConfigErrorsOnMalformedFlowAndEmptyHelpSlugs(t *testing.T) {
 	root := t.TempDir()
 	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte("version: 1\nslug: default\nname: Default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: unknown\n    mode: exec\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte("version: 1\nslug: default\nname: Default\nhelp: help.yaml\nmakefile: Makefile\nsteps: []\n"), 0o644))
 
 	_, err := loadAppConfig(root)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "flow steps must contain the default ordered stages")
+	assert.Contains(t, err.Error(), "flow steps are required")
 
 	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "help.yaml"), []byte("stage_modes:\n  - slug: ''\n"), 0o644))
@@ -125,29 +123,37 @@ func TestAppConfigErrorsOnMalformedFlowAndEmptyHelpSlugs(t *testing.T) {
 	assert.Contains(t, err.Error(), "stage_modes option slug is required")
 }
 
-func TestAppConfigErrorsOnDuplicateFlowStepSlugAndInvalidMode(t *testing.T) {
+func TestAppConfigErrorsOnDuplicateFlowStepSlugAndMissingMode(t *testing.T) {
 	root := t.TempDir()
 	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	flow := testFlowYAML()
-	flow = strings.Replace(flow, "  - slug: spec\n", "  - slug: idea\n", 1)
+	flow := `version: 1
+slug: default
+name: Default
+help: help.yaml
+makefile: Makefile
+steps:
+  - slug: custom
+    mode: edit
+  - slug: custom
+    mode: exec
+`
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte(flow), 0o644))
 
 	_, err := loadAppConfig(root)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicates slug \"idea\"")
+	assert.Contains(t, err.Error(), "duplicates slug \"custom\"")
 
 	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	flow = strings.Replace(testFlowYAML(), "    mode: prompt\n", "    mode: custom\n", 1)
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte(flow), 0o644))
-
-	_, err = loadAppConfig(root)
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported Flow step mode \"custom\"")
-
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
-	flow = strings.Replace(testFlowYAML(), "    mode: prompt\n", "    mode: \n", 1)
+	flow = `version: 1
+slug: default
+name: Default
+help: help.yaml
+makefile: Makefile
+steps:
+  - slug: custom
+    mode:
+`
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte(flow), 0o644))
 
 	_, err = loadAppConfig(root)
@@ -230,32 +236,29 @@ func writeMCHFixture(t *testing.T, root string, config string) {
 }
 
 func testFlowYAML() string {
-	var b strings.Builder
-	b.WriteString(`version: 1
+	return `version: 1
 slug: default
 name: Default Change Automation
 description: Test Flow.
 help: help.yaml
 makefile: Makefile
 steps:
-`)
-	for _, slug := range defaultFlowStageSlugs {
-		mode := "exec"
-		if slug == "idea" || slug == "polish" {
-			mode = "prompt"
-		}
-		fmt.Fprintf(&b, "  - slug: %s\n", slug)
-		fmt.Fprintf(&b, "    help: %s help\n", slug)
-		fmt.Fprintf(&b, "    mode: %s\n", mode)
-		fmt.Fprintf(&b, "    prompt: prompts/%s.md\n", slug)
-		fmt.Fprintf(&b, "    entry: make %s-entry\n", slug)
-		fmt.Fprintf(&b, "    exec: make %s-exec\n", slug)
-		fmt.Fprintf(&b, "    exit: make %s-exit\n", slug)
-	}
-	b.WriteString(`utility_prompts:
+  - slug: idea-write
+    help: write idea
+    mode: edit
+  - slug: idea-review
+    help: review idea
+    mode: exec
+    prompt: prompts/idea-review.md
+    entry: make idea-review-entry
+    exec: make idea-review-exec
+    exit: make idea-review-exit
+  - slug: idea-refine
+    help: refine idea
+    mode: prompt
+utility_prompts:
   change-idea-tmp: prompts/change-idea-tmp.md
-`)
-	return b.String()
+`
 }
 
 func testHelpYAML() string {

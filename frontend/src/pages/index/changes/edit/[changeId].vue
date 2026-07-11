@@ -84,7 +84,7 @@
       />
 
       <q-input
-        v-model="prBody"
+        v-model="pr"
         outlined
         type="textarea"
         label="PR body"
@@ -99,8 +99,6 @@
         label="PR URL"
         :disable="loading || saving"
       />
-
-      <q-toggle v-model="agentEdit" label="Agent edit" :disable="loading || saving" />
 
       <div class="change-create-actions">
         <q-btn flat icon="close" label="Cancel" :disable="saving" @click="goBack" />
@@ -118,13 +116,12 @@ import {
   getChange,
   getChangePhases,
   getChangeTypes,
-  updateChangeAgentEdit,
   updateChangeEpic,
   updateChangeOpen,
   updateChangePhase,
   updateChangeIdea,
   updateChangeSpec,
-  updateChangePRBody,
+  updateChangePR,
   updateChangePRUrl,
   updateChangeTitle,
   updateChangeTypes,
@@ -141,13 +138,12 @@ const loadedChange = ref<Change | null>(null);
 const title = ref('');
 const idea = ref('');
 const spec = ref('');
-const prBody = ref('');
+const pr = ref('');
 const prUrl = ref('');
 const changeTypes = ref<string[]>([]);
 const changePhase = ref('');
 const epicId = ref<number | null>(null);
 const open = ref(true);
-const agentEdit = ref(false);
 const typeOptions = ref<SelectOption[]>([]);
 const phaseOptions = ref<SelectOption[]>([]);
 const loading = ref(false);
@@ -190,13 +186,12 @@ async function loadEditContext() {
     title.value = detail.change.title;
     idea.value = detail.change.idea;
     spec.value = detail.change.spec || '';
-    prBody.value = detail.change.pr_body || '';
+    pr.value = detail.change.pr || '';
     prUrl.value = detail.change.pr_url || '';
     changeTypes.value = [...detail.change.change_types];
     changePhase.value = detail.change.change_phase;
     epicId.value = detail.change.epic_id || null;
     open.value = detail.change.open;
-    agentEdit.value = detail.change.agent_edit;
     await changeCache.loadProjectChanges(detail.change.project_id);
     changeCache.upsertChange(detail.change);
   } catch (err) {
@@ -213,6 +208,11 @@ async function saveChangeFromPage() {
   const changeTitle = title.value.trim();
   const changeIdea = idea.value.trim();
   if (!changeTitle || !changeIdea) return;
+  const validationError = changedArtifactValidationError(loadedChange.value);
+  if (validationError) {
+    error.value = validationError;
+    return;
+  }
 
   saving.value = true;
   error.value = '';
@@ -225,16 +225,16 @@ async function saveChangeFromPage() {
     if (changeIdea !== change.idea) {
       change = await updateChangeIdea(change.id, changeIdea);
     }
-    const nextSpec = spec.value.trim() || null;
-    if (nextSpec !== (change.spec || null)) {
-      change = await updateChangeSpec(change.id, nextSpec);
+    const nextSpec = spec.value.trim();
+    if (nextSpec !== change.spec) {
+      change = await updateChangeSpec(change.id, nextSpec, false);
     }
-    const nextPRBody = prBody.value.trim();
-    if (nextPRBody !== (change.pr_body || '')) {
-      change = await updateChangePRBody(change.id, nextPRBody);
+    const nextPR = pr.value.trim();
+    if (nextPR !== change.pr) {
+      change = await updateChangePR(change.id, nextPR, false);
     }
     const nextPRUrl = prUrl.value.trim();
-    if (nextPRUrl !== (change.pr_url || '')) {
+    if (nextPRUrl !== change.pr_url) {
       change = await updateChangePRUrl(change.id, nextPRUrl);
     }
     if (!sameStringList(changeTypes.value, change.change_types)) {
@@ -248,9 +248,6 @@ async function saveChangeFromPage() {
     }
     if (open.value !== change.open) {
       change = await updateChangeOpen(change.id, open.value);
-    }
-    if (agentEdit.value !== change.agent_edit) {
-      change = await updateChangeAgentEdit(change.id, agentEdit.value);
     }
 
     await changeCache.loadProjectChanges(change.project_id);
@@ -270,6 +267,32 @@ function goBack() {
   }
 
   void router.push('/changes');
+}
+
+function changedArtifactValidationError(change: Change) {
+  const nextSpec = spec.value.trim();
+  if (nextSpec !== change.spec && !nextSpec) {
+    return 'Spec is required.';
+  }
+  const nextPR = pr.value.trim();
+  if (nextPR !== change.pr && !nextPR) {
+    return 'PR is required.';
+  }
+  const nextPRUrl = prUrl.value.trim();
+  if (nextPRUrl !== change.pr_url && !isHTTPURL(nextPRUrl)) {
+    return 'PR URL must be an absolute http or https URL.';
+  }
+  return '';
+}
+
+function isHTTPURL(value: string) {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return Boolean(parsed.hostname) && (parsed.protocol === 'http:' || parsed.protocol === 'https:');
+  } catch {
+    return false;
+  }
 }
 
 function sameStringList(left: string[], right: string[]) {

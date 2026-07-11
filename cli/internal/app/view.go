@@ -151,7 +151,7 @@ func (m Model) helpText() string {
 	case ChangesListState:
 		return "<ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:
-		return "<ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  </> command"
+		return "<ctrl+n> new testcase  |  <return> edit  |  <space> toggle  |  <del> delete  |  <ctrl+ins> copy  |  </> command"
 	case TestCaseCreateState, TestCaseUpdateState:
 		return "<return> save  |  <ctrl+c> delete prompt  |  <esc> cancel"
 	case ChangeCreateState, ChangeUpdateState, EpicCreateState, EpicUpdateState, ProjectCreateState, ProjectUpdateState:

@@ -307,7 +307,7 @@ func agentSpecCreateCommand(client appClient, projectID int, workspace agent.Wor
 		if err != nil {
 			return agentSpecCreatedMsg{err: err}
 		}
-		if _, err := client.UpdateChangeSpec(id, &parsed.Spec); err != nil {
+		if _, err := client.UpdateChangeSpec(id, parsed.Spec, true); err != nil {
 			return agentSpecCreatedMsg{err: err}
 		}
 		if _, err := client.UpdateChangeTypes(id, parsed.ChangeTypes); err != nil {
@@ -399,7 +399,7 @@ func agentChangeCreateForRewriteCommand(client appClient, projectID int, workspa
 
 func changeIdeaUpdateForRewriteCommand(client appClient, id int, idea string) tea.Cmd {
 	return func() tea.Msg {
-		change, err := client.UpdateChangeIdea(id, idea)
+		change, err := client.UpdateChangeIdea(id, idea, false)
 		if err != nil {
 			return changeIdeaUpdatedForRewriteMsg{err: err}
 		}
@@ -413,7 +413,7 @@ func changeIdeaAgentEditSaveCommand(client appClient, id int, workspace agent.Wo
 		if err != nil {
 			return changeIdeaAgentEditSavedMsg{err: err}
 		}
-		updated, err := client.UpdateChangeIdeaAgentEdit(id, idea)
+		updated, err := client.UpdateChangeIdea(id, idea, true)
 		if err != nil {
 			return changeIdeaAgentEditSavedMsg{err: err}
 		}

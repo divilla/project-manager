@@ -9,6 +9,7 @@ type (
 	Change struct {
 		ID             int        `json:"id"`
 		Version        int16      `json:"version"`
+		RefUUID        string     `json:"ref_uuid"`
 		Ref            *int32     `json:"ref"`
 		Slug           *string    `json:"slug"`
 		ProjectID      int        `json:"project_id"`
@@ -18,11 +19,11 @@ type (
 		ChangeTypes    []string   `json:"change_types"`
 		Title          string     `json:"title"`
 		Idea           string     `json:"idea"`
-		Spec           *string    `json:"spec"`
-		SpecHTML       *string    `json:"spec_html"`
-		PRBody         *string    `json:"pr_body"`
-		PRHtml         *string    `json:"pr_html"`
-		PRUrl          *string    `json:"pr_url"`
+		Spec           string     `json:"spec"`
+		SpecHTML       string     `json:"spec_html"`
+		PR             string     `json:"pr"`
+		PRHtml         string     `json:"pr_html"`
+		PRUrl          string     `json:"pr_url"`
 		AgentEdit      bool       `json:"agent_edit"`
 		FlowStages     []string   `json:"flow_stages"`
 		FlowStageModes []string   `json:"flow_stage_modes"`
@@ -45,6 +46,7 @@ type (
 	// ChangeListItem defines ChangeListItem values.
 	ChangeListItem struct {
 		ID          int       `json:"id"`
+		RefUUID     string    `json:"ref_uuid"`
 		Ref         *int32    `json:"ref"`
 		Slug        *string   `json:"slug"`
 		ProjectID   int       `json:"project_id"`
@@ -127,38 +129,29 @@ type (
 
 	// ChangeUpdateIdeaRequest defines ChangeUpdateIdeaRequest values.
 	ChangeUpdateIdeaRequest struct {
-		ID   int    `json:"id"`
-		Idea string `json:"idea"`
-	}
-
-	// ChangeUpdateIdeaAgentEditRequest defines ChangeUpdateIdeaAgentEditRequest values.
-	ChangeUpdateIdeaAgentEditRequest struct {
-		ID   int    `json:"id"`
-		Idea string `json:"idea"`
+		ID        int    `json:"id"`
+		Idea      string `json:"idea"`
+		AgentEdit *bool  `json:"agent_edit"`
 	}
 
 	// ChangeUpdateSpecRequest defines ChangeUpdateSpecRequest values.
 	ChangeUpdateSpecRequest struct {
-		ID   int     `json:"id"`
-		Spec *string `json:"spec"`
+		ID        int    `json:"id"`
+		Spec      string `json:"spec"`
+		AgentEdit *bool  `json:"agent_edit"`
 	}
 
-	// ChangeUpdatePRBodyRequest defines ChangeUpdatePRBodyRequest values.
-	ChangeUpdatePRBodyRequest struct {
-		ID     int     `json:"id"`
-		PRBody *string `json:"pr_body"`
+	// ChangeUpdatePRRequest defines ChangeUpdatePRRequest values.
+	ChangeUpdatePRRequest struct {
+		ID        int    `json:"id"`
+		PR        string `json:"pr"`
+		AgentEdit *bool  `json:"agent_edit"`
 	}
 
 	// ChangeUpdatePRUrlRequest defines ChangeUpdatePRUrlRequest values.
 	ChangeUpdatePRUrlRequest struct {
-		ID    int     `json:"id"`
-		PRUrl *string `json:"pr_url"`
-	}
-
-	// ChangeUpdateAgentEditRequest defines ChangeUpdateAgentEditRequest values.
-	ChangeUpdateAgentEditRequest struct {
-		ID        int   `json:"id"`
-		AgentEdit *bool `json:"agent_edit"`
+		ID    int    `json:"id"`
+		PRUrl string `json:"pr_url"`
 	}
 
 	// ChangeUpdateRunRequest defines ChangeUpdateRunRequest values.

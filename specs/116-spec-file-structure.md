@@ -50,7 +50,7 @@ The Change workflow uses `spec` terminology and the canonical `.mch/default/prom
 
 ## Design Notes
 
-- Documentation is the source of truth: `Change` remains the core product vocabulary, while `idea`, `spec`, `pr_body`, `pr_url`, and `agent_edit` are the artifact fields used by current docs.
+- Documentation is the source of truth: `Change` remains the core product vocabulary, while `idea`, `spec`, `pr`, `pr_url`, and `agent_edit` are the artifact fields used by current docs.
 - The idea mentions a pluralized legacy prompt path, but the active repository contains the singular legacy prompt path; implementation should remove the actual singular-path file and clean up both singular and plural stale references if present.
 - The first non-blank line of generated Change specs remains the shared Change, Idea, and Spec title, followed by the `Types: <type-slugs>` metadata line.
 - Valid backend Change type slugs are backend option data. The current repository seed includes `feature`, `fix`, `refactor`, `upgrade`, `chore`, `docs`, `test`, `ci`, `security`, `migration`, `revert`, and `spike`; this spec uses `docs|refactor|test`.

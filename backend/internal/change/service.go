@@ -66,18 +66,10 @@ func (s *Service) RenderedArtifacts(ctx context.Context, req dto.ChangeRenderedA
 	artifacts := make([]dto.ChangeRenderedArtifact, 0, len(changes))
 	for _, item := range changes {
 		item = s.renderer.RenderChange(item)
-		specHTML := ""
-		if item.SpecHTML != nil {
-			specHTML = *item.SpecHTML
-		}
-		prHTML := ""
-		if item.PRHtml != nil {
-			prHTML = *item.PRHtml
-		}
 		artifacts = append(artifacts, dto.ChangeRenderedArtifact{
 			ID:       item.ID,
-			SpecHTML: specHTML,
-			PRHtml:   prHTML,
+			SpecHTML: item.SpecHTML,
+			PRHtml:   item.PRHtml,
 		})
 	}
 	return dto.ChangeRenderedArtifactsResponse{Artifacts: artifacts}, nil
@@ -126,7 +118,7 @@ func (s *Service) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequ
 // UpdateIdea executes UpdateIdea behavior.
 func (s *Service) UpdateIdea(ctx context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error) {
 	req.Idea = strings.TrimSpace(req.Idea)
-	if req.ID <= 0 || req.Idea == "" {
+	if req.ID <= 0 || req.Idea == "" || req.AgentEdit == nil {
 		return dto.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdateIdea(ctx, req)
@@ -136,26 +128,10 @@ func (s *Service) UpdateIdea(ctx context.Context, req dto.ChangeUpdateIdeaReques
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdateIdeaAgentEdit executes UpdateIdeaAgentEdit behavior.
-func (s *Service) UpdateIdeaAgentEdit(ctx context.Context, req dto.ChangeUpdateIdeaAgentEditRequest) (dto.Change, error) {
-	req.Idea = strings.TrimSpace(req.Idea)
-	if req.ID <= 0 || req.Idea == "" {
-		return dto.Change{}, ErrInvalidInput
-	}
-	change, err := s.repo.UpdateIdeaAgentEdit(ctx, req)
-	if err != nil {
-		return dto.Change{}, err
-	}
-	return s.renderer.RenderChange(change), nil
-}
-
 // UpdateSpec executes UpdateSpec behavior.
 func (s *Service) UpdateSpec(ctx context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error) {
-	if req.Spec != nil {
-		trimmed := strings.TrimSpace(*req.Spec)
-		req.Spec = &trimmed
-	}
-	if req.ID <= 0 {
+	req.Spec = strings.TrimSpace(req.Spec)
+	if req.ID <= 0 || req.Spec == "" || req.AgentEdit == nil {
 		return dto.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdateSpec(ctx, req)
@@ -165,16 +141,13 @@ func (s *Service) UpdateSpec(ctx context.Context, req dto.ChangeUpdateSpecReques
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdatePRBody executes UpdatePRBody behavior.
-func (s *Service) UpdatePRBody(ctx context.Context, req dto.ChangeUpdatePRBodyRequest) (dto.Change, error) {
-	if req.PRBody != nil {
-		trimmed := strings.TrimSpace(*req.PRBody)
-		req.PRBody = &trimmed
-	}
-	if req.ID <= 0 {
+// UpdatePR executes UpdatePR behavior.
+func (s *Service) UpdatePR(ctx context.Context, req dto.ChangeUpdatePRRequest) (dto.Change, error) {
+	req.PR = strings.TrimSpace(req.PR)
+	if req.ID <= 0 || req.PR == "" || req.AgentEdit == nil {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.UpdatePRBody(ctx, req)
+	change, err := s.repo.UpdatePR(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -183,26 +156,11 @@ func (s *Service) UpdatePRBody(ctx context.Context, req dto.ChangeUpdatePRBodyRe
 
 // UpdatePRUrl executes UpdatePRUrl behavior.
 func (s *Service) UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error) {
-	if req.PRUrl != nil {
-		trimmed := strings.TrimSpace(*req.PRUrl)
-		req.PRUrl = &trimmed
-	}
-	if req.ID <= 0 || invalidPRURL(req.PRUrl) {
+	req.PRUrl = strings.TrimSpace(req.PRUrl)
+	if req.ID <= 0 || req.PRUrl == "" || invalidPRURL(req.PRUrl) {
 		return dto.Change{}, ErrInvalidInput
 	}
 	change, err := s.repo.UpdatePRUrl(ctx, req)
-	if err != nil {
-		return dto.Change{}, err
-	}
-	return s.renderer.RenderChange(change), nil
-}
-
-// UpdateAgentEdit executes UpdateAgentEdit behavior.
-func (s *Service) UpdateAgentEdit(ctx context.Context, req dto.ChangeUpdateAgentEditRequest) (dto.Change, error) {
-	if req.ID <= 0 || req.AgentEdit == nil {
-		return dto.Change{}, ErrInvalidInput
-	}
-	change, err := s.repo.UpdateAgentEdit(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -332,11 +290,11 @@ func invalidOptionalID(value *int) bool {
 	return value != nil && *value <= 0
 }
 
-func invalidPRURL(value *string) bool {
-	if value == nil || *value == "" {
+func invalidPRURL(value string) bool {
+	if value == "" {
 		return false
 	}
-	parsed, err := url.Parse(*value)
+	parsed, err := url.Parse(value)
 	if err != nil {
 		return true
 	}

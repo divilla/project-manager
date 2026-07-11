@@ -142,7 +142,7 @@ func (m Model) SelectDetail(filters Filters) (Model, dto.Change, bool) {
 // WithDetail stores the selected Change and resets detail-table selection.
 func (m Model) WithDetail(change dto.Change) Model {
 	m.Detail = change
-	m.DetailSelected = firstSelectableDetailRow(DetailRows(change))
+	m.DetailSelected = firstSelectableDetailSelection(change)
 	m.DetailOffset = 0
 	return m
 }
@@ -156,14 +156,17 @@ func (m Model) MoveDetailSelection(delta int, pageSize int, width int) Model {
 		return m
 	}
 	m = m.ClampDetailSelection(pageSize, width)
-	next := nextSelectableDetailRow(rows, m.DetailSelected, delta)
-	if next >= 0 {
-		m.DetailSelected = next
+	next := nextSelectableDetailSelection(m.Detail, rows, m.DetailSelected, delta)
+	m.DetailSelected = next
+	if m.DetailSelected < 0 {
+		_, textWidth := DetailColumnWidths(m.Detail, width)
+		m.DetailOffset = clampLineOffset(m.DetailOffset, detailLineCount(rows, textWidth), detailScrollPageSize(m.Detail, pageSize, width))
+		return m
 	}
 	_, textWidth := DetailColumnWidths(m.Detail, width)
 	rowStart := detailRowLineStart(rows, m.DetailSelected, textWidth)
 	rowEnd := rowStart + detailRowLineCount(rows[m.DetailSelected], textWidth)
-	m.DetailOffset = detailOffsetKeepingRowVisible(m.DetailOffset, rowStart, rowEnd, detailLineCount(rows, textWidth), pageSize)
+	m.DetailOffset = detailOffsetKeepingRowVisible(m.DetailOffset, rowStart, rowEnd, detailLineCount(rows, textWidth), detailScrollPageSize(m.Detail, pageSize, width))
 	return m
 }
 
@@ -175,11 +178,11 @@ func (m Model) ClampDetailSelection(pageSize int, width int) Model {
 		m.DetailOffset = 0
 		return m
 	}
-	if m.DetailSelected < 0 || m.DetailSelected >= len(rows) || !rows[m.DetailSelected].Selectable {
-		m.DetailSelected = firstSelectableDetailRow(rows)
+	if !validDetailSelection(m.Detail, rows, m.DetailSelected) {
+		m.DetailSelected = firstSelectableDetailSelection(m.Detail)
 	}
 	_, textWidth := DetailColumnWidths(m.Detail, width)
-	m.DetailOffset = clampLineOffset(m.DetailOffset, detailLineCount(rows, textWidth), pageSize)
+	m.DetailOffset = clampLineOffset(m.DetailOffset, detailLineCount(rows, textWidth), detailScrollPageSize(m.Detail, pageSize, width))
 	return m
 }
 
@@ -192,7 +195,15 @@ func (m Model) ScrollDetailViewport(delta int, pageSize int, width int) Model {
 		return m
 	}
 	_, textWidth := DetailColumnWidths(m.Detail, width)
-	m.DetailOffset = clampLineOffset(m.DetailOffset+delta, detailLineCount(rows, textWidth), pageSize)
+	scrollPageSize := detailScrollPageSize(m.Detail, pageSize, width)
+	if abs(delta) >= pageSize {
+		if delta < 0 {
+			delta = -scrollPageSize
+		} else {
+			delta = scrollPageSize
+		}
+	}
+	m.DetailOffset = clampLineOffset(m.DetailOffset+delta, detailLineCount(rows, textWidth), scrollPageSize)
 	m.DetailSelected = selectableDetailRowAtOffset(rows, m.DetailOffset, textWidth)
 	return m
 }
@@ -201,10 +212,11 @@ func (m Model) ScrollDetailViewport(delta int, pageSize int, width int) Model {
 func (m Model) SelectDetailRow(pageSize int, width int) (Model, DetailRow, bool) {
 	m = m.ClampDetailSelection(pageSize, width)
 	rows := DetailRows(m.Detail)
-	if len(rows) == 0 || m.DetailSelected < 0 || m.DetailSelected >= len(rows) || !rows[m.DetailSelected].Selectable {
+	row, ok := detailRowForSelection(m.Detail, rows, m.DetailSelected)
+	if !ok {
 		return m, DetailRow{}, false
 	}
-	return m, rows[m.DetailSelected], true
+	return m, row, true
 }
 
 // DetailRows returns Change details as label/text table rows.
@@ -234,7 +246,7 @@ func DetailRows(change dto.Change) []DetailRow {
 		})
 	}
 	rows = append(rows,
-		DetailRow{Label: "PR", Text: change.PRBody, Selectable: true, DividerAfter: true},
+		DetailRow{Label: "PR", Text: change.PR, Selectable: true, DividerAfter: true},
 		DetailRow{Label: "PR URL", Text: change.PRUrl, Selectable: true},
 		DetailRow{Label: "Agent Edit", Text: agentEditIcon(change.AgentEdit), Selectable: true},
 		DetailRow{Label: "Complete", Text: fmt.Sprintf("%d/%d - %d%%", change.Done, change.Total, change.Completed), Selectable: true},
@@ -243,6 +255,103 @@ func DetailRows(change dto.Change) []DetailRow {
 		DetailRow{Label: "Modified", Text: formatListTimestamp(change.Modified), Selectable: true},
 	)
 	return rows
+}
+
+func fixedDetailRows(change dto.Change) []DetailRow {
+	return []DetailRow{
+		{Label: "ID", Text: change.ID, Selectable: true},
+		{Label: "Ref UUID", Text: change.RefUUID, Selectable: true},
+	}
+}
+
+// DetailCopyValue returns the value copied for a selected detail row.
+func DetailCopyValue(row DetailRow) string {
+	return row.Text
+}
+
+func firstSelectableDetailSelection(change dto.Change) int {
+	fixedRows := fixedDetailRows(change)
+	for i, row := range fixedRows {
+		if row.Selectable {
+			return i - len(fixedRows)
+		}
+	}
+	return firstSelectableDetailRow(DetailRows(change))
+}
+
+func validDetailSelection(change dto.Change, rows []DetailRow, selected int) bool {
+	_, ok := detailRowForSelection(change, rows, selected)
+	return ok
+}
+
+func detailRowForSelection(change dto.Change, rows []DetailRow, selected int) (DetailRow, bool) {
+	if selected < 0 {
+		fixedRows := fixedDetailRows(change)
+		index := selected + len(fixedRows)
+		if index < 0 || index >= len(fixedRows) || !fixedRows[index].Selectable {
+			return DetailRow{}, false
+		}
+		return fixedRows[index], true
+	}
+	if selected >= len(rows) || !rows[selected].Selectable {
+		return DetailRow{}, false
+	}
+	return rows[selected], true
+}
+
+func selectableDetailSelections(change dto.Change, rows []DetailRow) []int {
+	fixedRows := fixedDetailRows(change)
+	selections := make([]int, 0, len(fixedRows)+len(rows))
+	for i, row := range fixedRows {
+		if row.Selectable {
+			selections = append(selections, i-len(fixedRows))
+		}
+	}
+	for i, row := range rows {
+		if row.Selectable {
+			selections = append(selections, i)
+		}
+	}
+	return selections
+}
+
+func nextSelectableDetailSelection(change dto.Change, rows []DetailRow, selected int, delta int) int {
+	selections := selectableDetailSelections(change, rows)
+	if len(selections) == 0 || delta == 0 {
+		return selected
+	}
+	position := -1
+	for i, value := range selections {
+		if value == selected {
+			position = i
+			break
+		}
+	}
+	if position < 0 {
+		return selections[0]
+	}
+	next := position + delta
+	if next < 0 {
+		next = 0
+	}
+	if next >= len(selections) {
+		next = len(selections) - 1
+	}
+	return selections[next]
+}
+
+func detailScrollPageSize(change dto.Change, pageSize int, width int) int {
+	if pageSize < 1 {
+		pageSize = 1
+	}
+	_, textWidth := DetailColumnWidths(change, width)
+	for _, row := range fixedDetailRows(change) {
+		pageSize -= detailRowLineCount(row, textWidth)
+	}
+	if pageSize < 1 {
+		return 1
+	}
+	return pageSize
 }
 
 func agentEditIcon(value bool) string {
@@ -284,31 +393,6 @@ func firstSelectableDetailRow(rows []DetailRow) int {
 		}
 	}
 	return 0
-}
-
-func nextSelectableDetailRow(rows []DetailRow, selected int, delta int) int {
-	if len(rows) == 0 || delta == 0 {
-		return selected
-	}
-	step := 1
-	if delta < 0 {
-		step = -1
-	}
-	next := selected
-	for remaining := abs(delta); remaining > 0; remaining-- {
-		candidate := next
-		for {
-			candidate += step
-			if candidate < 0 || candidate >= len(rows) {
-				return next
-			}
-			if rows[candidate].Selectable {
-				next = candidate
-				break
-			}
-		}
-	}
-	return next
 }
 
 func detailLineCount(rows []DetailRow, textWidth int) int {
@@ -755,6 +839,7 @@ func hasChangeType(change dto.Change, values ...string) bool {
 func matchesFind(change dto.Change, query string) bool {
 	values := []string{
 		change.ID,
+		change.RefUUID,
 		change.Ref,
 		displayRef(change),
 		change.Slug,

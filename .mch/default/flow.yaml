@@ -7,13 +7,18 @@ help: help.yaml
 makefile: Makefile
 
 steps:
-  - slug: idea
+  - slug: idea-write
+    help: capture or refine the initial change idea
+    mode: edit
+
+  - slug: idea-review
+    help: capture or refine the initial change idea
+    mode: exec
+    prompt: idea-review
+
+  - slug: idea-refine
     help: capture or refine the initial change idea
     mode: prompt
-    prompt: prompts/change-idea.md
-    entry: make idea-entry
-    exec: make idea-exec
-    exit: make idea-exit
 
   - slug: spec
     help: create the implementation-ready spec

@@ -93,6 +93,16 @@ func TestTestCaseCRUDRecalculatesChangeAndEpicCompleteness(t *testing.T) {
 	assert.Equal(t, second.Version+1, updated.TestCase.Version)
 	second = *updated.TestCase
 
+	status = client.Post(t, "/api/v1/test-case/update", map[string]any{
+		"id":       second.ID,
+		"scenario": "Updated test case scenario again.",
+	}, &updated)
+	require.Equal(t, http.StatusOK, status)
+	require.NotNil(t, updated.TestCase)
+	assert.Equal(t, "Updated test case scenario again.", updated.TestCase.Scenario)
+	assert.Equal(t, second.Version+1, updated.TestCase.Version)
+	second = *updated.TestCase
+
 	status = client.Post(t, "/api/v1/test-case/update-done", map[string]any{"id": second.ID, "done": false}, &updated)
 	require.Equal(t, http.StatusOK, status)
 	require.NotNil(t, updated.TestCase)

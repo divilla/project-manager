@@ -16,11 +16,12 @@ A change is the primary unit of delivery and PR construction. It has a fixed str
 Important fields:
 
 - `ref`: optional project-scoped numeric reference allocated by backend Flow assignment.
+- `ref_uuid`: backend-generated, globally unique UUID identity returned on Change responses.
 - `slug`: optional backend-owned branch identifier generated from the Change reference and title.
 - `title`: short human-readable name.
 - `idea`: required user intent captured when the Change is created and replaceable by an agent rewrite.
 - `spec`: optional markdown-capable requirement or implementation specification.
-- `pr_body`: optional markdown text for the eventual PR body.
+- `pr`: optional markdown text for the eventual PR body.
 - `pr_url`: optional link to the published PR.
 - `agent_edit`: marker that the current active version was produced by an agent-assisted edit.
 - `open`: marker that the change remains active for work.
@@ -38,7 +39,7 @@ Important fields:
 
 `ref` is unique only inside its project. Two projects may both have a change with the same `ref`, but a single project must not.
 
-Users and clients cannot set or edit `ref`, `slug`, Flow snapshot fields, or Run state fields directly. New changes may have no assigned `ref`, `slug`, or Flow snapshot; clients must render that state without deriving identity locally. The backend assigns or refreshes identity only through Flow assignment and returns it on Change responses.
+Users and clients cannot set or edit `ref`, `ref_uuid`, `slug`, Flow snapshot fields, or Run state fields directly. New changes may have no assigned `ref`, `slug`, or Flow snapshot; clients must render that state without deriving identity locally. The backend assigns or refreshes `ref` and `slug` only through Flow assignment and returns identity on Change responses.
 
 ## Flow and Run
 A Flow is a reusable automation definition for moving a Change through ordered Steps. A Step is one named stage inside that Flow. A Run is one execution attempt of the Flow copied onto a Change. A Task performs one Step within a Run. A Worker is the executor, tool, or process that performs the Task.
@@ -63,7 +64,7 @@ Weak examples:
 - "Finish planning."
 
 ## History
-History stores previous active row versions before update or delete operations. It supports audit, review, and revert-oriented workflows for user and AI changes.
+History stores reviewable versions of changes, epics, and test cases. Change artifact history is document-specific for `idea`, `spec`, and `pr`; epic and test case history preserve prior active row context for their supported update and delete flows.
 
 ## Completeness
 Completeness is calculated from test cases:

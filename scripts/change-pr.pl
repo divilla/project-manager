@@ -25,8 +25,8 @@ my $pr_author = "divilla";
 ensure_gh_author($pr_author);
 ensure_stage_is_ancestor();
 
-my $pr_body_file = "agent/prs/$change_name.md";
-my $pr_title = extract_pr_title($pr_body_file);
+my $pr_file = "agent/prs/$change_name.md";
+my $pr_title = extract_pr_title($pr_file);
 my $pr_url_file = "agent/prurls/$change_name";
 
 run_checked(qw(git add -A));
@@ -45,7 +45,7 @@ my $pr_url = run_capture_checked(
     "--title",
     $pr_title,
     "--body-file",
-    $pr_body_file,
+    $pr_file,
 );
 write_file($pr_url_file, $pr_url);
 

@@ -34,6 +34,7 @@ type changeOption struct {
 type change struct {
 	ID             int      `json:"id"`
 	Version        int16    `json:"version"`
+	RefUUID        string   `json:"ref_uuid"`
 	Ref            *int32   `json:"ref"`
 	Slug           *string  `json:"slug"`
 	ProjectID      int      `json:"project_id"`
@@ -43,11 +44,11 @@ type change struct {
 	ChangeTypes    []string `json:"change_types"`
 	Title          string   `json:"title"`
 	Idea           string   `json:"idea"`
-	Spec           *string  `json:"spec"`
-	SpecHTML       *string  `json:"spec_html"`
-	PRBody         *string  `json:"pr_body"`
-	PRHtml         *string  `json:"pr_html"`
-	PRUrl          *string  `json:"pr_url"`
+	Spec           string   `json:"spec"`
+	SpecHTML       string   `json:"spec_html"`
+	PR             string   `json:"pr"`
+	PRHtml         string   `json:"pr_html"`
+	PRUrl          string   `json:"pr_url"`
 	AgentEdit      bool     `json:"agent_edit"`
 	FlowStages     []string `json:"flow_stages"`
 	FlowStageModes []string `json:"flow_stage_modes"`
@@ -106,6 +107,11 @@ type startRunResult struct {
 	err      error
 }
 
+var (
+	removedUpdateAgentEditPath     = "/api/v1/change/update-agent-" + "edit"
+	removedUpdateIdeaAgentEditPath = "/api/v1/change/update-idea-agent-" + "edit"
+)
+
 func TestChangeCRUDAndOptions(t *testing.T) {
 	client := shared.NewClient(t)
 
@@ -133,14 +139,17 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
+	assert.NotEmpty(t, created.RefUUID)
 	assert.Nil(t, created.Ref)
 	assert.Nil(t, created.Slug)
 	assert.Equal(t, title, created.Title)
 	assert.Equal(t, idea, created.Idea)
 	assert.Equal(t, "backlog", created.ChangePhase)
-	assert.Nil(t, created.Spec)
-	assert.Nil(t, created.PRBody)
-	assert.Nil(t, created.PRUrl)
+	assert.Empty(t, created.Spec)
+	assert.Empty(t, created.SpecHTML)
+	assert.Empty(t, created.PR)
+	assert.Empty(t, created.PRHtml)
+	assert.Empty(t, created.PRUrl)
 	assert.False(t, created.AgentEdit)
 	assert.True(t, created.Open)
 	assert.Empty(t, created.ChangeTypes)
@@ -151,6 +160,7 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	require.Len(t, listed, 1)
 	assert.Equal(t, created.ID, listed[0].ID)
+	assert.Equal(t, created.RefUUID, listed[0].RefUUID)
 	assert.Equal(t, created.Ref, listed[0].Ref)
 	assert.Equal(t, created.Slug, listed[0].Slug)
 	assert.Equal(t, created.Title, listed[0].Title)
@@ -164,7 +174,7 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.NotContains(t, listedFields[0], "idea")
 	assert.NotContains(t, listedFields[0], "spec")
 	assert.NotContains(t, listedFields[0], "spec_html")
-	assert.NotContains(t, listedFields[0], "pr_body")
+	assert.NotContains(t, listedFields[0], "pr")
 	assert.NotContains(t, listedFields[0], "pr_url")
 	assert.NotContains(t, listedFields[0], "flow_stages")
 	assert.NotContains(t, listedFields[0], "flow_stage_modes")
@@ -183,10 +193,11 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, created.ID, fetched.Change.ID)
+	assert.Equal(t, created.RefUUID, fetched.Change.RefUUID)
 	assert.Equal(t, created.Ref, fetched.Change.Ref)
 	assert.Equal(t, created.Slug, fetched.Change.Slug)
 	assert.Equal(t, idea, fetched.Change.Idea)
-	assert.Nil(t, fetched.Change.SpecHTML)
+	assert.Empty(t, fetched.Change.SpecHTML)
 
 	var referenced change
 	status = client.Post(t, "/api/v1/change/assign-flow", map[string]any{"id": created.ID}, &referenced)
@@ -249,52 +260,80 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, status)
 
 	status = client.Post(t, "/api/v1/change/update-idea", map[string]any{
-		"id":   created.ID,
-		"idea": "Focused idea update.",
+		"id":         created.ID,
+		"idea":       "Focused idea update.",
+		"agent_edit": false,
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, "Focused idea update.", updated.Idea)
+	assert.False(t, updated.AgentEdit)
 
-	status = client.Post(t, "/api/v1/change/update-idea-agent-edit", map[string]any{
-		"id":   created.ID,
-		"idea": "Agent rewritten idea.",
+	status = client.Post(t, "/api/v1/change/update-idea", map[string]any{
+		"id":         created.ID,
+		"idea":       "Agent rewritten idea.",
+		"agent_edit": true,
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, "Agent rewritten idea.", updated.Idea)
 	assert.True(t, updated.AgentEdit)
 
 	status = client.Post(t, "/api/v1/change/update-spec", map[string]any{
-		"id":   created.ID,
-		"spec": "Focused spec update.",
+		"id":         created.ID,
+		"spec":       "Focused spec update.",
+		"agent_edit": false,
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
-	require.NotNil(t, updated.Spec)
-	assert.Equal(t, "Focused spec update.", *updated.Spec)
-	require.NotNil(t, updated.SpecHTML)
-	assert.Contains(t, *updated.SpecHTML, "<p>Focused spec update.</p>")
+	assert.Equal(t, "Focused spec update.", updated.Spec)
+	assert.Contains(t, updated.SpecHTML, "<p>Focused spec update.</p>")
 
 	status = client.Post(t, "/api/v1/change/update-spec", map[string]any{
-		"id":   created.ID,
-		"spec": nil,
-	}, &updated)
-	require.Equal(t, http.StatusOK, status)
-	assert.Nil(t, updated.Spec)
+		"id":         created.ID,
+		"spec":       nil,
+		"agent_edit": false,
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, status)
 
-	status = client.Post(t, "/api/v1/change/update-pr-body", map[string]any{
-		"id":      created.ID,
-		"pr_body": "Focused pull request body update.",
+	status = client.Post(t, "/api/v1/change/update-spec", map[string]any{
+		"id":         created.ID,
+		"spec":       "",
+		"agent_edit": false,
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/change/update-pr", map[string]any{
+		"id":         created.ID,
+		"pr":         "Focused pull request body update.",
+		"agent_edit": true,
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
-	require.NotNil(t, updated.PRBody)
-	assert.Equal(t, "Focused pull request body update.", *updated.PRBody)
+	assert.Equal(t, "Focused pull request body update.", updated.PR)
+	assert.True(t, updated.AgentEdit)
+
+	status = client.Post(t, "/api/v1/change/update-pr", map[string]any{
+		"id":         created.ID,
+		"pr":         "",
+		"agent_edit": true,
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, status)
 
 	status = client.Post(t, "/api/v1/change/update-pr-url", map[string]any{
 		"id":     created.ID,
 		"pr_url": "https://example.test/project-manager/pull/1",
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
-	require.NotNil(t, updated.PRUrl)
-	assert.Equal(t, "https://example.test/project-manager/pull/1", *updated.PRUrl)
+	assert.Equal(t, "https://example.test/project-manager/pull/1", updated.PRUrl)
+
+	status = client.Post(t, "/api/v1/change/update-pr-url", map[string]any{
+		"id":     created.ID,
+		"pr_url": nil,
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, status)
+
+	status = client.Post(t, "/api/v1/change/update-pr-url", map[string]any{
+		"id":     created.ID,
+		"pr_url": "",
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, status)
 
 	status = client.Post(t, "/api/v1/change/update-pr-url", map[string]any{
 		"id":     created.ID,
@@ -304,15 +343,13 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
-	require.NotNil(t, fetched.Change.PRUrl)
-	assert.Equal(t, "https://example.test/project-manager/pull/1", *fetched.Change.PRUrl)
+	assert.Equal(t, "https://example.test/project-manager/pull/1", fetched.Change.PRUrl)
 
-	status = client.Post(t, "/api/v1/change/update-agent-edit", map[string]any{
+	status = client.Post(t, removedUpdateAgentEditPath, map[string]any{
 		"id":         created.ID,
 		"agent_edit": true,
-	}, &updated)
-	require.Equal(t, http.StatusOK, status)
-	assert.True(t, updated.AgentEdit)
+	}, nil)
+	require.Equal(t, http.StatusNotFound, status)
 
 	status = client.Post(t, "/api/v1/change/update-change-types", map[string]any{
 		"id":           created.ID,
@@ -814,22 +851,112 @@ func TestChangeBooleanUpdatesRequireExplicitFields(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	assert.True(t, fetched.Change.Open)
 
+	status = client.Post(t, removedUpdateAgentEditPath, map[string]any{"id": created.ID}, nil)
+	require.Equal(t, http.StatusNotFound, status)
+	status = client.Post(t, removedUpdateIdeaAgentEditPath, map[string]any{"id": created.ID, "idea": " ", "agent_edit": true}, nil)
+	require.Equal(t, http.StatusNotFound, status)
+
+	artifactRequests := []struct {
+		path  string
+		field string
+		body  string
+	}{
+		{path: "/api/v1/change/update-idea", field: "idea", body: "Idea without provenance"},
+		{path: "/api/v1/change/update-spec", field: "spec", body: "Spec without provenance"},
+		{path: "/api/v1/change/update-pr", field: "pr", body: "PR without provenance"},
+	}
+	for _, request := range artifactRequests {
+		t.Run(request.field+" rejects omitted agent_edit", func(t *testing.T) {
+			status := client.Post(t, request.path, map[string]any{
+				"id":          created.ID,
+				request.field: request.body,
+			}, nil)
+			require.Equal(t, http.StatusBadRequest, status)
+		})
+		t.Run(request.field+" rejects null agent_edit", func(t *testing.T) {
+			status := client.Post(t, request.path, map[string]any{
+				"id":          created.ID,
+				request.field: request.body,
+				"agent_edit":  nil,
+			}, nil)
+			require.Equal(t, http.StatusBadRequest, status)
+		})
+	}
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "Boolean update idea", fetched.Change.Idea)
+	assert.Empty(t, fetched.Change.Spec)
+	assert.Empty(t, fetched.Change.PR)
+	assert.False(t, fetched.Change.AgentEdit)
+
 	var updated change
-	status = client.Post(t, "/api/v1/change/update-agent-edit", map[string]any{
+	status = client.Post(t, "/api/v1/change/update-idea", map[string]any{
 		"id":         created.ID,
+		"idea":       "Agent-edited idea.",
 		"agent_edit": true,
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
 	require.True(t, updated.AgentEdit)
 
-	status = client.Post(t, "/api/v1/change/update-agent-edit", map[string]any{"id": created.ID}, nil)
-	require.Equal(t, http.StatusBadRequest, status)
-	status = client.Post(t, "/api/v1/change/update-idea-agent-edit", map[string]any{"id": created.ID, "idea": " "}, nil)
-	require.Equal(t, http.StatusBadRequest, status)
-
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
 	assert.True(t, fetched.Change.AgentEdit)
+}
+
+func TestChangeArtifactUpdatesRejectNullAndEmptyWithoutMutation(t *testing.T) {
+	client := shared.NewClient(t)
+
+	projectID := createProject(t, client)
+	defer shared.CleanupProject(t, client, projectID)
+
+	const originalIdea = "Artifact validation idea"
+	var created change
+	status := client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id": projectID,
+		"title":      fmt.Sprintf("api-test-artifact-validation-%d", time.Now().UnixNano()),
+		"idea":       originalIdea,
+	}, &created)
+	require.Equal(t, http.StatusCreated, status)
+
+	requests := []struct {
+		name  string
+		path  string
+		field string
+		value any
+	}{
+		{name: "null idea", path: "/api/v1/change/update-idea", field: "idea", value: nil},
+		{name: "empty idea", path: "/api/v1/change/update-idea", field: "idea", value: ""},
+		{name: "null spec", path: "/api/v1/change/update-spec", field: "spec", value: nil},
+		{name: "empty spec", path: "/api/v1/change/update-spec", field: "spec", value: ""},
+		{name: "null pr", path: "/api/v1/change/update-pr", field: "pr", value: nil},
+		{name: "empty pr", path: "/api/v1/change/update-pr", field: "pr", value: ""},
+		{name: "null pr url", path: "/api/v1/change/update-pr-url", field: "pr_url", value: nil},
+		{name: "empty pr url", path: "/api/v1/change/update-pr-url", field: "pr_url", value: ""},
+	}
+
+	for _, request := range requests {
+		t.Run(request.name, func(t *testing.T) {
+			body := map[string]any{
+				"id":          created.ID,
+				request.field: request.value,
+			}
+			if request.field != "pr_url" {
+				body["agent_edit"] = true
+			}
+
+			status := client.Post(t, request.path, body, nil)
+			require.Equal(t, http.StatusBadRequest, status)
+
+			var fetched detail
+			status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
+			require.Equal(t, http.StatusOK, status)
+			assert.Equal(t, originalIdea, fetched.Change.Idea)
+			assert.Empty(t, fetched.Change.Spec)
+			assert.Empty(t, fetched.Change.PR)
+			assert.Empty(t, fetched.Change.PRUrl)
+			assert.False(t, fetched.Change.AgentEdit)
+		})
+	}
 }
 
 func TestChangeCreateRejectsInvalidInput(t *testing.T) {
@@ -899,10 +1026,10 @@ func TestChangeRejectsInvalidInputAndMissingRows(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/update-pr-url", map[string]any{"id": 999999999, "pr_url": "https://example.test"}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
-	status = client.Post(t, "/api/v1/change/update-agent-edit", map[string]any{"id": 999999999, "agent_edit": true}, nil)
+	status = client.Post(t, removedUpdateAgentEditPath, map[string]any{"id": 999999999, "agent_edit": true}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
-	status = client.Post(t, "/api/v1/change/update-idea-agent-edit", map[string]any{"id": 999999999, "idea": "missing"}, nil)
+	status = client.Post(t, removedUpdateIdeaAgentEditPath, map[string]any{"id": 999999999, "idea": "missing", "agent_edit": true}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
 	status = client.Post(t, "/api/v1/change/delete", map[string]any{}, nil)

@@ -41,28 +41,24 @@ export function updateChangeTitle(id: number, title: string): Promise<Change> {
   return post<Change>('/api/v1/change/update-title', { id, title });
 }
 
-export function updateChangeIdea(id: number, idea: string): Promise<Change> {
-  return post<Change>('/api/v1/change/update-idea', { id, idea });
+export function updateChangeIdea(id: number, idea: string, agentEdit = false): Promise<Change> {
+  return post<Change>('/api/v1/change/update-idea', { id, idea, agent_edit: agentEdit });
 }
 
-export function updateChangeSpec(id: number, spec: string | null): Promise<Change> {
-  return post<Change>('/api/v1/change/update-spec', { id, spec });
+export function updateChangeSpec(id: number, spec: string, agentEdit = false): Promise<Change> {
+  return post<Change>('/api/v1/change/update-spec', { id, spec, agent_edit: agentEdit });
 }
 
 export function updateChangeTypes(id: number, changeTypes: string[]): Promise<Change> {
   return post<Change>('/api/v1/change/update-change-types', { id, change_types: changeTypes });
 }
 
-export function updateChangePRBody(id: number, prBody: string): Promise<Change> {
-  return post<Change>('/api/v1/change/update-pr-body', { id, pr_body: prBody });
+export function updateChangePR(id: number, pr: string, agentEdit = false): Promise<Change> {
+  return post<Change>('/api/v1/change/update-pr', { id, pr, agent_edit: agentEdit });
 }
 
 export function updateChangePRUrl(id: number, prUrl: string): Promise<Change> {
   return post<Change>('/api/v1/change/update-pr-url', { id, pr_url: prUrl });
-}
-
-export function updateChangeAgentEdit(id: number, agentEdit: boolean): Promise<Change> {
-  return post<Change>('/api/v1/change/update-agent-edit', { id, agent_edit: agentEdit });
 }
 
 export function updateChangePhase(id: number, changePhase: string): Promise<Change> {

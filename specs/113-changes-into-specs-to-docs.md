@@ -58,7 +58,7 @@ The repository Change workflow uses `change/<change-slug>` branches and stores i
 - Documentation is the source of truth; active docs should describe current behavior, not compatibility with the old `changes/` branch namespace.
 - The idea explicitly distinguishes the product object from the repository artifact: `Change` remains the cornerstone of the app and process; only `Change file` becomes `Change spec`.
 - The current `mch` architecture docs still describe `/reference` branch reconciliation with `changes/<slug>`; this Change updates that contract to `change/<slug>`.
-- `docs/docs-rules.md` requires product vocabulary to keep `change`, `epic`, `test case`, and `history` as core terms and to use `title`, `idea`, `spec`, `pr_body`, `pr_url`, and `agent_edit` for Change artifacts.
+- `docs/docs-rules.md` requires product vocabulary to keep `change`, `epic`, `test case`, and `history` as core terms and to use `title`, `idea`, `spec`, `pr`, `pr_url`, and `agent_edit` for Change artifacts.
 - `docs/functionality/pr-integration.md` is an active behavior doc and must move from `changes/<change-slug>` plus `agent/changes/<change-slug>.md` to `change/<change-slug>` plus `specs/<change-slug>.md`.
 - Historical PR notes and research may mention old paths when they are clearly historical, but active workflow prompts, scripts, and product behavior docs must not rely on them.
 - Valid type slugs are sourced from repository seed data; this spec uses `docs|refactor|test`.

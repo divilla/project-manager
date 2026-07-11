@@ -3,9 +3,9 @@
 ## Overview
 A change is the delivery unit. It can exist independently or reference one epic. It is never part of a nested change tree.
 
-Each change may have a backend-owned `ref` and `slug`. The `ref` is a project-scoped numeric reference allocated from the owning project. The `slug` is a branch identifier generated from the assigned reference and current title.
+Each change has a backend-generated `ref_uuid` and may have a backend-owned `ref` and `slug`. The `ref_uuid` is a non-null read-only UUID identity. The `ref` is a project-scoped numeric reference allocated from the owning project. The `slug` is a branch identifier generated from the assigned reference and current title.
 
-Users and clients must not create, edit, or overwrite `ref`, `slug`, Flow snapshot fields, Run state fields, or the project's reference counter. New Changes may exist without a `ref`, `slug`, or Flow snapshot; these fields are assigned or refreshed only by backend Flow assignment and returned to clients as read-only data.
+Users and clients must not create, edit, or overwrite `ref`, `ref_uuid`, `slug`, Flow snapshot fields, Run state fields, or the project's reference counter. New Changes may exist without a `ref`, `slug`, or Flow snapshot; those fields are assigned or refreshed only by backend Flow assignment and returned to clients as read-only data.
 
 ## Create
 Creating a change requires:
@@ -14,11 +14,11 @@ Creating a change requires:
 - title
 - idea
 
-The title and idea must be non-blank after validation. `spec`, `pr_body`, `pr_url`, and `epic_id` are optional and default to null when omitted. `change_types` defaults to an empty array when omitted or explicitly empty. `change_phase` defaults to `backlog` when clients do not provide a phase.
+The title and idea must be non-blank after validation. `spec`, `pr`, and `pr_url` are optional artifact strings and default to empty text when omitted. `epic_id` defaults to null, `change_types` defaults to an empty array when omitted or explicitly empty, and `change_phase` defaults to `backlog` when clients do not provide a phase.
 
-After a successful create, the returned change includes its database ID and may have unassigned `ref` and `slug` values. Creating a Change does not advance the project reference sequence.
+After a successful create, the returned change includes its database ID, generated `ref_uuid`, string artifact fields, and may have unassigned `ref` and `slug` values. Creating a Change does not advance the project reference sequence.
 
-Codex-assisted planning tools create Changes after the user confirms `Create Change?`, then may run an agent rewrite and save the rewritten idea through the dedicated agent-edit update flow. These Changes use the backend default phase until the user moves them through the normal lifecycle.
+Codex-assisted planning tools create Changes after the user confirms `Create Change?`, then may run an agent rewrite and save the rewritten idea through `POST /api/v1/change/update-idea` with `agent_edit` set to true. These Changes use the backend default phase until the user moves them through the normal lifecycle.
 
 ## Flow Assignment
 `POST /api/v1/change/assign-flow` assigns or returns identity and Flow configuration for an existing Change identified by numeric `id`.
@@ -39,7 +39,7 @@ The detail view shows:
 
 - project-scoped reference and slug
 - title, idea, and spec
-- `pr_body` and `pr_url` when present
+- `pr` and `pr_url` when present
 - phase and type information
 - linked epic and `epic_name` when present
 - test case list ordered by test case ID
@@ -50,7 +50,7 @@ The detail view shows:
 - Run state fields `run_claim_id`, `run_flow_stage`, `run_task_step`, `run_task_status`, `run_error`, `run_is_completed`, `run_started_at`, and `run_updated_at`
 - version, created time, and modified time
 
-Markdown `spec` and `pr_body` rendering is sanitized by the backend before display.
+Markdown `spec` and `pr` rendering is sanitized by the backend before display.
 
 ## Run State
 `POST /api/v1/change/start-run` claims an unclaimed Change Run and returns `claim_id`. If a Run is already claimed, the endpoint returns the documented no-claim result and leaves the active claim unchanged.
@@ -66,7 +66,9 @@ When `run_is_completed` is true, the update marks the Run completed, clears the 
 Frontend and CLI controls for Flow assignment, per-Change stage modes, Run claiming, Run updates, and claim reset are out of scope until dedicated frontend or CLI Changes add them.
 
 ## Update
-Editing a change can update title, `idea`, `spec`, `pr_body`, `pr_url`, type classification, epic reference, phase, open state, and `agent_edit`. History-bearing fields must preserve the previous row before mutation. Open-state updates use an explicit boolean value and return refreshed backend state.
+Editing a change can update title, `idea`, `spec`, `pr`, `pr_url`, type classification, epic reference, phase, and open state. Artifact responses use strings; empty text is the no-value state for optional artifacts that have not been submitted and for rendered artifact HTML. Focused artifact and PR URL update payloads must be non-empty. Open-state updates use an explicit boolean value and return refreshed backend state.
+
+Artifact update payloads for `idea`, `spec`, and `pr` include `agent_edit` to record whether that artifact save was agent-produced. After create, `agent_edit` is changed only by those artifact update flows.
 
 Focused updates return the refreshed change with its existing `ref` and `slug`. Updates must work before and after Flow assignment. Updating the title does not let clients supply replacement identity values.
 

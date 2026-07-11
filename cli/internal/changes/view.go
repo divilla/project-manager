@@ -238,12 +238,23 @@ func DetailsView(m Model, width int, pageSize int, phaseColors ...PhaseColors) s
 			allLines = append(allLines, detailDividerLine(labelWidth, textWidth))
 		}
 	}
-	offset := clampLineOffset(m.DetailOffset, len(allLines), pageSize)
-	end := offset + pageSize
+	fixedLines := make([]string, 0, len(fixedDetailRows(m.Detail)))
+	fixedRows := fixedDetailRows(m.Detail)
+	for rowIndex, row := range fixedRows {
+		selected := rowIndex-len(fixedRows) == m.DetailSelected
+		fixedLines = append(fixedLines, detailTableRowLines(row, labelWidth, textWidth, selected, colors)...)
+	}
+	lines := append([]string(nil), fixedLines...)
+	if len(lines) > pageSize {
+		lines = lines[:pageSize]
+	}
+	scrollPageSize := pageSize - len(lines)
+	offset := clampLineOffset(m.DetailOffset, len(allLines), scrollPageSize)
+	end := offset + scrollPageSize
 	if end > len(allLines) {
 		end = len(allLines)
 	}
-	lines := append([]string(nil), allLines[offset:end]...)
+	lines = append(lines, allLines[offset:end]...)
 	for len(lines) < pageSize {
 		lines = append(lines, detailBlankLine(labelWidth, textWidth))
 	}

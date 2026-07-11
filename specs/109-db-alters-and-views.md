@@ -2,7 +2,7 @@
 
 ## Goal
 
-Align the application, documentation, tests, and demo data with the new `db/init.sql` Change persistence contract so Change records use `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, and the new list/detail views consistently across the product.
+Align the application, documentation, tests, and demo data with the new `db/init.sql` Change persistence contract so Change records use `body`, `pr`, `pr_url`, `agent_edit`, `open`, and the new list/detail views consistently across the product.
 
 ## Scope
 
@@ -16,7 +16,7 @@ Align the application, documentation, tests, and demo data with the new `db/init
 
 ## Requirements
 
-- Active code and docs must use `body`, `pr_body`, and `pr_url` for Change requirement content, pull request body, and pull request URL.
+- Active code and docs must use `body`, `pr`, and `pr_url` for Change requirement content, pull request body, and pull request URL.
 - Active code must not read, write, serialize, or document `requirement_body`, `pull_request_body`, or `pull_request_url` as current Change fields.
 - Change responses that expose linked epic display data must use backend-provided `epic_name` from the new Change read contract.
 - Change list behavior must use the new list read shape and include only list-appropriate fields.
@@ -35,12 +35,12 @@ Align the application, documentation, tests, and demo data with the new `db/init
 
 ## Acceptance Criteria
 
-- A fresh disposable database initialized from `db/init.sql` creates Change rows with `body`, `pr_body`, `pr_url`, `agent_edit`, and `open`.
+- A fresh disposable database initialized from `db/init.sql` creates Change rows with `body`, `pr`, `pr_url`, `agent_edit`, and `open`.
 - No active repository query, DTO, API test, frontend type, or CLI payload references the old Change body field names.
 - `POST /api/v1/change/create` returns a Change with backend-assigned `ref` and `slug`, default phase, new body field names, completion counters, and timestamps.
 - `POST /api/v1/change/list` returns project-scoped Change list items with `epic_name` when linked to an epic.
-- `POST /api/v1/change/get` returns Change detail data with `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, linked test cases, and current completion counters.
-- Rendered body behavior renders markdown from `body` and `pr_body` and returns sanitized HTML using the new response field names.
+- `POST /api/v1/change/get` returns Change detail data with `body`, `pr`, `pr_url`, `agent_edit`, `open`, linked test cases, and current completion counters.
+- Rendered body behavior renders markdown from `body` and `pr` and returns sanitized HTML using the new response field names.
 - Focused update endpoints for title, body, PR body, PR URL, phase, types, epic, open state, and agent edit behave consistently with the new field names.
 - `POST /api/v1/options/change-phases-list` returns the database-backed `ChangePhase` list ordered by `priority, slug`.
 - `POST /api/v1/options/change-types-list` returns the database-backed `ChangeType` list ordered by `priority, slug`.
@@ -58,7 +58,7 @@ Align the application, documentation, tests, and demo data with the new `db/init
 - No foreign keys.
 - No production migration plan beyond the repository init and seed contract.
 - No authentication, authorization, hosting, or multi-user behavior changes.
-- No new PR publishing integration beyond storing and displaying `pr_body` and `pr_url`.
+- No new PR publishing integration beyond storing and displaying `pr` and `pr_url`.
 - No change to the core rule that `ref` and `slug` are backend-owned and read-only for clients.
 - No unrelated redesign of frontend layout or CLI interaction.
 
@@ -105,7 +105,7 @@ Align the application, documentation, tests, and demo data with the new `db/init
 ## QA Test Cases
 
 - Create a Change with a title, type, optional epic, and body; verify the response and UI show `ref`, `slug`, `body`, default phase, completion counters, and linked epic name when present.
-- Open a Change detail route from a fresh browser navigation; verify the detail view loads from the backend and shows `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, test cases, and completion values.
+- Open a Change detail route from a fresh browser navigation; verify the detail view loads from the backend and shows `body`, `pr`, `pr_url`, `agent_edit`, `open`, test cases, and completion values.
 - Update Change body text; verify only the body changes, history is preserved, rendered HTML refreshes, and `ref` and `slug` remain unchanged.
 - Update PR body and PR URL; verify both persist, render or display correctly, and survive page reload.
 - Toggle `agent_edit`; verify the value persists and is returned by list and detail responses where the contract requires it.
@@ -122,7 +122,7 @@ Align the application, documentation, tests, and demo data with the new `db/init
 
 ## Review Focus
 
-- Check every backend SQL query for alignment with `body`, `pr_body`, `pr_url`, `agent_edit`, `open`, `vw_change_list`, `vw_change_details`, and the new `change_history` shape.
+- Check every backend SQL query for alignment with `body`, `pr`, `pr_url`, `agent_edit`, `open`, `vw_change_list`, `vw_change_details`, and the new `change_history` shape.
 - Verify DTO and JSON field names are consistent across backend, frontend, CLI, API tests, and documentation.
 - Verify phase/type option loading uses `/api/v1/options/change-phases-list` and `/api/v1/options/change-types-list` without a combined `ChangeReferences` DTO.
 - Inspect Change history paths for transaction safety and correct prior-row capture.

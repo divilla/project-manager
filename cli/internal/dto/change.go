@@ -3,6 +3,7 @@ package dto
 // Change is the change row and detail data used by mch.
 type Change struct {
 	ID          string
+	RefUUID     string
 	Ref         string
 	Slug        string
 	ProjectID   string
@@ -13,7 +14,7 @@ type Change struct {
 	Title       string
 	Idea        string
 	Spec        string
-	PRBody      string
+	PR          string
 	PRUrl       string
 	AgentEdit   bool
 	Open        bool

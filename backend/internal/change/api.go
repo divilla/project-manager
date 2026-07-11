@@ -38,11 +38,9 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	a.g.POST("/update-change-types", a.updateChangeTypes)
 	a.g.POST("/update-title", a.updateTitle)
 	a.g.POST("/update-idea", a.updateIdea)
-	a.g.POST("/update-idea-agent-edit", a.updateIdeaAgentEdit)
 	a.g.POST("/update-spec", a.updateSpec)
-	a.g.POST("/update-pr-body", a.updatePRBody)
+	a.g.POST("/update-pr", a.updatePR)
 	a.g.POST("/update-pr-url", a.updatePRUrl)
-	a.g.POST("/update-agent-edit", a.updateAgentEdit)
 	a.g.POST("/delete", a.deleteChange)
 
 	return a
@@ -192,18 +190,6 @@ func (a *API) updateIdea(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) updateIdeaAgentEdit(c *echo.Context) error {
-	var req dto.ChangeUpdateIdeaAgentEditRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change idea agent edit payload")
-	}
-	res, err := a.s.UpdateIdeaAgentEdit(c.Request().Context(), req)
-	if err != nil {
-		return changeError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
 func (a *API) updateSpec(c *echo.Context) error {
 	var req dto.ChangeUpdateSpecRequest
 	if err := c.Bind(&req); err != nil {
@@ -216,12 +202,12 @@ func (a *API) updateSpec(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) updatePRBody(c *echo.Context) error {
-	var req dto.ChangeUpdatePRBodyRequest
+func (a *API) updatePR(c *echo.Context) error {
+	var req dto.ChangeUpdatePRRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pr body payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pr payload")
 	}
-	res, err := a.s.UpdatePRBody(c.Request().Context(), req)
+	res, err := a.s.UpdatePR(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}
@@ -234,18 +220,6 @@ func (a *API) updatePRUrl(c *echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid change pr url payload")
 	}
 	res, err := a.s.UpdatePRUrl(c.Request().Context(), req)
-	if err != nil {
-		return changeError(err)
-	}
-	return c.JSON(http.StatusOK, &res)
-}
-
-func (a *API) updateAgentEdit(c *echo.Context) error {
-	var req dto.ChangeUpdateAgentEditRequest
-	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change agent edit payload")
-	}
-	res, err := a.s.UpdateAgentEdit(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}

@@ -2,6 +2,7 @@ begin;
 
 truncate table public.change_phase;
 truncate table public.change_type;
+truncate table public.config;
 
 insert into public.config (
     slug,
@@ -16,9 +17,12 @@ insert into public.config (
     task_statuses,
     task_statuses_help,
     task_steps,
-    task_steps_help
+    task_steps_help,
+    change_phases,
+    change_types,
+    change_docs
 ) values (
-    'default',
+'default',
 
     array[
         'idea', 'spec', 'ready', 'docs', 'code', 'polish', 'pr',
@@ -92,7 +96,13 @@ insert into public.config (
         'automated agent is executing',
         'exit script is executing',
         'task has finished'
-    ]
+    ],
+
+    array['backlog', 'progress', 'review', 'staging', 'production', 'rejected'],
+
+    array['feature', 'fix', 'refactor', 'upgrade', 'chore', 'docs', 'test', 'ci', 'security', 'migration', 'revert', 'spike'],
+
+    array['idea', 'spec', 'pr']
 );
 
 insert into public.change_phase (slug, priority)

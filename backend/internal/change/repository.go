@@ -27,11 +27,9 @@ type (
 		UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error)
 		UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error)
 		UpdateIdea(ctx context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error)
-		UpdateIdeaAgentEdit(ctx context.Context, req dto.ChangeUpdateIdeaAgentEditRequest) (dto.Change, error)
 		UpdateSpec(ctx context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error)
-		UpdatePRBody(ctx context.Context, req dto.ChangeUpdatePRBodyRequest) (dto.Change, error)
+		UpdatePR(ctx context.Context, req dto.ChangeUpdatePRRequest) (dto.Change, error)
 		UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error)
-		UpdateAgentEdit(ctx context.Context, req dto.ChangeUpdateAgentEditRequest) (dto.Change, error)
 		UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) (dto.Change, error)
 		UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest) (dto.Change, error)
 		UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) (dto.Change, error)
@@ -45,6 +43,7 @@ type (
 
 const changeDetailColumns = `
 	id,
+	ref_uuid,
 	ref,
 	version,
 	slug,
@@ -56,7 +55,7 @@ const changeDetailColumns = `
 	title,
 	idea,
 	spec,
-	pr_body,
+	pr,
 	pr_url,
 	agent_edit,
 	flow_stages,
@@ -78,6 +77,7 @@ const changeDetailColumns = `
 
 const changeListColumns = `
 	id,
+	ref_uuid,
 	ref,
 	slug,
 	project_id,
@@ -138,7 +138,7 @@ func (r *Repo) Get(ctx context.Context, id int) (dto.ChangeDetail, error) {
 // Artifacts executes Artifacts behavior.
 func (r *Repo) Artifacts(ctx context.Context, ids []int) ([]dto.Change, error) {
 	rows, err := r.pool.Query(ctx, `
-		select requested.id::integer, c.spec, c.pr_body
+		select requested.id::integer, c.spec, c.pr
 		from unnest($1::bigint[]) with ordinality as requested(id, ord)
 		join public.change c on c.id = requested.id
 		order by requested.ord
@@ -151,7 +151,7 @@ func (r *Repo) Artifacts(ctx context.Context, ids []int) ([]dto.Change, error) {
 	changes := make([]dto.Change, 0, len(ids))
 	for rows.Next() {
 		var change dto.Change
-		if err := rows.Scan(&change.ID, &change.Spec, &change.PRBody); err != nil {
+		if err := rows.Scan(&change.ID, &change.Spec, &change.PR); err != nil {
 			return nil, err
 		}
 		changes = append(changes, change)
@@ -191,7 +191,6 @@ func (r *Repo) UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChange
 	}, `
 		update public.change
 		set change_types = $2,
-			version = version + 1,
 			modified = now()
 		where id = $1
 	`, req.ChangeTypes)
@@ -212,16 +211,12 @@ func (r *Repo) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest
 	if current.Title == req.Title {
 		return finishMutation(ctx, tx, req.ID)
 	}
-	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, false)", req.ID); err != nil {
-		return dto.Change{}, err
-	}
 	if _, err := tx.Exec(ctx, "call public.sp_change_title_update($1, $2)", req.ID, req.Title); err != nil {
 		return dto.Change{}, err
 	}
 	tag, err := tx.Exec(ctx, `
 		update public.change
-		set version = version + 1,
-			modified = now()
+		set modified = now()
 		where id = $1
 	`, req.ID)
 	if err != nil {
@@ -235,82 +230,29 @@ func (r *Repo) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest
 
 // UpdateIdea executes UpdateIdea behavior.
 func (r *Repo) UpdateIdea(ctx context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error) {
-	return r.updateField(ctx, req.ID, func(current state) bool {
-		return current.Idea == req.Idea
-	}, `
-		update public.change
-		set idea = $2,
-			version = version + 1,
-			modified = now()
-		where id = $1
-	`, req.Idea)
-}
-
-// UpdateIdeaAgentEdit executes UpdateIdeaAgentEdit behavior.
-func (r *Repo) UpdateIdeaAgentEdit(ctx context.Context, req dto.ChangeUpdateIdeaAgentEditRequest) (dto.Change, error) {
-	return r.updateField(ctx, req.ID, func(current state) bool {
-		return current.Idea == req.Idea && current.AgentEdit
-	}, `
-		update public.change
-		set idea = $2,
-			agent_edit = true,
-			version = version + 1,
-			modified = now()
-		where id = $1
-	`, req.Idea)
+	return r.updateArtifact(ctx, req.ID, "call public.sp_change_idea_update($1, $2, $3)", req.Idea, *req.AgentEdit)
 }
 
 // UpdateSpec executes UpdateSpec behavior.
 func (r *Repo) UpdateSpec(ctx context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error) {
-	return r.updateField(ctx, req.ID, func(current state) bool {
-		return equalStringPointers(current.Spec, req.Spec)
-	}, `
-		update public.change
-		set spec = $2,
-			version = version + 1,
-			modified = now()
-		where id = $1
-	`, req.Spec)
+	return r.updateArtifact(ctx, req.ID, "call public.sp_change_spec_update($1, $2, $3)", req.Spec, *req.AgentEdit)
 }
 
-// UpdatePRBody executes UpdatePRBody behavior.
-func (r *Repo) UpdatePRBody(ctx context.Context, req dto.ChangeUpdatePRBodyRequest) (dto.Change, error) {
-	return r.updateField(ctx, req.ID, func(current state) bool {
-		return equalStringPointers(current.PRBody, req.PRBody)
-	}, `
-		update public.change
-		set pr_body = $2,
-			version = version + 1,
-			modified = now()
-		where id = $1
-	`, req.PRBody)
+// UpdatePR executes UpdatePR behavior.
+func (r *Repo) UpdatePR(ctx context.Context, req dto.ChangeUpdatePRRequest) (dto.Change, error) {
+	return r.updateArtifact(ctx, req.ID, "call public.sp_change_pr_update($1, $2, $3)", req.PR, *req.AgentEdit)
 }
 
 // UpdatePRUrl executes UpdatePRUrl behavior.
 func (r *Repo) UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error) {
 	return r.updateField(ctx, req.ID, func(current state) bool {
-		return equalStringPointers(current.PRUrl, req.PRUrl)
+		return current.PRUrl == req.PRUrl
 	}, `
 		update public.change
 		set pr_url = $2,
-			version = version + 1,
 			modified = now()
 		where id = $1
 	`, req.PRUrl)
-}
-
-// UpdateAgentEdit executes UpdateAgentEdit behavior.
-func (r *Repo) UpdateAgentEdit(ctx context.Context, req dto.ChangeUpdateAgentEditRequest) (dto.Change, error) {
-	agentEdit := *req.AgentEdit
-	return r.updateField(ctx, req.ID, func(current state) bool {
-		return current.AgentEdit == agentEdit
-	}, `
-		update public.change
-		set agent_edit = $2,
-			version = version + 1,
-			modified = now()
-		where id = $1
-	`, agentEdit)
 }
 
 // UpdateEpic executes UpdateEpic behavior.
@@ -333,13 +275,9 @@ func (r *Repo) UpdateEpic(ctx context.Context, req dto.ChangeUpdateEpicRequest) 
 	if equalIntPointers(current.EpicID, req.EpicID) {
 		return finishMutation(ctx, tx, req.ID)
 	}
-	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, false)", req.ID); err != nil {
-		return dto.Change{}, err
-	}
 	tag, err := tx.Exec(ctx, `
 		update public.change
 		set epic_id = $2,
-			version = version + 1,
 			modified = now()
 		where id = $1
 	`, req.ID, req.EpicID)
@@ -373,13 +311,9 @@ func (r *Repo) UpdatePhase(ctx context.Context, req dto.ChangeUpdatePhaseRequest
 	if current.ChangePhase == req.ChangePhase {
 		return finishMutation(ctx, tx, req.ID)
 	}
-	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, false)", req.ID); err != nil {
-		return dto.Change{}, err
-	}
 	tag, err := tx.Exec(ctx, `
 		update public.change
 		set change_phase = $2,
-			version = version + 1,
 			modified = now()
 		where id = $1
 	`, req.ID, req.ChangePhase)
@@ -408,13 +342,9 @@ func (r *Repo) UpdateOpen(ctx context.Context, req dto.ChangeUpdateOpenRequest) 
 	if current.Open == open {
 		return finishMutation(ctx, tx, req.ID)
 	}
-	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, false)", req.ID); err != nil {
-		return dto.Change{}, err
-	}
 	tag, err := tx.Exec(ctx, `
 		update public.change
 		set open = $2,
-			version = version + 1,
 			modified = now()
 		where id = $1
 	`, req.ID, open)
@@ -533,9 +463,6 @@ func (r *Repo) Delete(ctx context.Context, req dto.ChangeIDRequest) error {
 			return err
 		}
 	}
-	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, true)", req.ID); err != nil {
-		return err
-	}
 	if _, err := tx.Exec(ctx, "delete from public.test_case where change_id = $1", req.ID); err != nil {
 		return err
 	}
@@ -629,19 +556,17 @@ func listTestCases(ctx context.Context, q queryer, changeID int) ([]dto.TestCase
 func scanChange(row pgx.Row) (dto.Change, error) {
 	var change dto.Change
 	var ref pgtype.Int4
+	var refUUID pgtype.UUID
 	var slug pgtype.Text
 	var epicID pgtype.Int8
 	var epicName pgtype.Text
-	var spec pgtype.Text
-	var prBody pgtype.Text
-	var prURL pgtype.Text
 	var runClaimID pgtype.UUID
 	var runStartedAt pgtype.Timestamptz
 	var runUpdatedAt pgtype.Timestamptz
 	err := row.Scan(
-		&change.ID, &ref, &change.Version, &slug, &change.ProjectID,
+		&change.ID, &refUUID, &ref, &change.Version, &slug, &change.ProjectID,
 		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
-		&change.Idea, &spec, &prBody, &prURL, &change.AgentEdit,
+		&change.Idea, &change.Spec, &change.PR, &change.PRUrl, &change.AgentEdit,
 		&change.FlowStages, &change.FlowStageModes, &runClaimID, &change.RunFlowStage,
 		&change.RunTaskStep, &change.RunTaskStatus, &change.RunError, &change.RunIsCompleted,
 		&runStartedAt, &runUpdatedAt,
@@ -650,6 +575,9 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	)
 	if err != nil {
 		return dto.Change{}, err
+	}
+	if refUUID.Valid {
+		change.RefUUID = refUUID.String()
 	}
 	if ref.Valid {
 		value := ref.Int32
@@ -666,18 +594,6 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	if epicName.Valid {
 		value := epicName.String
 		change.EpicName = &value
-	}
-	if spec.Valid {
-		value := spec.String
-		change.Spec = &value
-	}
-	if prBody.Valid {
-		value := prBody.String
-		change.PRBody = &value
-	}
-	if prURL.Valid {
-		value := prURL.String
-		change.PRUrl = &value
 	}
 	if runClaimID.Valid {
 		value := runClaimID.String()
@@ -696,17 +612,21 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 
 func scanChangeList(row pgx.Row) (dto.ChangeListItem, error) {
 	var change dto.ChangeListItem
+	var refUUID pgtype.UUID
 	var ref pgtype.Int4
 	var slug pgtype.Text
 	var epicID pgtype.Int8
 	var epicName pgtype.Text
 	err := row.Scan(
-		&change.ID, &ref, &slug, &change.ProjectID, &change.ChangePhase,
+		&change.ID, &refUUID, &ref, &slug, &change.ProjectID, &change.ChangePhase,
 		&change.ChangeTypes, &epicID, &epicName, &change.Title, &change.AgentEdit,
 		&change.Open, &change.DoneTC, &change.TotalTC, &change.Completed, &change.Modified,
 	)
 	if err != nil {
 		return dto.ChangeListItem{}, err
+	}
+	if refUUID.Valid {
+		change.RefUUID = refUUID.String()
 	}
 	if ref.Valid {
 		value := ref.Int32
@@ -734,9 +654,9 @@ type state struct {
 	ChangeTypes []string
 	Title       string
 	Idea        string
-	Spec        *string
-	PRBody      *string
-	PRUrl       *string
+	Spec        string
+	PR          string
+	PRUrl       string
 	AgentEdit   bool
 	Open        bool
 }
@@ -744,14 +664,11 @@ type state struct {
 func getState(ctx context.Context, tx pgx.Tx, id int) (state, error) {
 	var item state
 	var epicID pgtype.Int8
-	var spec pgtype.Text
-	var prBody pgtype.Text
-	var prURL pgtype.Text
 	err := tx.QueryRow(ctx, `
-		select project_id, epic_id, change_phase, change_types, title, idea, spec, pr_body, pr_url, agent_edit, open
+		select project_id, epic_id, change_phase, change_types, title, idea, spec, pr, pr_url, agent_edit, open
 		from public.change
 		where id = $1
-	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Idea, &spec, &prBody, &prURL, &item.AgentEdit, &item.Open)
+	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Idea, &item.Spec, &item.PR, &item.PRUrl, &item.AgentEdit, &item.Open)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return state{}, ErrNotFound
 	}
@@ -761,18 +678,6 @@ func getState(ctx context.Context, tx pgx.Tx, id int) (state, error) {
 	if epicID.Valid {
 		value := int(epicID.Int64)
 		item.EpicID = &value
-	}
-	if spec.Valid {
-		value := spec.String
-		item.Spec = &value
-	}
-	if prBody.Valid {
-		value := prBody.String
-		item.PRBody = &value
-	}
-	if prURL.Valid {
-		value := prURL.String
-		item.PRUrl = &value
 	}
 	return item, nil
 }
@@ -802,9 +707,6 @@ func (r *Repo) updateField(ctx context.Context, id int, unchanged func(state) bo
 	if unchanged(current) {
 		return finishMutation(ctx, tx, id)
 	}
-	if _, err := tx.Exec(ctx, "call public.sp_change_to_history($1, false)", id); err != nil {
-		return dto.Change{}, err
-	}
 	queryArgs := append([]any{id}, args...)
 	tag, err := tx.Exec(ctx, query, queryArgs...)
 	if err != nil {
@@ -812,6 +714,22 @@ func (r *Repo) updateField(ctx context.Context, id int, unchanged func(state) bo
 	}
 	if tag.RowsAffected() == 0 {
 		return dto.Change{}, ErrNotFound
+	}
+	return finishMutation(ctx, tx, id)
+}
+
+func (r *Repo) updateArtifact(ctx context.Context, id int, procedure string, body string, agentEdit bool) (dto.Change, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := getState(ctx, tx, id); err != nil {
+		return dto.Change{}, err
+	}
+	if _, err := tx.Exec(ctx, procedure, id, body, agentEdit); err != nil {
+		return dto.Change{}, err
 	}
 	return finishMutation(ctx, tx, id)
 }
@@ -863,13 +781,6 @@ func claimResponse(claimID pgtype.UUID) dto.ChangeRunClaimResponse {
 }
 
 func equalIntPointers(left, right *int) bool {
-	if left == nil || right == nil {
-		return left == nil && right == nil
-	}
-	return *left == *right
-}
-
-func equalStringPointers(left, right *string) bool {
 	if left == nil || right == nil {
 		return left == nil && right == nil
 	}

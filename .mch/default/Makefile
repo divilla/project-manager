@@ -2,11 +2,8 @@ FLOW_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 GIT_ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null)
 GIT_BRANCH := $(shell git branch --show-current 2>/dev/null)
 CHANGE_NAME := $(patsubst change/%,%,$(GIT_BRANCH))
-EVENTS_LOG := /tmp/mch/codex-events.jsonl
-PROGRESS_LOG := /tmp/mch/codex-progress.log
-LAST_OUTPUT := /tmp/mch/codex-output.txt
 
-.PHONY: help list git-root root require-repo-root init idea-exec idea-exit idea spec-exit commit
+.PHONY: help list git-root root require-repo-root init idea-init idea-exec idea-review idea-exit idea spec-exit commit
 .PHONY: %-entry %-exec %-exit %-before %-run %-leave %-prompt
 
 help: list
@@ -20,77 +17,20 @@ list:
 	@printf '%s\n' '  <stage>-run     alias for <stage>-exec'
 	@printf '%s\n' '  <stage>-leave   alias for <stage>-exit'
 	@printf '%s\n' '  <stage>-prompt  print the stage prompt'
+
 init:
 	@if [ -z "$(GIT_ROOT)" ]; then printf '%s\n' 'cannot extract repo root' >&2; exit 1; fi
-	@if [ -z "$(GIT_BRANCH)" ]; then printf '%s\n' 'cannot extract git branch' >&2; exit 1; fi
-	@printf '%s\n' "$(GIT_BRANCH)" | grep -Eq '^change/[0-9]+-[a-z0-9_-]+$$' || { printf '%s\n' "not a change branch ^change/([0-9]+-[a-z0-9_-]+)$$: $(GIT_BRANCH)" >&2; exit 1; }
-	@mkdir -p "$(dir $(EVENTS_LOG))"
+	@mkdir -p "$(GIT_ROOT)/.mch/tmp";
 
-root: init
-	@printf '%s\n' "$(GIT_ROOT)"
-	@printf '%s\n' "$(GIT_BRANCH)"
-	@printf '%s\n' "$(CHANGE_NAME)"
-	@printf '%s\n' "$(GIT_ROOT)/agent/ideas/$(CHANGE_NAME).md"
+idea-init: init
+	@if [ -z "$$MCH_TEMP_UUID" ]; then printf '%s\n' 'missing MCH_TEMP_UUID' >&2; exit 1; fi
+	@mkdir -p "$(GIT_ROOT)/.mch/tmp/$$MCH_TEMP_UUID";
 
-script-entry:
-	@cp /tmp/mch/output.md /tmp/mch/input.md
+idea-review: idea-init
+	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/idea-review.md"
 
-idea-exec: init
-	@cp "$(GIT_ROOT)/agent/ideas/$(CHANGE_NAME).md" /tmp/mch/input.md
-	@codex exec --json -C "$(GIT_ROOT)" -o "$(LAST_OUTPUT)" 'Output exactly: `Done.`' | tee "$(EVENTS_LOG)"; \
-	session_id=$$(jq -r 'select(.type=="thread.started") | .thread_id' "$(JSON_LOG)" | awk 'NF && $$0 != "null" { print; exit }'); \
-	codex_output=$$(cat "$(LAST_OUTPUT)"); \
-	if [ -z "$$session_id" ]; then printf '%s\n' 'missing codex session id' >&2; exit 1; fi; \
-	if [ "$$codex_output" != "Done." ]; then printf '%s\n' "unexpected codex output: $$codex_output" >&2; exit 1; fi; \
-	printf '%s\n' "codex session-id: $$session_id"; \
-	cat prompts/idea.md | codex exec -C "$(GIT_ROOT)" resume "$$session_id"
-
-idea-exit:
-	@git add -A
-	@git commit -m "Idea for $(CHANGE_NAME) by user"
-	@git push origin "change/$(CHANGE_NAME)"
-
-idea: init
-	@cp "$(GIT_ROOT)/agent/ideas/115-cli-config-loading.md" /tmp/mch/input.md
-	@codex exec --json -C "$(GIT_ROOT)" -o "$(LAST_OUTPUT)" "" | tee "$(EVENTS_LOG)"; \
-	session_id=$$(jq -r 'select(.type=="thread.started") | .thread_id' "$(JSON_LOG)" | awk 'NF && $$0 != "null" { print; exit }'); \
-	codex_output=$$(cat "$(LAST_OUTPUT)"); \
-	if [ -z "$$session_id" ]; then printf '%s\n' 'missing codex session id' >&2; exit 1; fi; \
-	cat prompts/idea.md | codex exec -C "$(GIT_ROOT)" -o "$(LAST_OUTPUT)" resume "$$session_id" -; \
-	codex resume -C "$(GIT_ROOT)" "$$session_id"
-
-idea-highlight: init
-	@cp "$(GIT_ROOT)/agent/ideas/115-cli-config-loading.md" /tmp/mch/input.md
-	@codex exec --json -C "$(GIT_ROOT)" -o "$(LAST_OUTPUT)" "" | tee "$(EVENTS_LOG)"; \
-	session_id=$$(jq -r 'select(.type=="thread.started") | .thread_id' "$(JSON_LOG)" | awk 'NF && $$0 != "null" { print; exit }'); \
-	codex_output=$$(cat "$(LAST_OUTPUT)"); \
-	if [ -z "$$session_id" ]; then printf '%s\n' 'missing codex session id' >&2; exit 1; fi; \
-	cat prompts/idea.md | codex exec -C "$(GIT_ROOT)" -o "$(LAST_OUTPUT)" resume "$$session_id" -; \
-	bat -pp --theme 'Coldark-Dark' /tmp/mch/input.md
-
-spec-entry: init
-	@cp "$(GIT_ROOT)/agent/ideas/$(CHANGE_NAME).md" /tmp/mch/input.md
-
-spec-exec: init
-	@cat prompts/spec.md | codex exec --json -C "$(GIT_ROOT)" -o "$(LAST_OUTPUT)" - > "$(EVENTS_LOG)" 2> "$(PROGRESS_LOG)"; \
-	session_id=$$(jq -r 'select(.type=="thread.started") | .thread_id' "$(EVENTS_LOG)" | awk 'NF && $$0 != "null" { print; exit }'); \
-	codex_output=$$(cat "$(LAST_OUTPUT)"); \
-	if [ -z "$$session_id" ]; then printf '%s\n' 'missing codex session id' >&2; exit 1; fi; \
-	codex -C "$(GIT_ROOT)" resume "$$session_id"; \
-	bat -pp --theme 'Coldark-Dark' "$(GIT_ROOT)/agent/ideas/$(CHANGE_NAME).md"
-
-spec-old: init
-	@cat prompts/spec.md | codex exec --json -C "$(GIT_ROOT)" -o "$(LAST_OUTPUT)" - > "$(EVENTS_LOG)" 2> "$(PROGRESS_LOG)"; \
-	session_id=$$(jq -r 'select(.type=="thread.started") | .thread_id' "$(EVENTS_LOG)" | awk 'NF && $$0 != "null" { print; exit }'); \
-	codex_output=$$(cat "$(LAST_OUTPUT)"); \
-	if [ -z "$$session_id" ]; then printf '%s\n' 'missing codex session id' >&2; exit 1; fi; \
-	if [ "$$codex_output" != "Done." ]; then printf '%s\n' "unexpected codex output: $$codex_output" >&2; exit 1; fi; \
-	bat -pp --theme 'Coldark-Dark' "$(GIT_ROOT)/agent/ideas/$(CHANGE_NAME).md"
-
-spec-exit: init
-	@git add -A
-	@git commit -m "Spec for $(CHANGE_NAME) by agent"
-	@git push origin "change/$(CHANGE_NAME)"
+idea-refine: init
+	@codex -C "$(GIT_ROOT)" resume "$$(cat ../tmp/sessions/$(CHANGE_NAME))"
 
 verify-exit: init
 	@git add -A
@@ -106,6 +46,50 @@ commit:
 	@git add -A
 	@git commit -m "Update for $(CHANGE_NAME) by user"
 	@git push origin "change/$(CHANGE_NAME)"
+
+
+extract-session: init
+	@repo="$$(git rev-parse --show-toplevel)"; \
+	stderr_file="$$(mktemp)"; \
+	events="$$(codex exec -C "$$repo" --json "$$prompt" 2>"$$stderr_file")"; \
+	status="$$?"; \
+	stderr="$$(cat "$$stderr_file")"; \
+	rm -f "$$stderr_file"; \
+	session_id="$$(printf '%s\n' "$$events" | jq -rsr '\
+	  [ \
+		.[] \
+		| select(.type=="thread.started") \
+		| (.thread_id // .session_id // .session.id // .id // empty) \
+	  ] \
+	  | first // "" \
+	')"; \
+	final_output="$$(printf '%s\n' "$$events" | jq -rsr '\
+	  [ \
+		.[] \
+		| if .type=="item.completed" and .item.type=="agent_message" then \
+			.item.text \
+		  elif .type=="agent_message" or .type=="message" then \
+			(.message // .text // .output // .content // empty) \
+		  else \
+			empty \
+		  end \
+	  ] \
+	  | last // "" \
+	')"; \
+	printf 'status=%s\n' "$$status"; \
+	printf 'session_id=%s\n' "$$session_id"; \
+	printf 'stderr=%s\n' "$$stderr"; \
+	printf 'final_output=%s\n' "$$final_output"; \
+	if [ "$$status" -ne 0 ]; then \
+	  exit "$$status"; \
+	fi; \
+	if [ "$$final_output" != "No questions or suggestions." ]; then \
+	  if [ -z "$$session_id" ]; then \
+		printf '%s\n' 'missing session_id; cannot resume' >&2; \
+		exit 1; \
+	  fi; \
+	  codex -C "$$repo" resume "$$session_id"; \
+	fi
 
 %-entry:
 	@$(FLOW_DIR)scripts/demo-entry.sh "$*"

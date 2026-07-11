@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	goconfig "github.com/ridgelines/go-config"
@@ -17,12 +16,6 @@ import (
 
 const defaultConfigPath = ".mch/config.yaml"
 const defaultFlowDir = ".mch/default"
-
-var defaultFlowStageSlugs = []string{
-	"idea", "spec", "ready", "docs", "code", "polish", "pr", "review", "fix", "sync", "merge", "stage", "master",
-}
-
-var defaultStageModes = []string{"skip", "prompt", "exec"}
 
 type appConfig struct {
 	RepositoryRoot string
@@ -174,9 +167,6 @@ func loadFlowConfig(flowDir string) (flowConfig, error) {
 	if len(flow.Steps) == 0 {
 		return flowConfig{}, fmt.Errorf("flow steps are required in %s", path)
 	}
-	if len(flow.Steps) != len(defaultFlowStageSlugs) {
-		return flowConfig{}, fmt.Errorf("flow steps must contain the default ordered stages in %s", path)
-	}
 	for i, step := range flow.Steps {
 		slug := strings.TrimSpace(step.Slug)
 		if slug == "" {
@@ -187,17 +177,8 @@ func loadFlowConfig(flowDir string) (flowConfig, error) {
 				return flowConfig{}, fmt.Errorf("flow step %d duplicates slug %q from step %d in %s", i+1, slug, previousIndex+1, path)
 			}
 		}
-		if step.Slug != defaultFlowStageSlugs[i] {
-			return flowConfig{}, fmt.Errorf("flow step %d must be %q in %s", i+1, defaultFlowStageSlugs[i], path)
-		}
-		if !slices.Contains(defaultFlowStageSlugs, step.Slug) {
-			return flowConfig{}, fmt.Errorf("unsupported Flow step slug %q in %s", step.Slug, path)
-		}
 		if strings.TrimSpace(step.Mode) == "" {
 			return flowConfig{}, fmt.Errorf("flow step %d mode is required in %s", i+1, path)
-		}
-		if !slices.Contains(defaultStageModes, step.Mode) {
-			return flowConfig{}, fmt.Errorf("unsupported Flow step mode %q in %s", step.Mode, path)
 		}
 	}
 	return flow, nil

@@ -8,7 +8,7 @@ Change consists of 4 major artifacts
 - title: shared by bellow three
 - idea: initial user idea rewritten until clear
 - spec: specification (former change)
-- pr_body: pull request body (description)
+- pr: pull request body (description)
 
 ## New change rules and structure
 
@@ -18,7 +18,7 @@ Change consists of 4 major artifacts
 - `types` are still mandatory, but now default to empty array
 - `epic` is optional, defaults to null
 - `spec` (former body) is optional, defaults to null
-- `pr_body` and pr_url are optional and default to null
+- `pr` and pr_url are optional and default to null
 
 ## New ref and slug flow
 

@@ -23,10 +23,9 @@ type Client interface {
 	CreateChange(input dto.ChangeCreateInput) (dto.Change, error)
 	ReferenceChange(id int) (dto.Change, error)
 	UpdateChangeTitle(id int, title string) (dto.Change, error)
-	UpdateChangeIdea(id int, idea string) (dto.Change, error)
-	UpdateChangeIdeaAgentEdit(id int, idea string) (dto.Change, error)
-	UpdateChangeSpec(id int, spec *string) (dto.Change, error)
-	UpdateChangePRBody(id int, prBody string) (dto.Change, error)
+	UpdateChangeIdea(id int, idea string, agentEdit bool) (dto.Change, error)
+	UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error)
+	UpdateChangePR(id int, pr string, agentEdit bool) (dto.Change, error)
 	UpdateChangePRUrl(id int, prURL string) (dto.Change, error)
 	UpdateChangeTypes(id int, changeTypes []string) (dto.Change, error)
 	UpdateChangePhase(id int, changePhase string) (dto.Change, error)
@@ -135,12 +134,12 @@ func (c HTTPClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error
 	return c.postChange("/api/v1/change/create", payload)
 }
 
-// ReferenceChange assigns or refreshes a backend-owned change reference.
+// ReferenceChange assigns or refreshes backend-owned change Flow identity.
 func (c HTTPClient) ReferenceChange(id int) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
-	return c.postChange("/api/v1/change/reference", map[string]any{"id": id})
+	return c.postChange("/api/v1/change/assign-flow", map[string]any{"id": id})
 }
 
 // UpdateChangeTitle updates a change title.
@@ -152,46 +151,38 @@ func (c HTTPClient) UpdateChangeTitle(id int, title string) (dto.Change, error) 
 }
 
 // UpdateChangeIdea updates a change idea.
-func (c HTTPClient) UpdateChangeIdea(id int, idea string) (dto.Change, error) {
+func (c HTTPClient) UpdateChangeIdea(id int, idea string, agentEdit bool) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
 	return c.postChange("/api/v1/change/update-idea", map[string]any{
-		"id":   id,
-		"idea": idea,
+		"id":         id,
+		"idea":       idea,
+		"agent_edit": agentEdit,
 	})
 }
 
-// UpdateChangeIdeaAgentEdit updates a change idea and marks it as agent-edited.
-func (c HTTPClient) UpdateChangeIdeaAgentEdit(id int, idea string) (dto.Change, error) {
-	if id <= 0 {
-		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
-	}
-	return c.postChange("/api/v1/change/update-idea-agent-edit", map[string]any{
-		"id":   id,
-		"idea": idea,
-	})
-}
-
-// UpdateChangeSpec updates or clears a change spec.
-func (c HTTPClient) UpdateChangeSpec(id int, spec *string) (dto.Change, error) {
+// UpdateChangeSpec updates a change spec.
+func (c HTTPClient) UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
 	return c.postChange("/api/v1/change/update-spec", map[string]any{
-		"id":   id,
-		"spec": spec,
+		"id":         id,
+		"spec":       spec,
+		"agent_edit": agentEdit,
 	})
 }
 
-// UpdateChangePRBody updates a change pull request body.
-func (c HTTPClient) UpdateChangePRBody(id int, prBody string) (dto.Change, error) {
+// UpdateChangePR updates a change pull request body.
+func (c HTTPClient) UpdateChangePR(id int, pr string, agentEdit bool) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
-	return c.postChange("/api/v1/change/update-pr-body", map[string]any{
-		"id":      id,
-		"pr_body": prBody,
+	return c.postChange("/api/v1/change/update-pr", map[string]any{
+		"id":         id,
+		"pr":         pr,
+		"agent_edit": agentEdit,
 	})
 }
 
@@ -640,6 +631,7 @@ func projectFromMap(values map[string]any) dto.Project {
 func changeFromMap(values map[string]any) dto.Change {
 	return dto.Change{
 		ID:          firstString(values, "id", "change_id"),
+		RefUUID:     firstString(values, "ref_uuid"),
 		Ref:         firstString(values, "ref"),
 		Slug:        firstString(values, "slug"),
 		ProjectID:   firstString(values, "project_id"),
@@ -650,7 +642,7 @@ func changeFromMap(values map[string]any) dto.Change {
 		Title:       firstString(values, "title", "name"),
 		Idea:        firstString(values, "idea"),
 		Spec:        firstString(values, "spec"),
-		PRBody:      firstString(values, "pr_body"),
+		PR:          firstString(values, "pr"),
 		PRUrl:       firstString(values, "pr_url"),
 		AgentEdit:   firstBool(values, "agent_edit"),
 		Open:        firstBool(values, "open"),

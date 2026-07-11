@@ -45,7 +45,7 @@ Make `/new-change` in `mch` run an AI-assisted planning flow that turns a user's
 - Parsed Change types must be sent as backend `change_types`.
 - The full contents of `/tmp/mch/initial-change.md` must be preserved as the backend Change `body`.
 - Change create must call `POST /api/v1/change/create` with numeric `project_id`, parsed `title`, full `body`, and parsed `change_types`.
-- Change create must not send `ref`, `slug`, `change_phase`, `pr_body`, `pr_url`, `agent_edit`, or `open`.
+- Change create must not send `ref`, `slug`, `change_phase`, `pr`, `pr_url`, `agent_edit`, or `open`.
 - After a successful Change create, `mch` must parse every scenario listed under `## QA Test Cases` in the generated Change body and call `POST /api/v1/test-case/create` with the created numeric `change_id` and each scenario as `scenario`.
 - Test case creation must preserve QA Test Case order and must complete before reloading created Change details.
 - If any generated QA Test Case create request fails, `mch` must show a recoverable save error and must not open a local-only Change details success state.

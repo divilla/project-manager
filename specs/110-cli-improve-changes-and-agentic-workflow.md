@@ -103,7 +103,7 @@ Make the `mch` Changes list and Change detail workflows clearer and more consist
 - `docs/concepts.md` and `docs/functionality/requirements-and-acceptance.md` define test cases as the binary completion unit for Changes.
 - This Change intentionally updates existing documentation that currently says `/new-change` exists on `MainState`, progress is bright cyan, production is color `10`, and detail rows use `Requirement` and `Pull Request`.
 - The old draft used `Requirement` as a visible row label, but current product vocabulary uses Change `body`; the required visible label is `Body` while the underlying API field remains `body`.
-- The old draft used `Pull Request` as a visible row label, but the required visible label is `PR` while the underlying API field remains `pr_body`.
+- The old draft used `Pull Request` as a visible row label, but the required visible label is `PR` while the underlying API field remains `pr`.
 - The `Agent Edit` icon pair is U+2714 and U+2718 with green and red styling. The `Open` and test case done icon pair is U+2705 and U+274C.
 - The type selector pending state must be local to the open selector. Canceling the selector or returning with no toggles must not call a mutation endpoint.
 - The test case refresh after toggling `done` may use a dedicated test case list endpoint or the recalculated data returned by the mutation endpoint, but the visible detail screen must reflect backend data and not a local-only guess.

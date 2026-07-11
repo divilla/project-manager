@@ -8,7 +8,7 @@
 ## Behavior
 - New Changes can be created with only `project_id`, `title`, and `idea`; they default to `backlog`, empty `change_types`, null optional artifacts, and unassigned `ref`/`slug`.
 - `POST /api/v1/change/reference` assigns the missing project-scoped `ref` and `slug` for an existing Change, returns refreshed Change data, and preserves an existing `ref` on repeated calls while allowing slug refresh from the current title.
-- Focused updates now use `idea`, `spec`, `pr_body`, `pr_url`, title, phase, types, epic, open, and agent-edit endpoints that work before and after reference assignment.
+- Focused updates now use `idea`, `spec`, `pr`, `pr_url`, title, phase, types, epic, open, and agent-edit endpoints that work before and after reference assignment.
 
 ## API
 - Replaces rendered body naming with `POST /api/v1/change/rendered-artifacts`, returning rendered `spec_html` and `pr_html`.

@@ -93,6 +93,16 @@ func TestEpicCRUDAndProjectScopedList(t *testing.T) {
 	assert.Equal(t, 0, updated.ChangeCount)
 	assert.False(t, updated.Modified.Before(updated.Created))
 
+	secondUpdatedName := name + "-updated-again"
+	var secondUpdated epic
+	status = client.Post(t, "/api/v1/epic/update", map[string]any{
+		"id":   created.ID,
+		"name": " " + secondUpdatedName + " ",
+	}, &secondUpdated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, secondUpdatedName, secondUpdated.Name)
+	assert.Equal(t, updated.Version+1, secondUpdated.Version)
+
 	status = client.Post(t, "/api/v1/epic/delete", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusNoContent, status)
 

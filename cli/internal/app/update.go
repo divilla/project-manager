@@ -126,6 +126,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.changeList = m.changeList.WithDetail(msg.change)
 		m.status = "loaded change"
 		return m, nil
+	case detailCopiedMsg:
+		if msg.err != nil {
+			m.err = msg.err.Error()
+			m.status = "copy failed"
+			return m, nil
+		}
+		m.status = detailCopyStatus(msg.label)
+		return m, nil
 	case changeSavedMsg:
 		if m.state != msg.source {
 			return m, nil
@@ -448,6 +456,9 @@ func (m Model) handleListNavigationKey(key string, msg tea.KeyMsg) (Model, tea.C
 			return updated.(Model), cmd, true
 		case key == "delete" || key == "del":
 			updated, cmd := m.handleDetailDelete()
+			return updated.(Model), cmd, true
+		case key == "ctrl+shift+c" || key == "ctrl+insert":
+			updated, cmd := m.handleDetailCopy()
 			return updated.(Model), cmd, true
 		}
 	case ProjectsListState:
@@ -944,7 +955,7 @@ func (m Model) beginDetailTextEditor(field detailEditField) (tea.Model, tea.Cmd)
 	case detailEditSpec:
 		m = m.setPromptValue(m.changeList.Detail.Spec)
 	case detailEditPullRequest:
-		m = m.setPromptValue(m.changeList.Detail.PRBody)
+		m = m.setPromptValue(m.changeList.Detail.PR)
 	case detailEditPRUrl:
 		m = m.setPromptValue(m.changeList.Detail.PRUrl)
 	default:

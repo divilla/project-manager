@@ -119,7 +119,7 @@ func changeUpdateCommand(client appClient, id int, projectID string, original dt
 			}
 		}
 		if parsed.Spec != original.Spec {
-			if _, err := client.UpdateChangeSpec(id, &parsed.Spec); err != nil {
+			if _, err := client.UpdateChangeSpec(id, parsed.Spec, false); err != nil {
 				return changeSavedMsg{source: ChangeUpdateState, err: err}
 			}
 		}
@@ -297,18 +297,27 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditSpec:
-			if _, err := client.UpdateChangeSpec(id, &value); err != nil {
+			if strings.TrimSpace(value) == "" {
+				return changeSavedMsg{source: source, err: fmt.Errorf("spec is required")}
+			}
+			if _, err := client.UpdateChangeSpec(id, value, false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditIdea:
-			if _, err := client.UpdateChangeIdea(id, value); err != nil {
+			if _, err := client.UpdateChangeIdea(id, value, false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditPullRequest:
-			if _, err := client.UpdateChangePRBody(id, value); err != nil {
+			if strings.TrimSpace(value) == "" {
+				return changeSavedMsg{source: source, err: fmt.Errorf("PR is required")}
+			}
+			if _, err := client.UpdateChangePR(id, value, false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditPRUrl:
+			if strings.TrimSpace(value) == "" {
+				return changeSavedMsg{source: source, err: fmt.Errorf("PR URL is required")}
+			}
 			if _, err := client.UpdateChangePRUrl(id, value); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
