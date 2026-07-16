@@ -1,12 +1,16 @@
 version: 1
 
-stage_modes:
-  - slug: skip
-    help: stage will not execute
-  - slug: prompt
-    help: stage will run an interactive session
+task_modes:
+  - slug: editor
+    help: task will open the configured editor
   - slug: exec
-    help: stage will run an automated agent
+    help: task will run an automated agent with the configured prompt
+  - slug: prompt
+    help: task will open an interactive agent session
+  - slug: script
+    help: task will execute the configured script
+  - slug: loop
+    help: task will repeat from its target until its condition matches
 
 task_statuses:
   - slug: queued

@@ -8,13 +8,23 @@ fi
 
 prompt_path="${1}"
 
-if [[ -z "${MCH_TEMP_UUID:-}" ]]; then
-  printf '%s\n' 'missing MCH_TEMP_UUID' >&2
+if [[ -z "${MCH_REF_UUID:-}" ]]; then
+  printf '%s\n' 'missing MCH_REF_UUID' >&2
   exit 1
 fi
 
-if [[ ! "${MCH_TEMP_UUID}" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
-  printf 'invalid MCH_TEMP_UUID: %s\n' "${MCH_TEMP_UUID}" >&2
+if [[ ! "${MCH_REF_UUID}" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
+  printf 'invalid MCH_REF_UUID: %s\n' "${MCH_REF_UUID}" >&2
+  exit 1
+fi
+
+if [[ -z "${MCH_ARTIFACT:-}" ]]; then
+  printf '%s\n' 'missing MCH_ARTIFACT' >&2
+  exit 1
+fi
+
+if [[ "${MCH_ARTIFACT}" != "idea" && "${MCH_ARTIFACT}" != "spec" ]]; then
+  printf 'unsupported MCH_ARTIFACT: %s\n' "${MCH_ARTIFACT}" >&2
   exit 1
 fi
 
@@ -33,16 +43,23 @@ if [[ ! -f "${prompt_path}" ]]; then
   exit 1
 fi
 
-temp_dir="${repo}/.mch/tmp/${MCH_TEMP_UUID}"
+temp_dir="${repo}/.mch/tmp/${MCH_REF_UUID}/${MCH_ARTIFACT}"
 mkdir -p "${temp_dir}"
+
+for resource in input.md output.md; do
+  if [[ ! -f "${temp_dir}/${resource}" ]]; then
+    printf 'missing artifact resource: .mch/tmp/%s/%s/%s\n' "${MCH_REF_UUID}" "${MCH_ARTIFACT}" "${resource}" >&2
+    exit 1
+  fi
+done
 
 prompt="$(sed "s|/tmp-dir/|${temp_dir}/|g" "${prompt_path}")"
 
-rm -f "${temp_dir}/agent_output.md" "${temp_dir}/events.jsonl" "${temp_dir}/error.log"
+rm -f "${temp_dir}/agent-output.md" "${temp_dir}/events.jsonl" "${temp_dir}/error.log"
 
 session_id=""
-if [[ -f "${temp_dir}/session_id" ]]; then
-  session_id="$(grep -Eom1 '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}' "${temp_dir}/session_id" || true)"
+if [[ -f "${temp_dir}/session-id" ]]; then
+  session_id="$(grep -Eom1 '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}' "${temp_dir}/session-id" || true)"
 fi
 
 if [[ -n "${session_id}" ]]; then
@@ -53,22 +70,22 @@ if [[ -n "${session_id}" ]]; then
 fi
 
 if [[ -n "${session_id}" ]]; then
-  codex exec -C "${repo}" --json -o "${temp_dir}/agent_output.md" resume "${session_id}" "${prompt}" > "${temp_dir}/events.jsonl" 2> "${temp_dir}/error.log"
+  codex exec -C "${repo}" --json -o "${temp_dir}/agent-output.md" resume "${session_id}" "${prompt}" > "${temp_dir}/events.jsonl" 2> "${temp_dir}/error.log"
 else
-  rm -f "${temp_dir}/session_id"
-  codex exec -C "${repo}" --json -o "${temp_dir}/agent_output.md" "${prompt}" > "${temp_dir}/events.jsonl" 2> "${temp_dir}/error.log"
+  rm -f "${temp_dir}/session-id"
+  codex exec -C "${repo}" --json -o "${temp_dir}/agent-output.md" "${prompt}" > "${temp_dir}/events.jsonl" 2> "${temp_dir}/error.log"
 fi
 
-if [[ ! -s "${temp_dir}/session_id" ]]; then
+if [[ ! -s "${temp_dir}/session-id" ]]; then
   session_id="$(jq -rsr 'map(select(.type=="thread.started") | (.thread_id // .session_id // .session.id // .id // empty)) | first // empty' "${temp_dir}/events.jsonl")"
   if [[ -z "${session_id}" ]]; then
-    printf '%s\n' 'missing session_id' >&2
+    printf '%s\n' 'missing session-id' >&2
     exit 1
   fi
-  printf '%s\n' "${session_id}" > "${temp_dir}/session_id"
+  printf '%s\n' "${session_id}" > "${temp_dir}/session-id"
 fi
 
-if [[ ! -s "${temp_dir}/agent_output.md" ]]; then
+if [[ ! -s "${temp_dir}/agent-output.md" ]]; then
   printf '%s\n' 'missing agent output' >&2
   exit 1
 fi

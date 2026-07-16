@@ -6,116 +6,130 @@ description: Default repository Flow for moving a Change from idea capture throu
 help: help.yaml
 makefile: Makefile
 
-steps:
-  - slug: idea-write
-    help: capture or refine the initial change idea
-    mode: edit
+stages:
+  - slug: plan
+    steps:
+      - slug: idea
+        help: capture or refine the initial change idea
+        tasks:
+          - slug: idea-edit
+            help: rewrite idea for readability
+            mode: editor
+          - slug: idea-rewrite
+            help: rewrite idea for readability
+            mode: exec
+            prompt: prompts/idea-rewrite.md
+            expect: Done.
+          - slug: idea-review
+            help: rewrite and clarify idea
+            mode: exec
+            prompt: prompts/idea-review.md
+          - slug: idea-loop
+            mode: loop
+            to: idea-review
+            until: No questions or suggestions.
+      - slug: spec
+        help: create the implementation-ready spec
+        tasks:
+          - slug: spec-write
+            help: write specification following ideas
+            mode: exec
+            prompt: prompts/spec-write.md
+            expect: Done.
+          - slug: spec-review
+            help: verify, review and clarify idea
+            mode: exec
+            prompt: prompts/spec-review.md
+          - slug: spec-loop
+            mode: loop
+            to: spec-review
+            until: No blocking issues found.
 
-  - slug: idea-review
-    help: capture or refine the initial change idea
-    mode: exec
-    prompt: idea-review
-
-  - slug: idea-refine
-    help: capture or refine the initial change idea
-    mode: prompt
-
-  - slug: spec
-    help: create the implementation-ready spec
-    mode: exec
-    prompt: prompts/change-spec.md
-    entry: make spec-entry
-    exec: make spec-exec
-    exit: make spec-exit
-
-  - slug: ready
-    help: mark the change as ready for execution
-    mode: exec
-    prompt: prompts/change-verify.md
-    entry: make ready-entry
-    exec: make ready-exec
-    exit: make ready-exit
-
-  - slug: docs
-    help: update required documentation before implementation
-    mode: exec
-    prompt: prompts/change-docs.md
-    entry: make docs-entry
-    exec: make docs-exec
-    exit: make docs-exit
-
-  - slug: code
-    help: implement the change
-    mode: exec
-    prompt: prompts/change-code.md
-    entry: make code-entry
-    exec: make code-exec
-    exit: make code-exit
-
-  - slug: polish
-    help: user-guided refinement after coding
-    mode: prompt
-    prompt: prompts/polish.md
-    entry: make polish-entry
-    exec: make polish-exec
-    exit: make polish-exit
-
-  - slug: pr
-    help: create or update the pull request
-    mode: exec
-    prompt: prompts/change-pr.md
-    entry: make pr-entry
-    exec: make pr-exec
-    exit: make pr-exit
+  - slug: implement
+    steps:
+      - slug: init
+        tasks:
+          - slug: init-branch
+            help: update required documentation before implementation
+            mode: script
+            script: scripts/init-branch.sh
+            args:
+              - change.slug
+          - slug: init-idea-file
+            help: write the Change specification to the repository
+            mode: script
+            script: scripts/init-idea-file.sh
+            stdin: change.idea
+          - slug: init-spec-file
+            help: write the Change specification to the repository
+            mode: script
+            script: scripts/init-spec-file.sh
+            stdin: change.spec
+      - slug: docs
+        tasks:
+          - slug: docs-update
+            help: update required documentation before implementation
+            mode: exec
+            prompt: prompts/docs-update.md
+      - slug: code
+        tasks:
+          - slug: code-implement
+            help: update required documentation before implementation
+            mode: exec
+            prompt: prompts/code-implement.md
+          - slug: code-polish
+            help: update required documentation before implementation
+            mode: prompt
+            prompt: prompts/code-polish.md
+      - slug: pr
+        tasks:
+          - slug: pr-write
+            help: update required documentation before implementation
+            mode: exec
+            prompt: prompts/pr-write.md
+          - slug: pr-publish
+            help: update required documentation before implementation
+            mode: script
+            script: scripts/pr-publish.sh
 
   - slug: review
     help: review the PR/change against the spec
-    mode: exec
-    prompt: prompts/change-review.md
-    entry: make review-entry
-    exec: make review-exec
-    exit: make review-exit
+    steps:
+      - slug: code
+        tasks:
+          - slug: code-review
+            mode: exec
+            prompt: prompts/code-review.md
+            help: update required documentation before implementation
+          - slug: code-review-publish
+            help: update required documentation before implementation
+            mode: script
+            script: scripts/pr-comment-publish.sh
+            stdin: finding
+          - slug: code-loop
+            mode: loop
+            to: code-review
+            until: No blocking issues found.
+      - slug: docs-specs
+        tasks:
+          - slug: finalize-docs
+            mode: exec
+            prompt: prompts/finalize-docs-spec.md
+            help:
+            expect: Done.
 
-  - slug: fix
-    help: address review findings
-    mode: exec
-    prompt: prompts/change-fix.md
-    entry: make fix-entry
-    exec: make fix-exec
-    exit: make fix-exit
-
-  - slug: sync
-    help: align spec, QA cases, and docs with final code changes
-    mode: exec
-    prompt: prompts/change-docs-post-code.md
-    entry: make sync-entry
-    exec: make sync-exec
-    exit: make sync-exit
-
-  - slug: merge
-    help: merge the change branch
-    mode: exec
-    prompt: prompts/merge.md
-    entry: make merge-entry
-    exec: make merge-exec
-    exit: make merge-exit
-
-  - slug: stage
-    help: promote or merge into the stage branch
-    mode: exec
-    prompt: prompts/stage.md
-    entry: make stage-entry
-    exec: make stage-exec
-    exit: make stage-exit
-
-  - slug: master
-    help: promote or merge into the master branch
-    mode: exec
-    prompt: prompts/master.md
-    entry: make master-entry
-    exec: make master-exec
-    exit: make master-exit
-
-utility_prompts:
-  change-idea-tmp: prompts/idea.md
-  change-spec-tmp: prompts/spec.md
+  - slug: deploy
+    help: review the PR/change against the spec
+    steps:
+      - slug: stage
+        tasks:
+          - slug: merge-stage
+            help: merge to stage branch
+            mode: script
+            script: scripts/merge-stage.sh
+      - slug: production
+        tasks:
+          - slug: deploy-master
+            help:
+            mode: script
+            script: scripts/deploy-master.sh

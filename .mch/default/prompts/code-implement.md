@@ -1,8 +1,3 @@
----
-name: change-code
-description: Implement code according to active change file
----
-
 Extract `<change-slug>` from the current Git branch using this regex: `^change/([0-9]+-[a-z0-9-_]+)$`
 
 If the current branch does not match, stop and output one concise error explaining that the branch must be named `change/<change-slug>`.

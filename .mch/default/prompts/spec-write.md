@@ -1,32 +1,30 @@
 Do not use any skills for this request.
 
-Write an implementation-ready Change specification from the configured temp directory into clear Markdown.
+Write an implementation-ready Change specification from the active Change's Idea workspace into clear Markdown.
 
 ## Preconditions
-
-Read `.mch/config.yaml` and extract the top-level `temp_dir` value into `<temp-dir>`.
 
 Extract `<change-slug>` from the current Git branch using this regex: `^change/([0-9]+-[a-z0-9-_]+)$`.
 
 Stop with one concise error if:
 
-- `.mch/config.yaml` does not exist or cannot be read
-- `temp_dir` is missing, empty, or not a single path value
 - the current branch does not match `^change/([0-9]+-[a-z0-9-_]+)$`
-- `<temp-dir>/input.md` does not exist or cannot be read
-- `<temp-dir>/input.md` is empty or contains only whitespace
+- `/tmp-dir/../idea/input.md` does not exist or cannot be read
+- `/tmp-dir/../idea/input.md` is empty or contains only whitespace
+- `/tmp-dir/input.md` does not exist, cannot be read, or is not empty
+- `/tmp-dir/output.md` does not exist or cannot be written
 - `.mch/default/prompts/spec-file-structure.md` does not exist or cannot be read
 - required Change type slugs cannot be determined from the active workflow context or repository-supported sources
 
 ## Instructions
 
-Read `<temp-dir>/input.md`.
+Read the authoritative Idea from `/tmp-dir/../idea/input.md`.
 
 Read `.mch/default/prompts/spec-file-structure.md`.
 
 Use targeted search to find relevant docs under `docs/`; do not broadly read unrelated docs. Read only docs that materially affect this Change.
 
-Write a completed, implementation-ready Change specification to `<temp-dir>/output.md`. If `<temp-dir>/output.md` already exists, overwrite it intentionally.
+Write a completed, implementation-ready Change specification to `/tmp-dir/output.md`. If `/tmp-dir/output.md` already exists, overwrite it intentionally.
 
 - Use the template in `.mch/default/prompts/spec-file-structure.md` exactly. Do not add, remove, rename, or reorder sections.
 - Treat documentation as the source of truth. If the input conflicts with docs, follow the docs and record important assumptions in `Design Notes`.
@@ -52,7 +50,7 @@ Before writing, check for ambiguity in:
 - QA expectations
 - valid Change type slugs
 
-If clarification is required, stop and output only concise clarifying questions. Do not write `<temp-dir>/output.md`.
+If clarification is required, stop and output only concise clarifying questions. Do not write `/tmp-dir/output.md`.
 
 The final Change must satisfy:
 
@@ -68,10 +66,10 @@ The final Change must satisfy:
 - `Review Focus`: riskiest contracts to inspect.
 - `Follow-Ups`: future work outside scope, or `- None.`.
 
-Only write `<temp-dir>/output.md`. Do not modify any other file.
+Only write `/tmp-dir/output.md`. Do not modify any other file.
 
 ## Final Response
 
-After successfully saving `<temp-dir>/output.md`, output exactly:
+After successfully saving `/tmp-dir/output.md`, output exactly:
 
 Done.

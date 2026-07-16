@@ -1,8 +1,3 @@
----
-name: change-docs
-description: Update repository documentation under docs from the active agent changes file on a changes branch, without editing code, tests, database files, or generated artifacts.
----
-
 Extract `<change-slug>` from the current Git branch using this regex: `^change/([0-9]+-[a-z0-9-_]+)$`
 
 If the current branch does not match, stop and output one concise error explaining that the branch must be named `change/<change-slug>`.

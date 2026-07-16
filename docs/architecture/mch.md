@@ -66,6 +66,34 @@ The root Bubble Tea `Model` owns current screen, window size, command menu state
 
 `View` should render current state from model data only. Rendering must not mutate state, read files, call APIs, or start processes.
 
+## Reusable Flow Runtime
+
+The reusable Flow runtime accepts a completed Flow definition and Flow context through a composition boundary. A Flow definition is immutable static behavior with YAML-representable identifiers and options for Steps, tasks, Screens, artifacts, prompts or scripts, expected output, commands, and typed destinations. A Flow context owns runtime-only state: configured `temp_dir`, active Change identity, originating navigation Screen, current session, Step, artifact, and execution result. Go conformance definitions use these same types and must return fresh independently mutable values.
+
+Definitions support exactly the artifacts `idea`, `spec`, `pr`, `implement`, `review`, and `finalize`; generic Editor, Exec, Interactive, Preview, and Error Screens; and the task sequences Editor, Exec, Exec followed by Interactive, or Interactive. A shared validator rejects missing or duplicate identifiers, unsupported kinds or task sequences, inconsistent Step artifacts, missing required fields, populated forbidden fields, and invalid command destinations before execution. A destination has exactly one kind and reference: `step` names a Step in the same Flow, while `screen` names a terminal navigation Screen in the composition-supplied allowlist. Runtime Flow Screens cannot be terminal `screen` destinations.
+
+Editor tasks require an artifact, Editor Screen, Preview completion, and Error failure destination and forbid prompt, script, expected-output, and unexpected-output fields. Exec tasks additionally require a prompt, script, exact expected output, and unexpected-output Interactive destination. Interactive tasks require an artifact, Interactive Screen, session-resume script, same-Step Editor destination, Preview completion, and Error failure destination; they forbid prompt and expected output, and `/cancel` always targets the originating Screen in Flow context. Editor completion may target only Preview, Editor failure only Error, Interactive completion only Preview, `/edit` only its Step's Editor, and failures only Error. Preview commands may target another Step or a composition-approved terminal Screen.
+
+Composition supplies the validated definition, Flow context, allowed terminal Screens, active Flow directory for relative prompt and script paths, an `ArtifactStore`, and fakeable editor, preview, diff, execution, interactive-session, and API boundaries. The reusable runtime is not connected to `/new-change`, Change-detail editing, or `.mch/default/flow.yaml`; it does not compose an Idea Rewrite, Idea Review, Spec Write, or other executable product Flow, and it does not change existing configuration loading or `/config` behavior.
+
+### Artifact Workspace And Step Lifecycle
+
+The runtime has no fallback workspace. It uses `<temp_dir>/<artifact>/`, where `temp_dir` comes from `.mch/config.yaml`, and resolves `session-id`, `input.md`, `output.md`, and `agent-output.md` beneath that artifact directory. At every Step start it loads exact persisted bytes through `ArtifactStore`, creates the directory, and replaces both `input.md` and `output.md` with those bytes. `input.md` is immutable for that Step and tasks may modify only `output.md`. Editor requires readable `output.md`; Preview requires `input.md` and `output.md`; Exec must produce readable `agent-output.md`; and `/interactive` requires a readable, non-empty `session-id`. Interactive after Exec and Interactive `/edit` reuse the same load, context, and files; a Preview `step` destination starts the referenced Step with a fresh load and baseline.
+
+Successful task completion compares `input.md` and `output.md` byte-for-byte. Identical content reaches Preview without a save; changed content reaches Preview only after `ArtifactStore.Save` succeeds. Stopped, cancelled, failed, or unsuccessfully saved Steps do not complete or persist. Missing configured workspace data, unsupported artifacts, missing task resources, load or save errors, and file creation errors enter Error.
+
+The CLI Change artifact store loads the active Change through `POST /api/v1/change/get`. It supports concrete persistence for `idea`, `spec`, and `pr` only, saving changed bytes through `POST /api/v1/change/update-idea`, `POST /api/v1/change/update-spec`, or `POST /api/v1/change/update-pr`; Editor-initiated saves are user edits and send `agent_edit: false`. Unsupported artifacts are rejected instead of being routed to an unrelated endpoint. Artifact-specific validation, endpoint selection, and metadata stay in the store rather than generic Screens.
+
+### Generic Flow Screens
+
+- Editor opens the current artifact's `output.md` in the configured external editor. A successful return completes compare and save; failure enters Error.
+- Exec offers only `/stop` while running. It evaluates the final line of readable `agent-output.md` against the exact configured output, completing the Step on a match and entering the configured Interactive Screen on a mismatch. `/stop` cancels execution, skips evaluation and persistence, and returns to the originating Screen.
+- Interactive does not start a session on entry. It shows preceding agent output when available and offers `/interactive`, `/edit`, and `/cancel` without `/stop`. `/interactive` resumes through the configured command and non-empty `session-id`; `/edit` opens the same-Step Editor and completes through compare and save; `/cancel` skips persistence and returns to the origin.
+- Preview performs no load or save and supports prepared Idea, Spec, and PR files. It renders `output.md` with `bat -pp --theme 'Coldark-Dark'` and renders Diff with `git --no-pager diff --no-index --no-ext-diff --color=never` piped to `bat` in diff mode. Either horizontal arrow toggles modes. Git status `0` means identical, `1` means different, and greater than `1` is Error; the runtime must preserve Git's status rather than the piped renderer's. Commands map explicitly to `step` or `screen` destinations rather than deriving navigation from command spelling.
+- Error displays the concrete validation, workspace, load, save, editor, execution, session, or rendering failure and offers only `/return`, which returns to the originating Screen without retrying, saving, or continuing.
+
+External operations return typed messages to the Bubble Tea update loop and preserve terminal handoff, cancellation, process status, session resources, and configured working directories. `Update` must not directly perform filesystem, persistence, or process work.
+
 ## Planning States
 
 AI-assisted Change planning flows should use these states:

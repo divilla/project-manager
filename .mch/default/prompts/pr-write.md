@@ -1,8 +1,3 @@
----
-name: change-pr
-description: Draft a GitHub pull request body for a repository Change workflow without creating the PR. Use when the user asks to write, generate, rewrite, or prepare a PR body for a Change branch.
----
-
 # Change PR
 
 Draft a reviewer-focused GitHub PR body for the current Change. Do not create, update, push, merge, or comment on a pull request.

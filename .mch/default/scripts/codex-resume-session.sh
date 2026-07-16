@@ -8,13 +8,23 @@ if [[ $# -gt 1 ]]; then
   exit 2
 fi
 
-if [[ -z "${MCH_TEMP_UUID:-}" ]]; then
-  printf '%s\n' 'missing MCH_TEMP_UUID' >&2
+if [[ -z "${MCH_REF_UUID:-}" ]]; then
+  printf '%s\n' 'missing MCH_REF_UUID' >&2
   exit 1
 fi
 
-if [[ ! "${MCH_TEMP_UUID}" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
-  printf 'invalid MCH_TEMP_UUID: %s\n' "${MCH_TEMP_UUID}" >&2
+if [[ ! "${MCH_REF_UUID}" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
+  printf 'invalid MCH_REF_UUID: %s\n' "${MCH_REF_UUID}" >&2
+  exit 1
+fi
+
+if [[ -z "${MCH_ARTIFACT:-}" ]]; then
+  printf '%s\n' 'missing MCH_ARTIFACT' >&2
+  exit 1
+fi
+
+if [[ "${MCH_ARTIFACT}" != "idea" && "${MCH_ARTIFACT}" != "spec" ]]; then
+  printf 'unsupported MCH_ARTIFACT: %s\n' "${MCH_ARTIFACT}" >&2
   exit 1
 fi
 
@@ -24,9 +34,16 @@ if [[ -z "${repo}" ]]; then
   exit 1
 fi
 
-temp_dir="${repo}/.mch/tmp/${MCH_TEMP_UUID}"
-session_path="${temp_dir}/session_id"
-session_display_path=".mch/tmp/${MCH_TEMP_UUID}/session_id"
+temp_dir="${repo}/.mch/tmp/${MCH_REF_UUID}/${MCH_ARTIFACT}"
+session_path="${temp_dir}/session-id"
+session_display_path=".mch/tmp/${MCH_REF_UUID}/${MCH_ARTIFACT}/session-id"
+
+for resource in input.md output.md; do
+  if [[ ! -f "${temp_dir}/${resource}" ]]; then
+    printf 'missing artifact resource: .mch/tmp/%s/%s/%s\n' "${MCH_REF_UUID}" "${MCH_ARTIFACT}" "${resource}" >&2
+    exit 1
+  fi
+done
 
 session_id=""
 if [[ -f "${session_path}" ]]; then
@@ -34,13 +51,13 @@ if [[ -f "${session_path}" ]]; then
 fi
 
 if [[ -z "${session_id}" ]]; then
-  printf 'invalid uuid or empty file: %s\n' "${session_display_path}" >&2
+  printf 'invalid UUID or empty file: %s\n' "${session_display_path}" >&2
   exit 1
 fi
 
 codex_sessions_dir="${CODEX_HOME:-${HOME}/.codex}/sessions"
 if [[ ! -d "${codex_sessions_dir}" ]] || ! find "${codex_sessions_dir}" -type f -name "*${session_id}.jsonl" | grep -q .; then
-  printf 'unknown codex session_id: %s\n' "${session_id}" >&2
+  printf 'unknown Codex session-id: %s\n' "${session_id}" >&2
   exit 1
 fi
 

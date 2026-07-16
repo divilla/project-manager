@@ -89,15 +89,18 @@ Return findings only, in this exact format:
 ```markdown
 Review Findings:
 
-- [P<severity>] <short imperative title> — <absolute file path>:<line or line-range>
-  <one concise paragraph explaining the concrete impact, when it occurs, and the specific fix direction.>
+- [P<severity>] <short imperative title> 
+  - <repo-root relative file path>:<line or line-range>
+  - <one concise paragraph explaining the concrete impact>
+  - <one concise paragraph explaining when it occurs>
+  - <one concise paragraph explaining specific fix direction>
 ```
 
 Rules:
 
 - Start with exactly `Review Findings:`
 - Use one Markdown bullet per finding.
-- Use absolute file paths and exact line or line range.
+- Use file paths relative to <repo-root> and exact line or line range.
 - Put the explanation on the next line, indented by two spaces.
 - Add exactly one blank line after each finding.
 - Do not include praise, summaries, or non-finding commentary.

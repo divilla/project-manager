@@ -20,6 +20,15 @@ The `cli/` module contains the reference `mch` TUI. Its architecture, package bo
 
 `mch` resolves the current Git repository root before loading configuration, so starting from the root or a nested directory uses the same `.mch` tree. The Main screen includes `/config`, which opens a read-only view of resolved in-memory CLI and Flow configuration without calling backend APIs, reading raw YAML for rendering, executing hooks, or saving local files.
 
+## Reusable Flow Runtime
+The CLI provides an uncomposed Flow runtime for later product Flows. A Flow definition is immutable static behavior that can be represented in YAML and names Steps, tasks, generic Screens, artifacts, commands, and typed destinations. A Flow context holds runtime-only state such as the configured temporary directory, active Change identity, originating navigation Screen, current Step and artifact, session data, and execution results. Composition supplies both values, the allowed terminal navigation Screens, external-command boundaries, and artifact persistence; the runtime does not depend on whether a validated definition was constructed in Go or loaded by a later configuration Change.
+
+A Step operates on one of the supported artifact identifiers `idea`, `spec`, `pr`, `implement`, `review`, or `finalize` and uses Editor, Exec, Exec followed by Interactive, or Interactive tasks. Editor, Exec, Interactive, Preview, and Error are generic reusable Screens configured by definition and context rather than artifact-specific Screen implementations. User-facing commands map to typed destinations: a `step` destination starts another Step with a fresh artifact load, while a `screen` destination ends the Flow and navigates to a composition-approved terminal Screen.
+
+Runtime artifacts are isolated under `<temp_dir>/<artifact>/`, where `temp_dir` is supplied from `.mch/config.yaml`. The runtime uses `session-id`, `input.md`, `output.md`, and `agent-output.md` resources in that directory, with `input.md` retained as the Step baseline and tasks editing only `output.md`. The generic persistence boundary loads and saves plain artifact bytes. Its Change API adapter loads through `POST /api/v1/change/get` and saves changed Idea, Spec, or PR bytes through the matching focused update endpoint; Editor-initiated saves send `agent_edit: false`. Other artifact identifiers require later persistence adapters.
+
+This runtime does not compose the Idea Stage or any other product Flow. It does not connect to `/new-change`, Change-detail editing, or the existing `.mch/default/flow.yaml` loader, and it does not change `/config`. Those existing behaviors remain active until later Changes deliberately compose and route a product Flow.
+
 Repository Change workflow automation uses `change/<change-slug>` branches, ideas under `agent/ideas/<change-slug>.md`, and Change specs under `specs/<change-slug>.md`. The spec structure template is `.mch/default/prompts/spec-file-structure.md`. This does not rename application routes, API paths, packages, or product data that use the Change concept.
 
 ## Current Project

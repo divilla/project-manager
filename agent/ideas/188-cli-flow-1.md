@@ -2,38 +2,21 @@
 
 First CLI Change in regarding Flow will be Idea Stage implementation.
 
-## Idea Flow
-
-- user writes the idea for software change artifact
-- agent reviews idea, asks for clarification - outputs questions and suggestions
-- user provides answers or accepts/rejects suggestions or rewrites idea
-- agent rewrites idea improving wording and readability and outputs idea
-- user accepts / edits idea introducing changes / asks agent for idea changes
-- agent applies changes and outputs rewritten idea
-
-The state model:
-Create  -> Review      -> Refine
-Create  -> Review      -> Preview
-Preview -> Rewrite     -> Preview
-Preview -> Refine      -> Preview
-Preview -> Edit        -> Review
-Preview -> Save/Cancel -> ChangeDetails
-Review  -> Refine      -> Preview
-Review  -> Stop        -> Preview
-Review  -> Cancel      -> ChangeDetails
-Review  -> Error       -> Preview/ChangeDetails
-Rewrite -> Cancel      -> ChangeDetails
-Rewrite -> Preview
-Rewrite -> Stop        -> Preview
-Rewrite -> Error       -> Preview/ChangeDetails
+- run interactive agent with codex-resume-session.sh 
 
 Idea screens - DocumentCreateScreen is a starting screen:
-- DocumentCreateScreen(<homeScreen>, <fromScreen>, <toScreen>):
-  - Process: user writes an initial idea for a software change.
-  - Layout: external `code` app is running in another window
-  - State: `mch` is waiting for user to exit
-  - Exits:
-    DocumentRewriteScreen
+- DocumentCreateScreen
+  - Process: user writes an initial idea for a software change using `Editor`
+    - OnExit Editor without changes - /tmp-dir/<stage>/input.md == /tmp-dir/<stage>/output.md == empty -> route to ChangesListScreen
+  - Layout: Viewport + Prompt
+  - Viewport: displays `bat -pp /tmp-dir/<stage>/output.md` output
+  - Prompt:
+    - Prompt question: `Save Change Idea?`
+    - State: command menu open
+    - Selected: /yes
+    - Commands:
+      /yes -    go to DocumentRewriteScreen
+      /cancel - go to ChangesListScreen
 
 - DocumentEditScreen(<homeScreen>, <fromScreen>, <toScreen>):
   - Process: user edits an idea for a software change to reduce or introduce further changes.
@@ -41,10 +24,24 @@ Idea screens - DocumentCreateScreen is a starting screen:
   - State: `mch` is waiting for user to exit
   - Exits:
     <fromScreen>(<homeScreen>) - if user made edits - input.md not equal to output.md
+    <homeScreen> - if toScreen is null and user made no edits - input.md equals output.md
     DocumentAcceptScreen(<homeScreen>, <fromScreen>, <toScreen>) - if toScreen is not null and user made no edits - input.md equals output.md
-    <homeScreen> - if toScreen null and user made no edits - input.md equals output.md
 
-- DocumentAcceptScreen(<homeScreen>, <fromScreen>, <toScreen>):
+- AgentExecScreen(<prompt>):
+  - Process: running `scripts/codex-exec-restore-session.sh prompts/<prompt>.md`
+  - Layout: Viewport + Prompt
+  - Viewport: `<running-animation-character> Executing <prompt> prompt...`
+  - Prompt:
+    - State: command menu closed
+    - Selected: /stop
+    - Commands:
+      /stop - go to DocumentPreviewScreen(<prompt>)
+      /agent - go to AgentInteractiveScreen(<prompt>)
+  - Exit:
+    DocumentDiffScreen(<prompt>) - on Expected Output
+    AgentInteractiveScreen(<prompt>) - on Unexpected Output
+
+- DocumentDiffScreen():
   - Process: user edits an idea for a software change to reduce or introduce further changes.
   - Layout: Viewport + Prompt
   - Viewport: displays `bat --diff` output
@@ -53,9 +50,9 @@ Idea screens - DocumentCreateScreen is a starting screen:
     - Selected: /accept
     - Commands:
       /accept - go to <toScreen>(<homeScreen>)
+      /agent  - go to AgentInteractiveScreen(<homeScreen>, <fromScreen>, <toScreen>)
       /edit   - go to DocumentEditScreen(<homeScreen>, <fromScreen>, <toScreen>)
-      /reject
-      /cancel
+      /cancel - go to <homeScreen> (ChangesListScreen or ChangeDetailsScreen)
 
 - DocumentRewriteScreen(<homeScreen>):
   - Process: agent rewrites the idea for clarity and readability without changing its intent.

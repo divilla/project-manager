@@ -1,8 +1,3 @@
----
-name: change-docs-post-code
-description: Reconcile the active Change spec, its QA test cases, and repository docs with already-implemented code on a changes branch, without editing code, tests, database files, seed data, migrations, or generated artifacts. Use after implementation when docs and Change-file test cases must reflect final observable behavior or record remaining contract ambiguity.
----
-
 Use this only for a post-code documentation pass. The implementation already exists; the job is to reconcile the Change contract, QA test cases, and `docs/` with the final accepted observable behavior. When docs and code diverge, code wins. When the Change spec and implementation diverge, ask the user how to resolve the divergence before editing the contract or docs.
 
 ## Preconditions
@@ -88,13 +83,9 @@ Update docs enough that future work can align code, tests, frontend, CLI, and se
 - Do not broaden the Change to include unrelated behavior discovered while reading the diff.
 - Record unrelated work as Follow-Ups instead of documenting it as part of this Change.
 
-## Final Report
+## Final Response
 
-Report:
+After successfully reconciling the Change contract, QA test cases, and documentation,
+output exactly:
 
-- Whether the Change contract was updated.
-- Any user-resolved Change-file/code divergence.
-- Which QA test cases were added, updated, removed, or left unchanged.
-- Which docs changed.
-- Which behavior contracts were clarified.
-- Any documented follow-up or unresolved ambiguity.
+Done.

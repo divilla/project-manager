@@ -1,8 +1,3 @@
----
-name: change-review
-description: Review a Change branch or PR against origin/stage using the active Change spec and linked docs as the contract like a very senior engineer. Use when asked to review a Change, review the current changes branch, review a Change PR, find blocking issues, or produce review findings without implementing fixes.
----
-
 Review the current branch against `origin/stage` like a very senior engineer.
 
 Build fresh context from the repository. Do not rely on conversation memory.
