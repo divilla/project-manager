@@ -3,9 +3,9 @@
 ## Overview
 A change is the delivery unit. It can exist independently or reference one epic. It is never part of a nested change tree.
 
-Each change has a backend-generated `ref_uuid` and may have a backend-owned `ref` and `slug`. The `ref_uuid` is a non-null read-only UUID identity. The `ref` is a project-scoped numeric reference allocated from the owning project. The `slug` is a branch identifier generated from the assigned reference and current title.
+Each change has a backend-generated `ref_uuid` and may have a backend-owned `ref` and `slug`. The `ref_uuid` is a non-null read-only UUID identity. The `ref` is a project-scoped numeric reference allocated from the owning project. The `slug` is a branch identifier generated from the assigned reference and the Change title at first Flow assignment.
 
-Users and clients must not create, edit, or overwrite `ref`, `ref_uuid`, `slug`, Flow snapshot fields, Run state fields, or the project's reference counter. New Changes may exist without a `ref`, `slug`, or Flow snapshot; those fields are assigned or refreshed only by backend Flow assignment and returned to clients as read-only data.
+Users and clients must not create, edit, or overwrite `ref`, `ref_uuid`, `slug`, Flow snapshot fields, Run state fields, or the project's reference counter. New Changes may exist without a `ref`, `slug`, or Flow snapshot; those fields are assigned by backend Flow assignment and returned to clients as read-only data.
 
 ## Create
 Creating a change requires:
@@ -16,14 +16,16 @@ Creating a change requires:
 
 The title and idea must be non-blank after validation. `spec`, `pr`, and `pr_url` are optional artifact strings and default to empty text when omitted. `epic_id` defaults to null, `change_types` defaults to an empty array when omitted or explicitly empty, and `change_phase` defaults to `backlog` when clients do not provide a phase.
 
+Only the AI-assisted `IdeaCreate` path initializes the Change title from an artifact H1: it sends the canonical Idea H1 as the explicit create `title`. Later Idea, Spec, and PR titles and metadata are independent from the Change and from one another.
+
 After a successful create, the returned change includes its database ID, generated `ref_uuid`, string artifact fields, and may have unassigned `ref` and `slug` values. Creating a Change does not advance the project reference sequence.
 
-Codex-assisted planning tools create Changes after the user confirms `Create Change?`, then may run an agent rewrite and save the rewritten idea through `POST /api/v1/change/update-idea` with `agent_edit` set to true. These Changes use the backend default phase until the user moves them through the normal lifecycle.
+Codex-assisted planning requires canonical Idea bytes with a body containing at least one non-whitespace character before `Create Change?`, then creates the Change and runs the composed Rewrite and Review Steps. Title-only, whitespace-body, and metadata-only artifacts are invalid in this workflow. Agent-produced canonical changes save through `POST /api/v1/change/update-idea` with `agent_edit: true`; user Editor saves use `agent_edit: false`. These Changes use the backend default phase until the user moves them through the normal lifecycle.
 
 ## Flow Assignment
 `POST /api/v1/change/assign-flow` assigns or returns identity and Flow configuration for an existing Change identified by numeric `id`.
 
-For an unreferenced Change, the endpoint allocates the next project-scoped `ref`, refreshes `slug` from the current title, copies the current global Flow stages and default stage modes onto the Change, preserves existing artifacts, and returns refreshed Change data. For a referenced Change, the endpoint must not allocate a new `ref` or overwrite the copied Flow arrays; it may refresh `slug` from the current title.
+For an unreferenced Change, the endpoint allocates the next project-scoped `ref`, derives `slug` from that reference and the current Change title, copies the current global Flow stages and default stage modes onto the Change, preserves existing artifacts, and returns refreshed Change data. For a referenced Change, the endpoint returns the existing `ref`, `slug`, and copied Flow arrays without regenerating identity.
 
 Flow configuration copied onto a Change is stable for that Change. Later global Flow configuration changes apply only to Changes assigned after those global changes.
 
@@ -68,9 +70,11 @@ Frontend and CLI controls for Flow assignment, per-Change stage modes, Run claim
 ## Update
 Editing a change can update title, `idea`, `spec`, `pr`, `pr_url`, type classification, epic reference, phase, and open state. Artifact responses use strings; empty text is the no-value state for optional artifacts that have not been submitted and for rendered artifact HTML. Focused artifact and PR URL update payloads must be non-empty. Open-state updates use an explicit boolean value and return refreshed backend state.
 
+The Change title, type set, and linked Epic change only through their focused update flows; those operations preserve an assigned slug. Every submitted Idea, Spec, or PR requires a body containing at least one non-whitespace character, then validates and canonicalizes its own optional metadata before persistence. Types use `Types: <type-slugs>` with valid slugs joined by `|` and no spaces. Epic uses `Epic: <epic-title> #<epic-id>` with the canonical current-project Epic title and ID. Artifact titles and metadata may differ from both the Change and one another without updating Change fields.
+
 Artifact update payloads for `idea`, `spec`, and `pr` include `agent_edit` to record whether that artifact save was agent-produced. After create, `agent_edit` is changed only by those artifact update flows.
 
-Focused updates return the refreshed change with its existing `ref` and `slug`. Updates must work before and after Flow assignment. Updating the title does not let clients supply replacement identity values.
+Focused updates return the refreshed change with its existing `ref` and `slug`. Updates must work before and after Flow assignment. Updating the title changes the user-facing Change title but does not regenerate an assigned slug or let clients supply replacement identity values.
 
 ## Delete
 Deleting a change is destructive and must be confirmed. Test cases linked to the change are archived or removed according to backend history rules before the active change is removed.

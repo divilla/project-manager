@@ -10,8 +10,17 @@ import (
 // ArtifactStore loads and saves plain artifact bytes for an active Change.
 type ArtifactStore interface {
 	Load(changeID int, artifact Artifact) ([]byte, error)
-	Save(changeID int, artifact Artifact, content []byte) error
+	Save(changeID int, artifact Artifact, content []byte, provenance SaveProvenance) error
 }
+
+// SaveProvenance records who produced a focused artifact save.
+type SaveProvenance string
+
+// Supported artifact save provenance values.
+const (
+	SaveByUser  SaveProvenance = "user"
+	SaveByAgent SaveProvenance = "agent"
+)
 
 // ChangeAPI is the existing CLI API boundary needed by ChangeArtifactStore.
 type ChangeAPI interface {
@@ -57,8 +66,8 @@ func (s ChangeArtifactStore) Load(changeID int, artifact Artifact) ([]byte, erro
 	return nil, fmt.Errorf("change artifact store does not support artifact %q", artifact)
 }
 
-// Save saves a user edit through the focused endpoint with agent_edit false.
-func (s ChangeArtifactStore) Save(changeID int, artifact Artifact, content []byte) error {
+// Save persists through the focused endpoint with explicit agent_edit provenance.
+func (s ChangeArtifactStore) Save(changeID int, artifact Artifact, content []byte, provenance SaveProvenance) error {
 	if s.api == nil {
 		return fmt.Errorf("change API is required")
 	}
@@ -73,13 +82,21 @@ func (s ChangeArtifactStore) Save(changeID int, artifact Artifact, content []byt
 		return fmt.Errorf("%s artifact must not be blank", artifact)
 	}
 	var err error
+	agentEdit := false
+	switch provenance {
+	case SaveByUser:
+	case SaveByAgent:
+		agentEdit = true
+	default:
+		return fmt.Errorf("unsupported artifact save provenance %q", provenance)
+	}
 	switch artifact {
 	case ArtifactIdea:
-		_, err = s.api.UpdateChangeIdea(changeID, text, false)
+		_, err = s.api.UpdateChangeIdea(changeID, text, agentEdit)
 	case ArtifactSpec:
-		_, err = s.api.UpdateChangeSpec(changeID, text, false)
+		_, err = s.api.UpdateChangeSpec(changeID, text, agentEdit)
 	case ArtifactPR:
-		_, err = s.api.UpdateChangePR(changeID, text, false)
+		_, err = s.api.UpdateChangePR(changeID, text, agentEdit)
 	}
 	if err != nil {
 		return fmt.Errorf("save %s artifact for Change %d: %w", artifact, changeID, err)

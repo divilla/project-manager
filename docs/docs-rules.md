@@ -36,6 +36,7 @@ docs/
 - Write current product documentation, not migration notes.
 - Use `change`, `epic`, `test case`, and `history` as the core product vocabulary.
 - Use `title`, `idea`, `spec`, `pr`, `pr_url`, and `agent_edit` for change text, PR fields, and agent-edit state.
+- Prefer lowercase dash-separated names for new files, directories, slugs, and angle-bracket placeholders, such as `change-details` and `<ref-uuid>`. This is a naming reference rather than a compatibility requirement; retain underscores when matching established database fields, API fields, environment variables, or script-local variables, such as `ref_uuid`, `MCH_REF_UUID`, and `artifact_dir`.
 - Do not describe obsolete hierarchy or obsolete terminology as active product behavior.
 - Functionality docs define product behavior.
 - Architecture docs define technical structure.

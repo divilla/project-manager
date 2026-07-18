@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"strings"
@@ -56,6 +57,12 @@ func (m Model) handleDropdownKey(key string, msg tea.KeyMsg) (tea.Model, tea.Cmd
 
 func (m *Model) openCommandDropdown() {
 	options := commandOptions(m.state)
+	if m.ideaFlowActive {
+		options = make([]dto.Option, 0, len(m.ideaFlow.Commands()))
+		for _, command := range m.ideaFlow.Commands() {
+			options = append(options, dto.Option{ID: string(command), Label: string(command)})
+		}
+	}
 	m.previousState = m.state
 	m.dropdown = dropdownModel{
 		kind:     dropdownCommand,
@@ -159,61 +166,26 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		}
 		return m.executeCommandFrom(m.dropdown.previous, selected.ID)
 	}
-	if m.dropdown.kind == dropdownAgent {
-		selected := m.selectedOption()
-		m.dropdown = dropdownModel{}
-		switch selected.ID {
-		case "/resume":
-			content, err := m.agentFlow.Workspace.ReadIdea()
-			if err != nil {
-				m.err = err.Error()
-				m.status = "agent failed"
-				return m, nil
-			}
-			return m.openAgentIdeaEditor(false, content)
-		case "/clear":
-			return m.openAgentIdeaEditor(true, "")
-		case "/cancel":
-			return m.discardAgentIdea(ChangesListState, "cancel", true)
-		default:
-			m.err = "unknown command"
-			return m, nil
-		}
-	}
 	if m.dropdown.kind == dropdownIdea {
 		selected := m.selectedOption()
-		previous := m.dropdown.previous
 		m.dropdown = dropdownModel{}
 		switch selected.ID {
-		case "/edit":
-			if previous == UpdateIdeaState {
-				m.state = UpdateIdeaState
-				if err := m.agentFlow.Workspace.WriteIdea(m.agentFlow.IdeaEntryContent); err != nil {
-					m.err = err.Error()
-					m.status = "agent failed"
-					return m, nil
-				}
-				return m.openPersistentEditor(UpdateIdeaState, m.agentFlow.Workspace.IdeaPath())
-			}
-			content, err := m.agentFlow.Workspace.ReadIdea()
-			if err != nil {
-				m.err = err.Error()
-				m.status = "agent failed"
-				return m, nil
-			}
-			return m.openAgentIdeaEditor(false, content)
+		case "/fix":
+			m.state = CreateIdeaState
+			return m.openPersistentEditor(CreateIdeaState, m.ideaCreateAttempt.path)
 		case "/cancel", "/no":
-			return m.discardAgentIdea(ChangesListState, "cancel", true)
+			return m.cancelIdeaCreate()
 		case "/yes":
 			projectID, err := currentProjectNumericID(m.currentProject.ID)
 			if err != nil {
-				m.err = err.Error()
-				m.status = "validation failed"
-				return m, nil
+				return m.enterIdeaCreateError(err)
+			}
+			if m.ideaCreateAttempt.uuid == "" {
+				return m.enterIdeaCreateError(fmt.Errorf("IdeaCreate attempt workspace is required"))
 			}
 			m.state = CreateIdeaState
 			m.status = "creating change"
-			return m, agentChangeCreateForRewriteCommand(m.client, projectID, m.agentFlow.Workspace)
+			return m, createChangeForIdeaFlowCommand(m.client, m.ideaCreateAttempt.uuid, projectID, m.ideaCreateTitle, m.ideaCreateBytes)
 		default:
 			m.err = "unknown command"
 			return m, nil
@@ -307,7 +279,7 @@ func (m Model) dropdownView(width int) string {
 }
 
 func (m Model) dropdownShowsIdeaPreview() bool {
-	return m.state == CreateIdeaState || m.state == UpdateIdeaState
+	return m.state == CreateIdeaState
 }
 
 func (m Model) renderIdeaPreview(_ int) string {
@@ -319,12 +291,7 @@ func (m Model) renderIdeaPreview(_ int) string {
 }
 
 func (m Model) ideaPreviewContent() string {
-	if m.dropdownShowsIdeaPreview() && strings.TrimSpace(m.agentFlow.Workspace.Dir) != "" {
-		if content, err := m.agentFlow.Workspace.ReadIdea(); err == nil {
-			return content
-		}
-	}
-	return m.agentFlow.IdeaEntryContent
+	return string(m.ideaCreateBytes)
 }
 
 var (

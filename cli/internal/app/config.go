@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"mch/internal/flow"
+
 	goconfig "github.com/ridgelines/go-config"
 	"gopkg.in/yaml.v3"
 )
@@ -21,7 +23,6 @@ type appConfig struct {
 	RepositoryRoot string
 	ConfigPath     string
 	BackendURL     string
-	TempDir        string
 	ProjectID      int
 	FlowDir        string
 	Flow           flowConfig
@@ -30,7 +31,6 @@ type appConfig struct {
 
 type configFile struct {
 	BackendURL string `yaml:"backend_url"`
-	TempDir    string `yaml:"temp_dir"`
 	ProjectID  int    `yaml:"project_id"`
 }
 
@@ -80,6 +80,12 @@ func loadAppConfig(repoRoot string) (appConfig, error) {
 	if repoRoot == "" {
 		return appConfig{BackendURL: defaultBackendURL}, fmt.Errorf("repository root is required")
 	}
+	if err := requireRepositoryDirectory(filepath.Join(repoRoot, ".mch")); err != nil {
+		return appConfig{RepositoryRoot: repoRoot, BackendURL: defaultBackendURL}, err
+	}
+	if err := requireRepositoryDirectory(filepath.Join(repoRoot, flow.TmpDir)); err != nil {
+		return appConfig{RepositoryRoot: repoRoot, BackendURL: defaultBackendURL}, err
+	}
 	configPath := filepath.Join(repoRoot, defaultConfigPath)
 	cfg, err := loadConfigFile(configPath)
 	if err != nil {
@@ -117,19 +123,25 @@ func loadConfigFile(path string) (appConfig, error) {
 	if backendURL == "" {
 		return appConfig{}, fmt.Errorf("backend_url is required in %s", path)
 	}
-	tempDir, err := cfg.StringOr("temp_dir", "")
-	if err != nil {
-		return appConfig{}, fmt.Errorf("load temp_dir from %s: %w", path, err)
-	}
-	tempDir = strings.TrimSpace(tempDir)
-	if tempDir == "" {
-		return appConfig{}, fmt.Errorf("temp_dir is required in %s", path)
-	}
 	projectID, err := cfg.IntOr("project_id", 0)
 	if err != nil {
 		return appConfig{}, fmt.Errorf("load project_id from %s: %w", path, err)
 	}
-	return appConfig{BackendURL: backendURL, TempDir: tempDir, ProjectID: projectID}, nil
+	return appConfig{BackendURL: backendURL, ProjectID: projectID}, nil
+}
+
+func requireRepositoryDirectory(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("required directory %s does not exist", path)
+		}
+		return fmt.Errorf("inspect required directory %s: %w", path, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("required path %s is not a directory", path)
+	}
+	return nil
 }
 
 func resolveGitRepositoryRoot(ctx context.Context) (string, error) {
@@ -220,13 +232,8 @@ func saveAppConfig(path string, cfg appConfig) error {
 	if backendURL == "" {
 		return fmt.Errorf("backend_url is required")
 	}
-	tempDir := strings.TrimSpace(cfg.TempDir)
-	if tempDir == "" {
-		return fmt.Errorf("temp_dir is required")
-	}
 	body, err := yaml.Marshal(configFile{
 		BackendURL: backendURL,
-		TempDir:    tempDir,
 		ProjectID:  cfg.ProjectID,
 	})
 	if err != nil {
@@ -240,7 +247,6 @@ func renderResolvedConfig(cfg appConfig) string {
 	writeConfigLine(&b, "repository_root", cfg.RepositoryRoot)
 	writeConfigLine(&b, "config_path", cfg.ConfigPath)
 	writeConfigLine(&b, "backend_url", cfg.BackendURL)
-	writeConfigLine(&b, "temp_dir", cfg.TempDir)
 	fmt.Fprintf(&b, "project_id: %d\n", cfg.ProjectID)
 	writeConfigLine(&b, "flow_dir", cfg.FlowDir)
 	fmt.Fprintf(&b, "flow:\n")

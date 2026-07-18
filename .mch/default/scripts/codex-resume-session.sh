@@ -8,6 +8,16 @@ if [[ $# -gt 1 ]]; then
   exit 2
 fi
 
+if [[ -z "${MCH_TEMP_DIR:-}" ]]; then
+  printf '%s\n' 'missing MCH_TEMP_DIR' >&2
+  exit 1
+fi
+
+if [[ "${MCH_TEMP_DIR}" == /* || "${MCH_TEMP_DIR}" == *".."* ]]; then
+  printf 'invalid MCH_TEMP_DIR: %s\n' "${MCH_TEMP_DIR}" >&2
+  exit 1
+fi
+
 if [[ -z "${MCH_REF_UUID:-}" ]]; then
   printf '%s\n' 'missing MCH_REF_UUID' >&2
   exit 1
@@ -34,13 +44,19 @@ if [[ -z "${repo}" ]]; then
   exit 1
 fi
 
-temp_dir="${repo}/.mch/tmp/${MCH_REF_UUID}/${MCH_ARTIFACT}"
+flow_temp_root="${repo}/${MCH_TEMP_DIR}"
+if [[ ! -d "${flow_temp_root}" ]]; then
+  printf 'missing Flow temp root: %s\n' "${MCH_TEMP_DIR}" >&2
+  exit 1
+fi
+
+temp_dir="${flow_temp_root}/${MCH_REF_UUID}/${MCH_ARTIFACT}"
 session_path="${temp_dir}/session-id"
-session_display_path=".mch/tmp/${MCH_REF_UUID}/${MCH_ARTIFACT}/session-id"
+session_display_path="${MCH_TEMP_DIR}/${MCH_REF_UUID}/${MCH_ARTIFACT}/session-id"
 
 for resource in input.md output.md; do
   if [[ ! -f "${temp_dir}/${resource}" ]]; then
-    printf 'missing artifact resource: .mch/tmp/%s/%s/%s\n' "${MCH_REF_UUID}" "${MCH_ARTIFACT}" "${resource}" >&2
+    printf 'missing artifact resource: %s/%s/%s/%s\n' "${MCH_TEMP_DIR}" "${MCH_REF_UUID}" "${MCH_ARTIFACT}" "${resource}" >&2
     exit 1
   fi
 done

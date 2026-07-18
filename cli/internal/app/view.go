@@ -24,13 +24,15 @@ func (m Model) View() string {
 		lines = append(lines, "")
 		lines = append(lines, projects.TableView(m.projectList, width))
 	}
-	if (m.state == ChangesListState || m.state == RewriteIdeaState) && !m.hasDropdown() {
-		if m.agentFlow.Stage == agent.StageAIRunning {
-			lines = append(lines, "", m.agentRunningView(width))
-		} else if m.state == ChangesListState {
-			table := changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
-			lines = append(lines, m.changeFiltersLine(table), table)
-		}
+	if m.state == ChangesListState && !m.hasDropdown() {
+		table := changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
+		lines = append(lines, m.changeFiltersLine(table), table)
+	}
+	if m.ideaFlowActive {
+		lines = append(lines, "", m.ideaFlow.View())
+	}
+	if m.state == IdeaProcessingState {
+		lines = append(lines, "", m.spinner.View()+" "+styles.Default.Foreground.Render("Processing..."))
 	}
 	if m.state == ChangeDetailsState {
 		details := changes.DetailsView(m.changeList, width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
@@ -84,30 +86,14 @@ func (m Model) headerLine(width int) string {
 }
 
 func (m Model) headerRight() string {
-	if (m.state == ChangesListState || m.state == RewriteIdeaState) && m.agentFlow.Stage == agent.StageAIRunning {
-		return styles.Default.Foreground.Render("AgentRunningScreen")
+	if m.ideaFlowActive {
+		return styles.Default.Foreground.Render(string(m.ideaFlow.Screen()))
 	}
 	title := screenTitle(m.state)
 	if before, _, ok := strings.Cut(title, " - "); ok {
 		title = before
 	}
 	return styles.Default.Foreground.Render(title)
-}
-
-func (m Model) agentRunningView(width int) string {
-	message := "Agent running: rewriting idea"
-	if m.agentFlow.SessionID != "" {
-		message = "Agent running: updating idea"
-	}
-	unit := "seconds"
-	if m.agentElapsed == 1 {
-		unit = "second"
-	}
-	lines := []string{fmt.Sprintf("%s %s... %d %s", m.agentSpinner.View(), message, m.agentElapsed, unit)}
-	if strings.TrimSpace(m.agentFlow.CommandOutput) != "" {
-		lines = append(lines, "", "Codex output:", strings.TrimSpace(m.agentFlow.CommandOutput))
-	}
-	return styles.Default.InputBand.Width(width).Render(strings.Join(lines, "\n"))
 }
 
 func (m Model) configView(width int) string {
@@ -159,6 +145,8 @@ func (m Model) helpText() string {
 	case FindInputState:
 		return "<return> search  |  <ctrl+c> delete prompt  |  <esc> cancel"
 	case ConfigState:
+		return "/return  |  <esc> or <ctrl+c> return"
+	case FlowErrorState:
 		return "/return  |  <esc> or <ctrl+c> return"
 	case ProjectsListState, EpicsListState:
 		return "<return> view  |  </> command"
@@ -275,8 +263,8 @@ func screenTitle(state State) string {
 		MainState:                  agent.MainTitle(),
 		ChangesListState:           changes.ListTitle(),
 		CreateIdeaState:            "CreateIdeaScreen - Title: New Change",
-		UpdateIdeaState:            "UpdateIdeaScreen - Title: Edit Idea",
-		RewriteIdeaState:           "RewriteIdeaScreen - Title: Rewrite Idea",
+		IdeaProcessingState:        "IdeaProcessingScreen - Title: Processing...",
+		FlowErrorState:             "FlowErrorScreen - Title: Flow Error",
 		ChangeDetailsState:         changes.DetailTitle(),
 		TestCaseDetailsState:       testcases.DetailTitle(),
 		ChangeCreateState:          "ChangeCreateScreen - Title: New Change",

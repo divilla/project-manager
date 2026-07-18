@@ -53,7 +53,7 @@ func UpdateTarget(state State) State {
 // SaveTarget returns the state reached after a navigation-only save.
 func SaveTarget(state State) State {
 	switch state {
-	case CreateIdeaState, UpdateIdeaState, RewriteIdeaState, ChangeCreateState, ChangeUpdateState:
+	case CreateIdeaState, ChangeCreateState, ChangeUpdateState:
 		return ChangeDetailsState
 	case TestCaseCreateState, TestCaseUpdateState:
 		return ChangeDetailsState
@@ -71,7 +71,7 @@ func CancelTarget(state State) State {
 	switch state {
 	case CreateIdeaState, ChangeCreateState:
 		return ChangesListState
-	case UpdateIdeaState, ChangeUpdateState:
+	case ChangeUpdateState:
 		return ChangeDetailsState
 	case TestCaseCreateState, TestCaseUpdateState:
 		return ChangeDetailsState

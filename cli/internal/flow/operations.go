@@ -25,8 +25,8 @@ type ExecRequest struct {
 	Artifact  Artifact
 }
 
-// InteractiveRequest describes a configured terminal session handoff.
-type InteractiveRequest struct {
+// ChatRequest describes a configured terminal session handoff.
+type ChatRequest struct {
 	Script    string
 	FlowDir   string
 	Workspace string
@@ -46,7 +46,7 @@ type RenderResult struct {
 type Operations interface {
 	Editor(path string, workingDirectory string, done func(error) tea.Msg) tea.Cmd
 	Exec(ctx context.Context, request ExecRequest, done func(error) tea.Msg) tea.Cmd
-	Interactive(ctx context.Context, request InteractiveRequest, done func(error) tea.Msg) tea.Cmd
+	Chat(ctx context.Context, request ChatRequest, done func(error) tea.Msg) tea.Cmd
 	Preview(ctx context.Context, path string, workingDirectory string, theme string, done func(RenderResult, error) tea.Msg) tea.Cmd
 	Diff(ctx context.Context, inputPath string, outputPath string, workingDirectory string, theme string, done func(RenderResult, error) tea.Msg) tea.Cmd
 }
@@ -95,8 +95,8 @@ func (ProcessOperations) Exec(ctx context.Context, request ExecRequest, done fun
 	}
 }
 
-// Interactive hands terminal control to the configured session-resume script.
-func (ProcessOperations) Interactive(ctx context.Context, request InteractiveRequest, done func(error) tea.Msg) tea.Cmd {
+// Chat hands terminal control to the configured session-resume script.
+func (ProcessOperations) Chat(ctx context.Context, request ChatRequest, done func(error) tea.Msg) tea.Cmd {
 	script, err := resolveDefinitionPath(request.FlowDir, request.Script)
 	if err != nil {
 		return func() tea.Msg { return done(err) }
@@ -171,7 +171,7 @@ func configureCommand(command *exec.Cmd, flowDirectory string, workspace string,
 		"MCH_CHANGE_ID="+strconv.Itoa(changeID),
 		"MCH_REF_UUID="+changeRef,
 		"MCH_ARTIFACT="+string(artifact),
-		"MCH_TEMP_DIR="+workspace,
+		"MCH_TEMP_DIR="+TmpDir,
 	)
 }
 

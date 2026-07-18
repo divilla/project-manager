@@ -12,7 +12,7 @@ import (
 
 func TestAppConfigLoadsRepositoryMCHConfigFlowAndHelp(t *testing.T) {
 	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n"+"project_id: 7\n")
+	writeMCHFixture(t, root, "backend_url: http://backend.test\nproject_id: 7\n")
 
 	cfg, err := loadAppConfig(root)
 
@@ -20,7 +20,6 @@ func TestAppConfigLoadsRepositoryMCHConfigFlowAndHelp(t *testing.T) {
 	assert.Equal(t, root, cfg.RepositoryRoot)
 	assert.Equal(t, filepath.Join(root, ".mch", "config.yaml"), cfg.ConfigPath)
 	assert.Equal(t, "http://backend.test", cfg.BackendURL)
-	assert.Equal(t, "/workspace/custom-mch", cfg.TempDir)
 	assert.Equal(t, 7, cfg.ProjectID)
 	assert.Equal(t, filepath.Join(root, ".mch", "default"), cfg.FlowDir)
 	assert.Equal(t, "default", cfg.Flow.Slug)
@@ -36,21 +35,40 @@ func TestAppConfigLoadsRepositoryMCHConfigFlowAndHelp(t *testing.T) {
 
 func TestAppConfigAllowsMissingAndZeroProjectID(t *testing.T) {
 	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
+	writeMCHFixture(t, root, "backend_url: http://backend.test\n")
 
 	missing, err := loadAppConfig(root)
 	require.NoError(t, err)
 	assert.Zero(t, missing.ProjectID)
 
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "config.yaml"), []byte("backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n"+"project_id: 0\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "config.yaml"), []byte("backend_url: http://backend.test\nproject_id: 0\n"), 0o644))
 	zero, err := loadAppConfig(root)
 	require.NoError(t, err)
 	assert.Zero(t, zero.ProjectID)
 }
 
-func TestSaveAppConfigPersistsRepositoryProjectIDAndTempDir(t *testing.T) {
+func TestAppConfigRequiresRepositoryMCHDirectoriesWithoutCreatingThem(t *testing.T) {
 	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n"+"project_id: 0\n")
+	_, err := loadAppConfig(root)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), filepath.Join(root, ".mch"))
+
+	require.NoError(t, os.Mkdir(filepath.Join(root, ".mch"), 0o755))
+	_, err = loadAppConfig(root)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), filepath.Join(root, ".mch", "tmp"))
+	_, statErr := os.Stat(filepath.Join(root, ".mch", "tmp"))
+	assert.True(t, os.IsNotExist(statErr))
+
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "tmp"), []byte("not a directory"), 0o644))
+	_, err = loadAppConfig(root)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "is not a directory")
+}
+
+func TestSaveAppConfigPersistsRepositoryProjectIDWithoutTempDir(t *testing.T) {
+	root := t.TempDir()
+	writeMCHFixture(t, root, "backend_url: http://backend.test\nproject_id: 0\n")
 	path := filepath.Join(root, ".mch", "config.yaml")
 	cfg, err := loadAppConfig(root)
 	require.NoError(t, err)
@@ -61,12 +79,11 @@ func TestSaveAppConfigPersistsRepositoryProjectIDAndTempDir(t *testing.T) {
 	loaded, err := loadAppConfig(root)
 	require.NoError(t, err)
 	assert.Equal(t, "http://backend.test", loaded.BackendURL)
-	assert.Equal(t, "/workspace/custom-mch", loaded.TempDir)
 	assert.Equal(t, 11, loaded.ProjectID)
 	body, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(body), "backend_url: http://backend.test")
-	assert.Contains(t, string(body), "temp_dir: /workspace/custom-mch")
+	assert.NotContains(t, string(body), "temp_dir")
 	assert.Contains(t, string(body), "project_id: 11")
 }
 
@@ -97,16 +114,16 @@ func TestAppConfigErrorsWithoutFallbackToLegacyConfig(t *testing.T) {
 	cfg, err := loadAppConfig(root)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), ".mch/config.yaml")
+	assert.Contains(t, err.Error(), ".mch")
 	assert.Equal(t, root, cfg.RepositoryRoot)
-	assert.Equal(t, filepath.Join(root, ".mch", "config.yaml"), cfg.ConfigPath)
+	assert.Empty(t, cfg.ConfigPath)
 	_, statErr := os.Stat(filepath.Join(root, ".mch", "config.yaml"))
 	assert.True(t, os.IsNotExist(statErr))
 }
 
 func TestAppConfigErrorsOnMalformedFlowAndEmptyHelpSlugs(t *testing.T) {
 	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
+	writeMCHFixture(t, root, "backend_url: http://backend.test\n")
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte("version: 1\nslug: default\nname: Default\nhelp: help.yaml\nmakefile: Makefile\nsteps: []\n"), 0o644))
 
 	_, err := loadAppConfig(root)
@@ -114,7 +131,7 @@ func TestAppConfigErrorsOnMalformedFlowAndEmptyHelpSlugs(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "flow steps are required")
 
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
+	writeMCHFixture(t, root, "backend_url: http://backend.test\n")
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "help.yaml"), []byte("stage_modes:\n  - slug: ''\n"), 0o644))
 
 	_, err = loadAppConfig(root)
@@ -125,7 +142,7 @@ func TestAppConfigErrorsOnMalformedFlowAndEmptyHelpSlugs(t *testing.T) {
 
 func TestAppConfigErrorsOnDuplicateFlowStepSlugAndMissingMode(t *testing.T) {
 	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
+	writeMCHFixture(t, root, "backend_url: http://backend.test\n")
 	flow := `version: 1
 slug: default
 name: Default
@@ -144,7 +161,7 @@ steps:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicates slug \"custom\"")
 
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
+	writeMCHFixture(t, root, "backend_url: http://backend.test\n")
 	flow = `version: 1
 slug: default
 name: Default
@@ -164,7 +181,7 @@ steps:
 
 func TestAppConfigAllowsCustomAndMissingFlowHelpOptions(t *testing.T) {
 	root := t.TempDir()
-	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
+	writeMCHFixture(t, root, "backend_url: http://backend.test\n")
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "help.yaml"), []byte("stage_modes:\n  - slug: custom-mode\n    help: custom mode\n"), 0o644))
 
 	cfg, err := loadAppConfig(root)
@@ -180,7 +197,6 @@ func testAppConfig(overrides appConfig) appConfig {
 		RepositoryRoot: "/repo",
 		ConfigPath:     "/repo/.mch/config.yaml",
 		BackendURL:     defaultBackendURL,
-		TempDir:        "/workspace/mch",
 		FlowDir:        "/repo/.mch/default",
 		Flow: flowConfig{
 			Version:        1,
@@ -208,9 +224,6 @@ func testAppConfig(overrides appConfig) appConfig {
 	if overrides.BackendURL != "" {
 		cfg.BackendURL = overrides.BackendURL
 	}
-	if overrides.TempDir != "" {
-		cfg.TempDir = overrides.TempDir
-	}
 	if overrides.ProjectID != 0 {
 		cfg.ProjectID = overrides.ProjectID
 	}
@@ -230,6 +243,7 @@ func writeMCHFixture(t *testing.T, root string, config string) {
 	t.Helper()
 	flowDir := filepath.Join(root, ".mch", "default")
 	require.NoError(t, os.MkdirAll(filepath.Join(flowDir, "prompts"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(root, ".mch", "tmp"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "config.yaml"), []byte(config), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte(testFlowYAML()), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "help.yaml"), []byte(testHelpYAML()), 0o644))

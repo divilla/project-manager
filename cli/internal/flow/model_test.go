@@ -2,7 +2,6 @@ package flow
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,657 +11,460 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type storeSave struct {
-	changeID int
-	artifact Artifact
-	content  []byte
-}
-
 type fakeStore struct {
-	data    map[Artifact][]byte
-	loads   []Artifact
-	saves   []storeSave
-	loadErr error
-	saveErr error
-	events  *[]string
+	content    []byte
+	loads      int
+	saves      int
+	provenance SaveProvenance
+	saveRun    func() error
 }
 
-func (s *fakeStore) Load(_ int, artifact Artifact) ([]byte, error) {
-	s.loads = append(s.loads, artifact)
-	if s.loadErr != nil {
-		return nil, s.loadErr
-	}
-	return append([]byte(nil), s.data[artifact]...), nil
+func (f *fakeStore) Load(int, Artifact) ([]byte, error) {
+	f.loads++
+	return append([]byte(nil), f.content...), nil
 }
 
-func (s *fakeStore) Save(changeID int, artifact Artifact, content []byte) error {
-	if s.events != nil {
-		*s.events = append(*s.events, "save")
+func (f *fakeStore) Save(_ int, _ Artifact, content []byte, provenance SaveProvenance) error {
+	f.saves++
+	f.content = append([]byte(nil), content...)
+	f.provenance = provenance
+	if f.saveRun != nil {
+		return f.saveRun()
 	}
-	if s.saveErr != nil {
-		return s.saveErr
-	}
-	s.saves = append(s.saves, storeSave{changeID: changeID, artifact: artifact, content: append([]byte(nil), content...)})
 	return nil
 }
 
 type fakeOperations struct {
-	editorContent      []byte
-	editorErr          error
-	editorCalls        int
-	execRun            func(ExecRequest) error
-	execCalls          int
-	execContext        context.Context
-	execRequest        ExecRequest
-	interactiveRun     func(InteractiveRequest) error
-	interactiveErr     error
-	interactiveCalls   int
-	interactiveRequest InteractiveRequest
-	previewResult      RenderResult
-	previewErr         error
-	previewCalls       int
-	diffResult         RenderResult
-	diffErr            error
-	diffCalls          int
-	events             *[]string
+	editorRun func(path string) error
+	execRun   func(ExecRequest) error
+	chatRun   func(ChatRequest) error
+	execCalls int
+	chatCalls int
 }
 
-func (o *fakeOperations) Editor(path string, _ string, done func(error) tea.Msg) tea.Cmd {
-	o.editorCalls++
+func (f *fakeOperations) Editor(path, _ string, done func(error) tea.Msg) tea.Cmd {
 	return func() tea.Msg {
-		if o.editorErr != nil {
-			return done(o.editorErr)
-		}
-		if o.editorContent != nil {
-			if err := os.WriteFile(path, o.editorContent, 0o644); err != nil {
-				return done(err)
-			}
+		if f.editorRun != nil {
+			return done(f.editorRun(path))
 		}
 		return done(nil)
 	}
 }
 
-func (o *fakeOperations) Exec(ctx context.Context, request ExecRequest, done func(error) tea.Msg) tea.Cmd {
-	o.execCalls++
-	o.execContext = ctx
-	o.execRequest = request
+func (f *fakeOperations) Exec(_ context.Context, request ExecRequest, done func(error) tea.Msg) tea.Cmd {
+	f.execCalls++
 	return func() tea.Msg {
-		if o.execRun == nil {
-			return done(nil)
-		}
-		return done(o.execRun(request))
-	}
-}
-
-func (o *fakeOperations) Interactive(_ context.Context, request InteractiveRequest, done func(error) tea.Msg) tea.Cmd {
-	o.interactiveCalls++
-	o.interactiveRequest = request
-	return func() tea.Msg {
-		if o.interactiveErr != nil {
-			return done(o.interactiveErr)
-		}
-		if o.interactiveRun != nil {
-			return done(o.interactiveRun(request))
+		if f.execRun != nil {
+			return done(f.execRun(request))
 		}
 		return done(nil)
 	}
 }
 
-func (o *fakeOperations) Preview(_ context.Context, _ string, _ string, _ string, done func(RenderResult, error) tea.Msg) tea.Cmd {
-	o.previewCalls++
-	if o.events != nil {
-		*o.events = append(*o.events, "preview")
+func (f *fakeOperations) Chat(_ context.Context, request ChatRequest, done func(error) tea.Msg) tea.Cmd {
+	f.chatCalls++
+	return func() tea.Msg {
+		if f.chatRun != nil {
+			return done(f.chatRun(request))
+		}
+		return done(nil)
 	}
-	return func() tea.Msg { return done(o.previewResult, o.previewErr) }
 }
 
-func (o *fakeOperations) Diff(_ context.Context, _ string, _ string, _ string, _ string, done func(RenderResult, error) tea.Msg) tea.Cmd {
-	o.diffCalls++
-	return func() tea.Msg { return done(o.diffResult, o.diffErr) }
+func (*fakeOperations) Preview(_ context.Context, path, _, _ string, done func(RenderResult, error) tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		content, err := os.ReadFile(path)
+		return done(RenderResult{Output: string(content)}, err)
+	}
 }
 
-func TestEditorStepLifecycleLoadsComparesSavesAndPreviews(t *testing.T) {
-	for _, test := range []struct {
-		name         string
-		artifact     Artifact
-		edited       []byte
-		expectedSave int
-	}{
-		{name: "unchanged Idea", artifact: ArtifactIdea, edited: nil, expectedSave: 0},
-		{name: "changed Idea", artifact: ArtifactIdea, edited: []byte("changed idea"), expectedSave: 1},
-		{name: "changed Spec", artifact: ArtifactSpec, edited: []byte("changed spec"), expectedSave: 1},
-		{name: "changed PR", artifact: ArtifactPR, edited: []byte("changed pr"), expectedSave: 1},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			tempDir := t.TempDir()
-			events := []string{}
-			store := &fakeStore{data: map[Artifact][]byte{test.artifact: []byte("persisted")}, events: &events}
-			operations := &fakeOperations{editorContent: test.edited, previewResult: RenderResult{Output: "rendered"}, events: &events}
-			model := composeTestModel(t, editorDefinition(test.artifact), "edit", tempDir, store, operations)
+func (*fakeOperations) Diff(_ context.Context, input, output, _, _ string, done func(RenderResult, error) tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		left, leftErr := os.ReadFile(input)
+		right, rightErr := os.ReadFile(output)
+		if leftErr != nil {
+			return done(RenderResult{}, leftErr)
+		}
+		if rightErr != nil {
+			return done(RenderResult{}, rightErr)
+		}
+		status := 0
+		if string(left) != string(right) {
+			status = 1
+		}
+		return done(RenderResult{Output: string(right), Status: status}, nil)
+	}
+}
 
-			var command tea.Cmd = model.Init()
-			require.NotNil(t, command)
-			message := command()
-			inputPath := filepath.Join(tempDir, string(test.artifact), inputFileName)
-			outputPath := filepath.Join(tempDir, string(test.artifact), outputFileName)
-			assertFileContent(t, inputPath, "persisted")
-			assertFileContent(t, outputPath, "persisted")
+func TestEditorCanonicalSaveNoOpAndValidationRecovery(t *testing.T) {
+	t.Run("changed canonical output saves as user before Preview", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Old\n\nBody")}
+		operations := &fakeOperations{editorRun: func(path string) error {
+			return os.WriteFile(path, []byte("# New\r\n\r\nTypes: test | feature\r\n\r\nBody"), 0o644)
+		}}
+		model, cmd := composeIdeaModel(t, IdeaEdit, ChangeDetailsTerminal, store, operations)
+		for cmd != nil {
+			model, cmd = drive(t, model, cmd)
+		}
+		assert.Equal(t, IdeaEditPreview, model.Screen())
+		assert.Equal(t, SaveByUser, store.provenance)
+		assert.Equal(t, "# New\n\nTypes: feature|test\n\nBody", string(store.content))
+		assert.Equal(t, []CommandID{"/continue", "/edit", "/cancel"}, model.Commands())
+		assert.Equal(t, WorkspaceArtifact, model.FlowContext().WorkspaceScope)
+		artifactWorkspace := Workspace{Root: model.FlowContext().Root, ChangeRef: testRefUUID, Artifact: ArtifactIdea}
+		artifactInputPath, err := artifactWorkspace.InputPath()
+		require.NoError(t, err)
+		artifactInput, err := os.ReadFile(artifactInputPath)
+		require.NoError(t, err)
+		artifactOutputPath, err := artifactWorkspace.OutputPath()
+		require.NoError(t, err)
+		artifactOutput, err := os.ReadFile(artifactOutputPath)
+		require.NoError(t, err)
+		assert.Equal(t, "# Old\n\nBody", string(artifactInput))
+		assert.Equal(t, "# New\n\nTypes: feature|test\n\nBody", string(artifactOutput))
+	})
 
-			model, command = applyUpdate(t, model, message)
-			assert.Equal(t, ScreenID("editor"), model.Screen())
-			model = drainCommands(t, model, command, 5)
+	t.Run("canonical byte-identical output returns to caller", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Same\n\nTypes: feature|test\n\nBody")}
+		operations := &fakeOperations{editorRun: func(path string) error {
+			return os.WriteFile(path, []byte("# Same\n\nTypes: test | feature\n\nBody"), 0o644)
+		}}
+		model, cmd := composeIdeaModel(t, IdeaEdit, ChangeDetailsTerminal, store, operations)
+		for cmd != nil {
+			model, cmd = drive(t, model, cmd)
+		}
+		assert.True(t, model.Done())
+		assert.Equal(t, ChangeDetailsTerminal, model.TerminalScreen())
+		assert.Zero(t, store.saves)
+	})
 
-			assert.NoError(t, model.Error())
-			assert.Equal(t, ScreenID("preview"), model.Screen())
-			assert.Equal(t, "rendered", model.Rendered())
-			assert.Len(t, store.loads, 1)
-			assert.Len(t, store.saves, test.expectedSave)
-			assertFileContent(t, inputPath, "persisted")
-			if test.expectedSave == 1 {
-				assert.Equal(t, test.edited, store.saves[0].content)
-				assert.Equal(t, []string{"save", "preview"}, events)
-			} else {
-				assert.Equal(t, []string{"preview"}, events)
+	t.Run("publish failure enters Error after save", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Old\n\nBody")}
+		operations := &fakeOperations{editorRun: func(path string) error {
+			return os.WriteFile(path, []byte("# New\n\nBody"), 0o644)
+		}}
+		model, cmd := composeIdeaModel(t, IdeaEdit, ChangeDetailsTerminal, store, operations)
+		editorWorkspace := Workspace{
+			Root: model.FlowContext().Root, ChangeRef: testRefUUID, Artifact: ArtifactIdea, Scope: WorkspaceEditor,
+		}
+		store.saveRun = func() error {
+			outputPath, err := editorWorkspace.OutputPath()
+			if err != nil {
+				return err
 			}
-		})
-	}
-}
-
-func TestEditorFailuresAndSaveFailuresEnterErrorWithoutPreview(t *testing.T) {
-	tests := []struct {
-		name      string
-		editorErr error
-		saveErr   error
-		expected  string
-	}{
-		{name: "editor failure", editorErr: errors.New("editor unavailable"), expected: "editor unavailable"},
-		{name: "save failure", saveErr: errors.New("backend unavailable"), expected: "backend unavailable"},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("before")}, saveErr: test.saveErr}
-			operations := &fakeOperations{editorContent: []byte("after"), editorErr: test.editorErr}
-			model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", t.TempDir(), store, operations)
-
-			model, command := applyUpdate(t, model, model.Init()())
-			model = drainCommands(t, model, command, 5)
-
-			require.Error(t, model.Error())
-			assert.Contains(t, model.Error().Error(), test.expected)
-			assert.Equal(t, ScreenID("error"), model.Screen())
-			assert.Equal(t, []CommandID{"/return"}, model.Commands())
-			assert.Equal(t, 0, operations.previewCalls)
-		})
-	}
-}
-
-func TestExecExactOutputStopAndInteractiveContinuation(t *testing.T) {
-	t.Run("exact final line completes and saves", func(t *testing.T) {
-		tempDir := t.TempDir()
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactSpec: []byte("before")}}
-		operations := &fakeOperations{previewResult: RenderResult{Output: "spec preview"}}
-		operations.execRun = func(request ExecRequest) error {
-			require.NoError(t, os.WriteFile(filepath.Join(request.Workspace, outputFileName), []byte("after"), 0o644))
-			return os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), []byte("details\nNo blocking issues found.\n"), 0o644)
+			return os.Remove(outputPath)
 		}
-		model := composeTestModel(t, ConformanceDefinition(), "spec-review", tempDir, store, operations)
-
-		model, command := applyUpdate(t, model, model.Init()())
-		assert.Equal(t, []CommandID{"/stop"}, model.Commands())
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-
-		assert.Nil(t, command)
-		assert.NoError(t, model.Error())
-		assert.Equal(t, ScreenID("spec-preview"), model.Screen())
-		assert.Equal(t, "spec preview", model.Rendered())
-		require.Len(t, store.saves, 1)
-		assert.Equal(t, []byte("after"), store.saves[0].content)
-	})
-
-	t.Run("stop cancels and returns without save", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactSpec: []byte("before")}}
-		operations := &fakeOperations{}
-		model := composeTestModel(t, ConformanceDefinition(), "spec-review", t.TempDir(), store, operations)
-		model, _ = applyUpdate(t, model, model.Init()())
-		require.NotNil(t, operations.execContext)
-
-		model, command := applyUpdate(t, model, CommandMsg{ID: "/stop"})
-
-		assert.Nil(t, command)
-		assert.True(t, model.Done())
-		assert.Equal(t, ScreenID("changes"), model.TerminalScreen())
-		assert.Empty(t, store.saves)
-		select {
-		case <-operations.execContext.Done():
-		default:
-			t.Fatal("expected active Exec context to be cancelled")
+		for index := 0; index < 4; index++ {
+			model, cmd = drive(t, model, cmd)
 		}
-	})
-
-	t.Run("non-matching output enters Interactive and edit reuses baseline", func(t *testing.T) {
-		tempDir := t.TempDir()
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactSpec: []byte("before")}}
-		operations := &fakeOperations{editorContent: []byte("edited"), previewResult: RenderResult{Output: "preview"}}
-		operations.execRun = func(request ExecRequest) error {
-			return os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), []byte("questions remain\n"), 0o644)
-		}
-		model := composeTestModel(t, ConformanceDefinition(), "spec-review", tempDir, store, operations)
-
-		model, command := applyUpdate(t, model, model.Init()())
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-		assert.Nil(t, command)
-
-		assert.Equal(t, ScreenID("interactive"), model.Screen())
-		assert.Equal(t, []CommandID{"/interactive", "/edit", "/cancel"}, model.Commands())
-		assert.Contains(t, model.View(), "questions remain")
-		assert.Len(t, store.loads, 1)
-		model, command = applyUpdate(t, model, CommandMsg{ID: "/edit"})
-		model = drainCommands(t, model, command, 5)
-
-		assert.Equal(t, ScreenID("spec-preview"), model.Screen())
-		assert.Len(t, store.loads, 1)
-		require.Len(t, store.saves, 1)
-		assertFileContent(t, filepath.Join(tempDir, string(ArtifactSpec), inputFileName), "before")
-	})
-
-	t.Run("execution failure enters Error without save", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactSpec: []byte("before")}}
-		operations := &fakeOperations{execRun: func(ExecRequest) error { return errors.New("exec failed") }}
-		model := composeTestModel(t, ConformanceDefinition(), "spec-review", t.TempDir(), store, operations)
-		model, command := applyUpdate(t, model, model.Init()())
-		model, _ = applyUpdate(t, model, command())
-
+		assert.Equal(t, GenericErrorScreen, model.Screen())
 		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "exec failed")
-		assert.Empty(t, store.saves)
-		assert.Equal(t, 0, operations.previewCalls)
-	})
-}
-
-func TestInteractiveSessionEntryCompletionFailureAndCancel(t *testing.T) {
-	t.Run("entry does not start session and missing session enters Error", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactPR: []byte("pr")}}
-		operations := &fakeOperations{}
-		model := composeTestModel(t, ConformanceDefinition(), "pr-review", t.TempDir(), store, operations)
-
-		model, command := applyUpdate(t, model, model.Init()())
-		assert.Equal(t, 0, operations.interactiveCalls)
-		require.NotNil(t, command)
-		model, _ = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, CommandMsg{ID: "/interactive"})
-		model, _ = applyUpdate(t, model, command())
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "session-id")
-		assert.Equal(t, 0, operations.interactiveCalls)
-		assert.Empty(t, store.saves)
+		assert.Contains(t, model.Error().Error(), "read Editor output.md")
+		assert.Equal(t, 1, store.saves)
 	})
 
-	t.Run("successful session completes through save before Preview", func(t *testing.T) {
-		tempDir := t.TempDir()
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactPR: []byte("before")}}
-		operations := &fakeOperations{previewResult: RenderResult{Output: "preview"}}
-		operations.interactiveRun = func(request InteractiveRequest) error {
-			return os.WriteFile(filepath.Join(request.Workspace, outputFileName), []byte("after"), 0o644)
+	t.Run("invalid output offers fix and cancel", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Old\n\n")}
+		operations := &fakeOperations{editorRun: func(path string) error {
+			return os.WriteFile(path, []byte("not a title"), 0o644)
+		}}
+		model, cmd := composeIdeaModel(t, IdeaEdit, ChangeDetailsTerminal, store, operations)
+		for index := 0; index < 4; index++ {
+			model, cmd = drive(t, model, cmd)
 		}
-		model := composeTestModel(t, ConformanceDefinition(), "pr-review", tempDir, store, operations)
-		model, optionalOutput := applyUpdate(t, model, model.Init()())
-		model, _ = applyUpdate(t, model, optionalOutput())
-		require.NoError(t, os.WriteFile(filepath.Join(tempDir, string(ArtifactPR), sessionFileName), []byte("session-123\n"), 0o644))
-
-		model, command := applyUpdate(t, model, CommandMsg{ID: "/interactive"})
-		model, command = applyUpdate(t, model, command())
-		assert.Equal(t, "session-123", operations.interactiveRequest.SessionID)
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-
-		assert.Nil(t, command)
-		assert.NoError(t, model.Error())
-		assert.Equal(t, ScreenID("pr-preview"), model.Screen())
-		require.Len(t, store.saves, 1)
-		assert.Equal(t, []byte("after"), store.saves[0].content)
-	})
-
-	t.Run("cancel returns to origin without save", func(t *testing.T) {
-		tempDir := t.TempDir()
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactPR: []byte("before")}}
-		model := composeTestModel(t, ConformanceDefinition(), "pr-review", tempDir, store, &fakeOperations{})
-		model, _ = applyUpdate(t, model, model.Init()())
-		require.NoError(t, os.WriteFile(filepath.Join(tempDir, string(ArtifactPR), outputFileName), []byte("local change"), 0o644))
-
-		model, command := applyUpdate(t, model, CommandMsg{ID: "/cancel"})
-
-		assert.Nil(t, command)
-		assert.True(t, model.Done())
-		assert.Equal(t, ScreenID("changes"), model.TerminalScreen())
-		assert.Empty(t, store.saves)
-	})
-
-	t.Run("session failure enters Error without save", func(t *testing.T) {
-		tempDir := t.TempDir()
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactPR: []byte("before")}}
-		operations := &fakeOperations{interactiveErr: errors.New("resume failed")}
-		model := composeTestModel(t, ConformanceDefinition(), "pr-review", tempDir, store, operations)
-		model, optionalOutput := applyUpdate(t, model, model.Init()())
-		model, _ = applyUpdate(t, model, optionalOutput())
-		require.NoError(t, os.WriteFile(filepath.Join(tempDir, string(ArtifactPR), sessionFileName), []byte("session"), 0o644))
-		model, command := applyUpdate(t, model, CommandMsg{ID: "/interactive"})
-		model, command = applyUpdate(t, model, command())
-		model, _ = applyUpdate(t, model, command())
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "resume failed")
-		assert.Empty(t, store.saves)
-		assert.Equal(t, 0, operations.previewCalls)
+		assert.Equal(t, []CommandID{"/fix", "/cancel"}, model.Commands())
+		require.Error(t, model.ValidationError())
+		assert.Equal(t, "# Title parsing failed", model.ValidationError().Error())
+		updated, _ := model.Update(CommandMsg{ID: "/cancel"})
+		model = updated.(Model)
+		assert.Equal(t, ChangeDetailsTerminal, model.TerminalScreen())
+		assert.Zero(t, store.saves)
 	})
 }
 
-func TestPreviewNavigationTogglingAndRenderingErrors(t *testing.T) {
-	t.Run("Step destination fresh-loads and terminal destination does not", func(t *testing.T) {
-		definition := twoEditorStepDefinition()
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea"), ArtifactSpec: []byte("spec")}}
-		operations := &fakeOperations{previewResult: RenderResult{Output: "preview"}}
-		model := composeTestModel(t, definition, "idea", t.TempDir(), store, operations)
-		model = completeUnchangedEditor(t, model)
-
-		model, command := applyUpdate(t, model, CommandMsg{ID: "/anything"})
-		require.NotNil(t, command)
-		model, command = applyUpdate(t, model, command())
-		assert.Equal(t, []Artifact{ArtifactIdea, ArtifactSpec}, store.loads)
-		assert.Equal(t, ScreenID("editor"), model.Screen())
-		assertFileContent(t, filepath.Join(model.FlowContext().TempDir, string(ArtifactSpec), inputFileName), "spec")
-		assert.NotNil(t, command)
-
-		model = completeUnchangedEditorFromCommand(t, model, command)
-		loadsBefore := len(store.loads)
-		model, command = applyUpdate(t, model, CommandMsg{ID: "/done"})
-		assert.Nil(t, command)
-		assert.True(t, model.Done())
-		assert.Equal(t, ScreenID("changes"), model.TerminalScreen())
-		assert.Len(t, store.loads, loadsBefore)
+func TestExecTraversesOrderedChatAndSynthesizesPreviewChat(t *testing.T) {
+	t.Run("matching output skips Chat", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Idea\n\nBody")}
+		operations := &fakeOperations{execRun: func(request ExecRequest) error {
+			require.Equal(t, TmpDir, commandTempDirForTest(request))
+			return os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), []byte("Done.\n"), 0o644)
+		}}
+		model, cmd := composeIdeaModel(t, IdeaRewriteExec, ChangesListTerminal, store, operations)
+		for index := 0; index < 5; index++ {
+			model, cmd = drive(t, model, cmd)
+		}
+		assert.Equal(t, IdeaRewritePreview, model.Screen())
+		assert.Zero(t, operations.chatCalls)
+		assert.Equal(t, []CommandID{"/continue", "/chat", "/edit", "/cancel"}, model.Commands())
+		updated, chatCommand := model.Update(CommandMsg{ID: "/chat"})
+		model = updated.(Model)
+		assert.Equal(t, IdeaRewriteChat, model.Screen())
+		assert.Empty(t, model.Commands())
+		assert.NotContains(t, model.View(), "/chat")
+		updated, prematureCommand := model.Update(CommandMsg{ID: "/chat"})
+		model = updated.(Model)
+		assert.Nil(t, prematureCommand)
+		assert.Zero(t, operations.chatCalls)
+		model, _ = drive(t, model, chatCommand)
+		assert.Equal(t, IdeaRewriteChat, model.Screen())
+		assert.Equal(t, []CommandID{"/chat", "/edit", "/cancel"}, model.Commands())
+		assert.Equal(t, IdeaRewriteExec, model.FlowContext().Step)
+		assert.Equal(t, 1, model.FlowContext().TaskIndex)
+		assert.Equal(t, 2, store.loads)
 	})
 
-	t.Run("both horizontal arrows toggle Preview and Diff", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea")}}
+	t.Run("unexpected output advances to Chat and Chat completion reaches Preview", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Idea\n\nBody")}
 		operations := &fakeOperations{
-			previewResult: RenderResult{Output: "preview"},
-			diffResult:    RenderResult{Output: "diff", Status: 1},
+			execRun: func(request ExecRequest) error {
+				require.NoError(t, os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), []byte("Needs work\n"), 0o644))
+				return os.WriteFile(filepath.Join(request.Workspace, sessionFileName), []byte(testRefUUID), 0o644)
+			},
+			chatRun: func(request ChatRequest) error {
+				return os.WriteFile(filepath.Join(request.Workspace, outputFileName), []byte("# Idea\n\nImproved"), 0o644)
+			},
 		}
-		model := completeUnchangedEditor(t, composeTestModel(t, editorDefinition(ArtifactIdea), "edit", t.TempDir(), store, operations))
-
-		model, command := applyUpdate(t, model, tea.KeyMsg{Type: tea.KeyLeft})
-		model, _ = applyUpdate(t, model, command())
-		assert.Equal(t, PreviewDiff, model.Mode())
-		assert.Equal(t, "diff", model.Rendered())
-		model, command = applyUpdate(t, model, tea.KeyMsg{Type: tea.KeyRight})
-		model, _ = applyUpdate(t, model, command())
-		assert.Equal(t, PreviewArtifact, model.Mode())
-		assert.Equal(t, "preview", model.Rendered())
+		model, cmd := composeIdeaModel(t, IdeaRewriteExec, ChangesListTerminal, store, operations)
+		for index := 0; index < 4; index++ {
+			model, cmd = drive(t, model, cmd)
+		}
+		assert.Equal(t, IdeaRewriteChat, model.Screen())
+		assert.Empty(t, model.Commands())
+		assert.NotContains(t, model.View(), "/chat")
+		model, _ = drive(t, model, cmd)
+		assert.Equal(t, []CommandID{"/chat", "/edit", "/cancel"}, model.Commands())
+		assert.Contains(t, model.View(), "Needs work")
+		updated, cmd := model.Update(CommandMsg{ID: "/chat"})
+		model = updated.(Model)
+		for index := 0; index < 4; index++ {
+			model, cmd = drive(t, model, cmd)
+		}
+		assert.Equal(t, IdeaRewritePreview, model.Screen())
+		assert.Equal(t, SaveByAgent, store.provenance)
+		assert.Equal(t, "# Idea\n\nImproved", string(store.content))
 	})
 
-	t.Run("Git status zero is a successful identical Diff", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea")}}
+	t.Run("empty readable output advances to Chat", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Idea\n\nBody")}
+		operations := &fakeOperations{execRun: func(request ExecRequest) error {
+			return os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), nil, 0o644)
+		}}
+		model, cmd := composeIdeaModel(t, IdeaRewriteExec, ChangesListTerminal, store, operations)
+		for index := 0; index < 5; index++ {
+			model, cmd = drive(t, model, cmd)
+		}
+		assert.Equal(t, IdeaRewriteChat, model.Screen())
+	})
+
+	t.Run("byte-identical Edit preserves the exact Preview workspace", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Idea\n\nOriginal")}
+		operations := &fakeOperations{execRun: func(request ExecRequest) error {
+			require.NoError(t, os.WriteFile(filepath.Join(request.Workspace, outputFileName), []byte("# Idea\n\nRewritten"), 0o644))
+			return os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), []byte("Done.\n"), 0o644)
+		}}
+		model, cmd := composeIdeaModel(t, IdeaRewriteExec, ChangesListTerminal, store, operations)
+		for index := 0; index < 5; index++ {
+			model, cmd = drive(t, model, cmd)
+		}
+		require.Equal(t, IdeaRewritePreview, model.Screen())
+		artifactWorkspace := Workspace{Root: model.FlowContext().Root, ChangeRef: testRefUUID, Artifact: ArtifactIdea}
+
+		updated, cmd := model.Update(CommandMsg{ID: "/edit"})
+		model = updated.(Model)
+		for cmd != nil {
+			model, cmd = drive(t, model, cmd)
+		}
+
+		assert.Equal(t, IdeaRewritePreview, model.Screen())
+		assert.Equal(t, WorkspaceArtifact, model.FlowContext().WorkspaceScope)
+		assert.Equal(t, 1, store.saves)
+		inputPath, err := artifactWorkspace.InputPath()
+		require.NoError(t, err)
+		input, err := os.ReadFile(inputPath)
+		require.NoError(t, err)
+		outputPath, err := artifactWorkspace.OutputPath()
+		require.NoError(t, err)
+		output, err := os.ReadFile(outputPath)
+		require.NoError(t, err)
+		assert.Equal(t, "# Idea\n\nOriginal", string(input))
+		assert.Equal(t, "# Idea\n\nRewritten", string(output))
+
+		updated, cmd = model.Update(tea.KeyMsg{Type: tea.KeyLeft})
+		model = updated.(Model)
+		model, _ = drive(t, model, cmd)
+		assert.Equal(t, PreviewDiff, model.Mode())
+	})
+
+	t.Run("byte-identical Edit restores the exact Chat caller", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Idea\n\nBody")}
+		operations := &fakeOperations{execRun: func(request ExecRequest) error {
+			return os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), []byte("Needs work"), 0o644)
+		}}
+		model, cmd := composeIdeaModel(t, IdeaRewriteExec, ChangesListTerminal, store, operations)
+		for index := 0; index < 5; index++ {
+			model, cmd = drive(t, model, cmd)
+		}
+		updated, cmd := model.Update(CommandMsg{ID: "/edit"})
+		model = updated.(Model)
+		for cmd != nil {
+			model, cmd = drive(t, model, cmd)
+		}
+		assert.Equal(t, IdeaRewriteChat, model.Screen())
+		assert.Equal(t, IdeaRewriteExec, model.FlowContext().Step)
+		assert.Equal(t, TaskID("IdeaRewriteChatTask"), model.FlowContext().Task)
+		assert.Equal(t, 1, model.FlowContext().TaskIndex)
+		assert.Contains(t, model.View(), "Needs work")
+		assert.Zero(t, store.saves)
+	})
+}
+
+func TestPendingOperationsBlockCommandsAndIgnoreStaleReplies(t *testing.T) {
+	t.Run("Chat save blocks overlapping commands", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Idea\n\nBody")}
 		operations := &fakeOperations{
-			previewResult: RenderResult{Output: "preview"},
-			diffResult:    RenderResult{Output: "identical", Status: 0},
+			execRun: func(request ExecRequest) error {
+				require.NoError(t, os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), []byte("Needs work\n"), 0o644))
+				return os.WriteFile(filepath.Join(request.Workspace, sessionFileName), []byte(testRefUUID), 0o644)
+			},
+			chatRun: func(request ChatRequest) error {
+				return os.WriteFile(filepath.Join(request.Workspace, outputFileName), []byte("# Idea\n\nImproved"), 0o644)
+			},
 		}
-		model := completeUnchangedEditor(t, composeTestModel(t, editorDefinition(ArtifactIdea), "edit", t.TempDir(), store, operations))
-		model, command := applyUpdate(t, model, tea.KeyMsg{Type: tea.KeyLeft})
-		model, _ = applyUpdate(t, model, command())
+		model, command := composeIdeaModel(t, IdeaRewriteExec, ChangesListTerminal, store, operations)
+		for index := 0; index < 5; index++ {
+			model, command = drive(t, model, command)
+		}
 
-		assert.NoError(t, model.Error())
-		assert.Equal(t, PreviewDiff, model.Mode())
-		assert.Equal(t, "identical", model.Rendered())
+		updated, command := model.Update(CommandMsg{ID: "/chat"})
+		model = updated.(Model)
+		model, chatCommand := drive(t, model, command)
+		assert.Empty(t, model.Commands())
+		require.NotNil(t, chatCommand)
+
+		chatResult := chatCommand()
+		updated, saveCommand := model.Update(chatResult)
+		model = updated.(Model)
+		require.NotNil(t, saveCommand)
+		assert.Empty(t, model.Commands())
+		assert.Zero(t, store.saves)
+		assert.Equal(t, 1, operations.chatCalls)
+
+		for _, commandID := range []CommandID{"/chat", "/edit", "/cancel"} {
+			updated, overlappingCommand := model.Update(CommandMsg{ID: commandID})
+			model = updated.(Model)
+			assert.Nil(t, overlappingCommand)
+		}
+		assert.Equal(t, IdeaRewriteChat, model.Screen())
+		assert.Equal(t, 1, operations.chatCalls)
+
+		updated, staleCommand := model.Update(chatResult)
+		model = updated.(Model)
+		assert.Nil(t, staleCommand)
+		assert.Zero(t, store.saves)
+
+		saveResult := saveCommand()
+		updated, renderCommand := model.Update(saveResult)
+		model = updated.(Model)
+		assert.Equal(t, IdeaRewritePreview, model.Screen())
+		assert.Empty(t, model.Commands())
+		assert.Equal(t, 1, store.saves)
+
+		updated, staleCommand = model.Update(saveResult)
+		model = updated.(Model)
+		assert.Nil(t, staleCommand)
+		assert.Equal(t, 1, store.saves)
+
+		model, _ = drive(t, model, renderCommand)
+		assert.Equal(t, []CommandID{"/continue", "/chat", "/edit", "/cancel"}, model.Commands())
 	})
 
-	t.Run("Git status greater than one enters Error", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea")}}
-		operations := &fakeOperations{previewResult: RenderResult{Output: "preview"}, diffResult: RenderResult{Status: 2}}
-		model := completeUnchangedEditor(t, composeTestModel(t, editorDefinition(ArtifactIdea), "edit", t.TempDir(), store, operations))
+	t.Run("Preview destination load blocks commands and stale load replies", func(t *testing.T) {
+		store := &fakeStore{content: []byte("# Idea\n\nBody")}
+		operations := &fakeOperations{execRun: func(request ExecRequest) error {
+			return os.WriteFile(filepath.Join(request.Workspace, agentOutputFileName), []byte("Done.\n"), 0o644)
+		}}
+		model, command := composeIdeaModel(t, IdeaRewriteExec, ChangesListTerminal, store, operations)
+		for command != nil {
+			model, command = drive(t, model, command)
+		}
 
-		model, command := applyUpdate(t, model, tea.KeyMsg{Type: tea.KeyRight})
-		model, _ = applyUpdate(t, model, command())
+		updated, loadCommand := model.Update(CommandMsg{ID: "/continue"})
+		model = updated.(Model)
+		require.NotNil(t, loadCommand)
+		assert.Empty(t, model.Commands())
 
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "status 2")
-		assert.Equal(t, ScreenID("error"), model.Screen())
-	})
+		updated, overlappingCommand := model.Update(CommandMsg{ID: "/edit"})
+		model = updated.(Model)
+		assert.Nil(t, overlappingCommand)
+		assert.Equal(t, IdeaRewritePreview, model.Screen())
 
-	t.Run("renderer failure enters Error", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea")}}
-		operations := &fakeOperations{previewErr: errors.New("bat failed")}
-		model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", t.TempDir(), store, operations)
-		model, command := applyUpdate(t, model, model.Init()())
-		model = drainCommands(t, model, command, 5)
+		loaded := loadCommand()
+		updated, execCommand := model.Update(loaded)
+		model = updated.(Model)
+		require.NotNil(t, execCommand)
+		assert.Equal(t, IdeaReviewExec, model.FlowContext().Step)
+		assert.Equal(t, 2, operations.execCalls)
 
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "bat failed")
-		assert.Equal(t, ScreenID("error"), model.Screen())
-	})
-
-	t.Run("unsupported Preview artifact enters Error", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactImplement: []byte("implementation")}}
-		operations := &fakeOperations{}
-		model := composeTestModel(t, editorDefinition(ArtifactImplement), "edit", t.TempDir(), store, operations)
-		model, command := applyUpdate(t, model, model.Init()())
-		model = drainCommands(t, model, command, 5)
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "does not support artifact")
-		assert.Equal(t, 0, operations.previewCalls)
-	})
-}
-
-func TestTaskSpecificMissingResourcesEnterErrorBeforeExternalOperation(t *testing.T) {
-	t.Run("Editor requires output.md", func(t *testing.T) {
-		tempDir := t.TempDir()
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea")}}
-		operations := &fakeOperations{}
-		model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", tempDir, store, operations)
-		model, command := applyUpdate(t, model, model.Init()())
-		require.NoError(t, os.Remove(filepath.Join(tempDir, string(ArtifactIdea), outputFileName)))
-		model, _ = applyUpdate(t, model, command())
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "output.md")
-		assert.Equal(t, 0, operations.editorCalls)
-	})
-
-	t.Run("Exec requires agent-output.md", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactSpec: []byte("spec")}}
-		operations := &fakeOperations{}
-		model := composeTestModel(t, ConformanceDefinition(), "spec-review", t.TempDir(), store, operations)
-		model, command := applyUpdate(t, model, model.Init()())
-		model, command = applyUpdate(t, model, command())
-		model, _ = applyUpdate(t, model, command())
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "agent-output.md")
-		assert.Empty(t, store.saves)
-	})
-
-	t.Run("Preview requires input.md and output.md", func(t *testing.T) {
-		tempDir := t.TempDir()
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea")}}
-		operations := &fakeOperations{}
-		model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", tempDir, store, operations)
-		model, command := applyUpdate(t, model, model.Init()())
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-		model, command = applyUpdate(t, model, command())
-		require.NoError(t, os.Remove(filepath.Join(tempDir, string(ArtifactIdea), inputFileName)))
-		model, _ = applyUpdate(t, model, command())
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "input.md")
-		assert.Equal(t, 0, operations.previewCalls)
+		updated, staleCommand := model.Update(loaded)
+		model = updated.(Model)
+		assert.Nil(t, staleCommand)
+		assert.Equal(t, IdeaReviewExec, model.FlowContext().Step)
+		assert.Equal(t, 2, operations.execCalls)
 	})
 }
 
-func TestChangedInputBaselineFailsStepWithoutPersistence(t *testing.T) {
-	tempDir := t.TempDir()
-	store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("baseline")}}
-	operations := &fakeOperations{editorContent: []byte("output")}
-	model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", tempDir, store, operations)
-	model, command := applyUpdate(t, model, model.Init()())
-	model, command = applyUpdate(t, model, command())
-	editorFinished := command()
-	require.NoError(t, os.WriteFile(filepath.Join(tempDir, string(ArtifactIdea), inputFileName), []byte("tampered"), 0o644))
-	model, command = applyUpdate(t, model, editorFinished)
-	model, _ = applyUpdate(t, model, command())
-
-	require.Error(t, model.Error())
-	assert.Contains(t, model.Error().Error(), "input.md changed")
-	assert.Empty(t, store.saves)
-	assert.Equal(t, 0, operations.previewCalls)
-}
-
-func TestWorkspaceAndLoadFailuresEnterConcreteError(t *testing.T) {
-	t.Run("missing temp_dir prevents load", func(t *testing.T) {
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea")}}
-		model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", "", store, &fakeOperations{})
-		model, _ = applyUpdate(t, model, model.Init()())
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "temp_dir")
-		assert.Empty(t, store.loads)
-	})
-
-	t.Run("load failure", func(t *testing.T) {
-		store := &fakeStore{loadErr: errors.New("backend down")}
-		model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", t.TempDir(), store, &fakeOperations{})
-		model, _ = applyUpdate(t, model, model.Init()())
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "backend down")
-	})
-
-	t.Run("artifact directory creation failure", func(t *testing.T) {
-		tempDir := t.TempDir()
-		require.NoError(t, os.WriteFile(filepath.Join(tempDir, string(ArtifactIdea)), []byte("not a directory"), 0o644))
-		store := &fakeStore{data: map[Artifact][]byte{ArtifactIdea: []byte("idea")}}
-		model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", tempDir, store, &fakeOperations{})
-		model, _ = applyUpdate(t, model, model.Init()())
-
-		require.Error(t, model.Error())
-		assert.Contains(t, model.Error().Error(), "artifact workspace")
-	})
-}
-
-func TestErrorReturnUsesRecordedOrigin(t *testing.T) {
-	store := &fakeStore{loadErr: errors.New("failed")}
-	model := composeTestModel(t, editorDefinition(ArtifactIdea), "edit", t.TempDir(), store, &fakeOperations{})
-	model, _ = applyUpdate(t, model, model.Init()())
-
-	model, command := applyUpdate(t, model, CommandMsg{ID: "/return"})
-
-	assert.Nil(t, command)
-	assert.True(t, model.Done())
-	assert.Equal(t, ScreenID("changes"), model.TerminalScreen())
-}
-
-func composeTestModel(t *testing.T, definition Definition, step StepID, tempDir string, store ArtifactStore, operations Operations) Model {
-	t.Helper()
+func TestSameStepChatEditorDestinationRemainsRepresentable(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, TmpDir), 0o755))
+	store := &fakeStore{content: []byte("# PR\n\nBody")}
+	operations := &fakeOperations{}
 	model := Compose(Composition{
-		Definition: definition,
+		Definition: ConformanceDefinition(),
 		Context: Context{
-			TempDir:   tempDir,
-			FlowDir:   "/flow",
-			ChangeID:  42,
-			ChangeRef: "ref-42",
-			Origin:    "changes",
-			Step:      step,
+			Root: root, FlowDir: root, ChangeID: 1, ChangeRef: testRefUUID,
+			Origin: ChangeDetailsTerminal, Step: "pr-chat",
 		},
-		TerminalScreens: []ScreenID{"changes"},
+		TerminalScreens: ideaTerminals,
 		Store:           store,
+		Options:         &fakeDocumentOptions{},
 		Operations:      operations,
 	})
 	require.NoError(t, model.Error())
-	return model
-}
+	model, command := drive(t, model, model.Init())
+	model, _ = drive(t, model, command)
+	assert.Equal(t, ScreenID("pr-chat"), model.Screen())
 
-func applyUpdate(t *testing.T, model Model, message tea.Msg) (Model, tea.Cmd) {
-	t.Helper()
-	next, command := model.Update(message)
-	updated, ok := next.(Model)
-	require.True(t, ok)
-	return updated, command
-}
-
-func completeUnchangedEditor(t *testing.T, model Model) Model {
-	t.Helper()
-	model, command := applyUpdate(t, model, model.Init()())
-	return completeUnchangedEditorFromCommand(t, model, command)
-}
-
-func completeUnchangedEditorFromCommand(t *testing.T, model Model, command tea.Cmd) Model {
-	t.Helper()
-	return drainCommands(t, model, command, 5)
-}
-
-func drainCommands(t *testing.T, model Model, command tea.Cmd, limit int) Model {
-	t.Helper()
-	for count := 0; command != nil && count < limit; count++ {
-		model, command = applyUpdate(t, model, command())
+	updated, command := model.Update(CommandMsg{ID: "/edit"})
+	model = updated.(Model)
+	for command != nil {
+		model, command = drive(t, model, command)
 	}
-	assert.Nil(t, command, "command chain exceeded limit")
-	return model
+	assert.Equal(t, ScreenID("pr-chat"), model.Screen())
+	assert.Equal(t, StepID("pr-chat"), model.FlowContext().Step)
+	assert.Zero(t, store.saves)
 }
 
-func assertFileContent(t *testing.T, path string, expected string) {
+func composeIdeaModel(t *testing.T, step StepID, caller ScreenID, store ArtifactStore, operations Operations) (Model, tea.Cmd) {
 	t.Helper()
-	content, err := os.ReadFile(path)
-	require.NoError(t, err)
-	assert.Equal(t, expected, string(content))
-}
-
-func editorDefinition(artifact Artifact) Definition {
-	return Definition{
-		ID: "editor-definition",
-		Steps: []StepDefinition{{
-			ID: "edit",
-			Tasks: []TaskDefinition{{
-				ID:       "edit-artifact",
-				Type:     TaskEditor,
-				Artifact: artifact,
-				Screen:   "editor",
-				Preview:  "preview",
-				Error:    "error",
-			}},
-		}},
-		Screens: []ScreenDefinition{
-			{ID: "editor", Type: ScreenEditor},
-			{ID: "preview", Type: ScreenPreview, Commands: []CommandDefinition{{ID: "/done", Destination: ScreenDestination("changes")}}},
-			{ID: "error", Type: ScreenError},
-		},
-	}
-}
-
-func twoEditorStepDefinition() Definition {
-	definition := editorDefinition(ArtifactIdea)
-	definition.ID = "two-editor-steps"
-	definition.Steps[0].ID = "idea"
-	definition.Steps[0].Tasks[0].ID = "edit-idea"
-	definition.Steps = append(definition.Steps, StepDefinition{
-		ID: "spec",
-		Tasks: []TaskDefinition{{
-			ID:       "edit-spec",
-			Type:     TaskEditor,
-			Artifact: ArtifactSpec,
-			Screen:   "editor",
-			Preview:  "preview",
-			Error:    "error",
-		}},
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, TmpDir), 0o755))
+	model := Compose(Composition{
+		Definition:      IdeaDefinition(),
+		Context:         Context{Root: root, FlowDir: root, ChangeID: 1, ChangeRef: testRefUUID, Origin: ChangesListTerminal, Step: step, EditorCaller: caller},
+		TerminalScreens: ideaTerminals,
+		Store:           store,
+		Options:         &fakeDocumentOptions{types: []TypeOption{{Slug: "feature"}, {Slug: "test"}}, epics: []EpicOption{{ID: 1, Title: "Epic"}}},
+		Operations:      operations,
 	})
-	definition.Screens[1].Commands = []CommandDefinition{
-		{ID: "/anything", Destination: StepDestination("spec")},
-		{ID: "/done", Destination: ScreenDestination("changes")},
-	}
-	return definition
+	require.NoError(t, model.Error())
+	return model, model.Init()
 }
+
+func drive(t *testing.T, model Model, cmd tea.Cmd) (Model, tea.Cmd) {
+	t.Helper()
+	require.NotNil(t, cmd)
+	updated, next := model.Update(cmd())
+	return updated.(Model), next
+}
+
+func commandTempDirForTest(ExecRequest) string { return TmpDir }

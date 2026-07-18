@@ -20,12 +20,13 @@ list:
 
 init:
 	@if [ -z "$(GIT_ROOT)" ]; then printf '%s\n' 'cannot extract repo root' >&2; exit 1; fi
-	@mkdir -p "$(GIT_ROOT)/.mch/tmp";
+	@if [ -z "$$MCH_TEMP_DIR" ]; then printf '%s\n' 'missing MCH_TEMP_DIR' >&2; exit 1; fi
+	@if [ ! -d "$(GIT_ROOT)/$$MCH_TEMP_DIR" ]; then printf 'missing Flow temp root: %s\n' "$$MCH_TEMP_DIR" >&2; exit 1; fi
 
 idea-init: init
 	@if [ -z "$$MCH_REF_UUID" ]; then printf '%s\n' 'missing MCH_REF_UUID' >&2; exit 1; fi
 	@if [ -z "$$MCH_ARTIFACT" ]; then printf '%s\n' 'missing MCH_ARTIFACT' >&2; exit 1; fi
-	@mkdir -p "$(GIT_ROOT)/.mch/tmp/$$MCH_REF_UUID/$$MCH_ARTIFACT";
+	@mkdir -p "$(GIT_ROOT)/$$MCH_TEMP_DIR/$$MCH_REF_UUID/$$MCH_ARTIFACT";
 
 idea-review: idea-init
 	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/idea-review.md"

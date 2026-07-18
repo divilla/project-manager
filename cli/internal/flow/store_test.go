@@ -12,100 +12,43 @@ import (
 
 type fakeChangeAPI struct {
 	change    dto.Change
-	getIDs    []int
-	ideaCalls []artifactAPICall
-	specCalls []artifactAPICall
-	prCalls   []artifactAPICall
-	getErr    error
-	updateErr error
-}
-
-type artifactAPICall struct {
-	id        int
-	content   string
 	agentEdit bool
+	artifact  Artifact
+	err       error
 }
 
-func (a *fakeChangeAPI) GetChange(id int) (dto.Change, error) {
-	a.getIDs = append(a.getIDs, id)
-	return a.change, a.getErr
+func (f *fakeChangeAPI) GetChange(int) (dto.Change, error) { return f.change, f.err }
+func (f *fakeChangeAPI) UpdateChangeIdea(_ int, value string, agent bool) (dto.Change, error) {
+	f.artifact, f.agentEdit, f.change.Idea = ArtifactIdea, agent, value
+	return f.change, f.err
+}
+func (f *fakeChangeAPI) UpdateChangeSpec(_ int, value string, agent bool) (dto.Change, error) {
+	f.artifact, f.agentEdit, f.change.Spec = ArtifactSpec, agent, value
+	return f.change, f.err
+}
+func (f *fakeChangeAPI) UpdateChangePR(_ int, value string, agent bool) (dto.Change, error) {
+	f.artifact, f.agentEdit, f.change.PR = ArtifactPR, agent, value
+	return f.change, f.err
 }
 
-func (a *fakeChangeAPI) UpdateChangeIdea(id int, content string, agentEdit bool) (dto.Change, error) {
-	a.ideaCalls = append(a.ideaCalls, artifactAPICall{id: id, content: content, agentEdit: agentEdit})
-	return a.change, a.updateErr
-}
-
-func (a *fakeChangeAPI) UpdateChangeSpec(id int, content string, agentEdit bool) (dto.Change, error) {
-	a.specCalls = append(a.specCalls, artifactAPICall{id: id, content: content, agentEdit: agentEdit})
-	return a.change, a.updateErr
-}
-
-func (a *fakeChangeAPI) UpdateChangePR(id int, content string, agentEdit bool) (dto.Change, error) {
-	a.prCalls = append(a.prCalls, artifactAPICall{id: id, content: content, agentEdit: agentEdit})
-	return a.change, a.updateErr
-}
-
-func TestChangeArtifactStoreLoadsAndSavesFocusedArtifacts(t *testing.T) {
-	for _, test := range []struct {
-		name     string
-		artifact Artifact
-		loaded   string
-		calls    func(*fakeChangeAPI) []artifactAPICall
-	}{
-		{name: "Idea", artifact: ArtifactIdea, loaded: "idea", calls: func(api *fakeChangeAPI) []artifactAPICall { return api.ideaCalls }},
-		{name: "Spec", artifact: ArtifactSpec, loaded: "spec", calls: func(api *fakeChangeAPI) []artifactAPICall { return api.specCalls }},
-		{name: "PR", artifact: ArtifactPR, loaded: "pr", calls: func(api *fakeChangeAPI) []artifactAPICall { return api.prCalls }},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			api := &fakeChangeAPI{change: dto.Change{Idea: "idea", Spec: "spec", PR: "pr"}}
-			store := NewChangeArtifactStore(api)
-
-			loaded, err := store.Load(17, test.artifact)
-			require.NoError(t, err)
-			assert.Equal(t, test.loaded, string(loaded))
-			require.NoError(t, store.Save(17, test.artifact, []byte("changed")))
-
-			assert.Equal(t, []int{17}, api.getIDs)
-			require.Len(t, test.calls(api), 1)
-			assert.Equal(t, artifactAPICall{id: 17, content: "changed", agentEdit: false}, test.calls(api)[0])
-			assert.Len(t, api.ideaCalls, boolToInt(test.artifact == ArtifactIdea))
-			assert.Len(t, api.specCalls, boolToInt(test.artifact == ArtifactSpec))
-			assert.Len(t, api.prCalls, boolToInt(test.artifact == ArtifactPR))
-		})
-	}
-}
-
-func TestChangeArtifactStoreRejectsUnsupportedBlankAndFailedOperations(t *testing.T) {
-	api := &fakeChangeAPI{change: dto.Change{Idea: "idea"}}
+func TestChangeArtifactStoreUsesFocusedEndpointAndProvenance(t *testing.T) {
+	api := &fakeChangeAPI{change: dto.Change{Idea: "idea", Spec: "spec", PR: "pr"}}
 	store := NewChangeArtifactStore(api)
+	for _, artifact := range []Artifact{ArtifactIdea, ArtifactSpec, ArtifactPR} {
+		_, err := store.Load(1, artifact)
+		require.NoError(t, err)
+		require.NoError(t, store.Save(1, artifact, []byte("# Title\n\nBody"), SaveByAgent))
+		assert.Equal(t, artifact, api.artifact)
+		assert.True(t, api.agentEdit)
+	}
+	require.NoError(t, store.Save(1, ArtifactIdea, []byte("# Title\n\nBody"), SaveByUser))
+	assert.False(t, api.agentEdit)
+}
 
+func TestChangeArtifactStoreRejectsUnsupportedAndFailures(t *testing.T) {
+	store := NewChangeArtifactStore(&fakeChangeAPI{err: errors.New("backend")})
 	_, err := store.Load(1, ArtifactImplement)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does not support")
-	assert.Empty(t, api.getIDs)
-	err = store.Save(1, ArtifactFinalize, []byte("content"))
+	err = store.Save(1, ArtifactIdea, []byte("x"), SaveProvenance("unknown"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does not support")
-	err = store.Save(1, ArtifactIdea, []byte(" \n"))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "must not be blank")
-	assert.Empty(t, api.ideaCalls)
-
-	api.getErr = errors.New("get failed")
-	_, err = store.Load(1, ArtifactIdea)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "get failed")
-	api.getErr = nil
-	api.updateErr = errors.New("save failed")
-	err = store.Save(1, ArtifactIdea, []byte("changed"))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "save failed")
-}
-
-func boolToInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }

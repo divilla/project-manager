@@ -2,6 +2,7 @@ package flow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -9,191 +10,245 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// Context contains runtime-only values supplied by Flow composition.
+// Context contains runtime-only Flow state.
 type Context struct {
-	TempDir         string
+	Root            string
 	FlowDir         string
 	ChangeID        int
 	ChangeRef       string
 	Origin          ScreenID
 	Step            StepID
 	Task            TaskID
+	TaskIndex       int
 	Artifact        Artifact
 	SessionID       string
 	ExecutionResult string
+	FromStep        StepID
+	EditorCaller    ScreenID
+	WorkspaceScope  WorkspaceScope
 }
 
-// Composition supplies a completed definition and all runtime boundaries.
+// Composition supplies a definition and its runtime boundaries.
 type Composition struct {
 	Definition      Definition
 	Context         Context
 	TerminalScreens []ScreenID
 	Store           ArtifactStore
+	Options         DocumentOptions
 	Operations      Operations
 }
 
-// CommandMsg selects a user-facing command on the current Flow Screen.
-type CommandMsg struct {
-	ID CommandID
-}
+// CommandMsg selects a command on the active Flow Screen.
+type CommandMsg struct{ ID CommandID }
 
 // PreviewMode identifies artifact or diff rendering.
 type PreviewMode string
 
+// Supported Preview rendering modes.
 const (
-	// PreviewArtifact renders output.md.
 	PreviewArtifact PreviewMode = "preview"
-	// PreviewDiff renders input.md against output.md.
-	PreviewDiff PreviewMode = "diff"
+	PreviewDiff     PreviewMode = "diff"
 )
 
-// Model is the reusable Bubble Tea Flow runtime model.
+// Model is the reusable Bubble Tea Flow runtime.
 type Model struct {
 	definition Definition
 	context    Context
 	store      ArtifactStore
+	options    DocumentOptions
 	operations Operations
 	steps      map[StepID]StepDefinition
 	screens    map[ScreenID]ScreenDefinition
+	terminals  map[ScreenID]struct{}
 
 	screen         ScreenID
-	taskIndex      int
 	previewMode    PreviewMode
 	rendered       string
 	baseline       []byte
 	err            error
+	validationErr  error
+	chatLoading    bool
 	running        bool
 	done           bool
 	terminalScreen ScreenID
 	cancel         context.CancelFunc
+	callerRendered string
+	callerMode     PreviewMode
+	callerOutput   string
+	callerStep     StepID
+	callerTask     TaskID
+	callerIndex    int
+	callerArtifact Artifact
+	callerBaseline []byte
+	callerScope    WorkspaceScope
+
+	operationSequence uint64
+	pendingOperation  uint64
 }
 
 type stepLoadedMsg struct {
-	stepID   StepID
-	artifact Artifact
-	baseline []byte
-	err      error
+	operation uint64
+	stepID    StepID
+	artifact  Artifact
+	scope     WorkspaceScope
+	baseline  []byte
+	err       error
+}
+
+type chatLoadedMsg struct {
+	operation uint64
+	baseline  []byte
+	output    string
+	err       error
 }
 
 type editorFinishedMsg struct {
-	err error
+	operation uint64
+	err       error
 }
-
 type editorPreparedMsg struct {
-	err error
+	operation uint64
+	err       error
 }
-
 type execFinishedMsg struct {
-	err error
+	operation uint64
+	err       error
 }
-
 type execEvaluatedMsg struct {
+	operation uint64
 	output    string
 	finalLine string
 	err       error
 }
-
-type interactivePreparedMsg struct {
+type chatPreparedMsg struct {
+	operation uint64
 	sessionID string
 	err       error
 }
-
-type interactiveFinishedMsg struct {
-	err error
+type chatFinishedMsg struct {
+	operation uint64
+	err       error
 }
-
-type interactiveOutputMsg struct {
-	output string
-	err    error
+type taskCompletedMsg struct {
+	operation uint64
+	empty     bool
+	err       error
 }
-
-type stepCompletedMsg struct {
-	err error
-}
-
 type renderedMsg struct {
-	mode   PreviewMode
-	result RenderResult
-	err    error
+	operation uint64
+	mode      PreviewMode
+	result    RenderResult
+	err       error
 }
 
-// Compose validates and prepares an unstarted Flow runtime.
+// Compose validates and prepares an unstarted Flow model.
 func Compose(composition Composition) Model {
 	definition := cloneDefinition(composition.Definition)
-	model := Model{
+	m := Model{
 		definition:  definition,
 		context:     composition.Context,
 		store:       composition.Store,
+		options:     composition.Options,
 		operations:  composition.Operations,
 		steps:       make(map[StepID]StepDefinition, len(definition.Steps)),
 		screens:     make(map[ScreenID]ScreenDefinition, len(definition.Screens)),
+		terminals:   make(map[ScreenID]struct{}, len(composition.TerminalScreens)),
 		previewMode: PreviewArtifact,
 	}
 	for _, step := range definition.Steps {
-		model.steps[step.ID] = step
+		m.steps[step.ID] = step
 	}
 	for _, screen := range definition.Screens {
-		model.screens[screen.ID] = screen
+		m.screens[screen.ID] = screen
+	}
+	for _, terminal := range composition.TerminalScreens {
+		m.terminals[terminal] = struct{}{}
 	}
 	if err := ValidateDefinition(definition, composition.TerminalScreens); err != nil {
-		return model.withError(fmt.Errorf("invalid Flow definition: %w", err), "")
+		return m.withError(fmt.Errorf("invalid Flow definition: %w", err), "")
 	}
-	if model.store == nil {
-		return model.withError(fmt.Errorf("artifact store is required"), "")
+	if m.store == nil {
+		return m.withError(fmt.Errorf("artifact store is required"), "")
 	}
-	if model.operations == nil {
-		return model.withError(fmt.Errorf("external operations boundary is required"), "")
+	if m.operations == nil {
+		return m.withError(fmt.Errorf("external operations boundary is required"), "")
 	}
-	if strings.TrimSpace(string(model.context.Origin)) == "" {
-		return model.withError(fmt.Errorf("flow context originating Screen is required"), "")
+	if _, ok := m.terminals[m.context.Origin]; !ok {
+		return m.withError(fmt.Errorf("flow context originating Screen %q is not an allowed terminal Screen", m.context.Origin), "")
 	}
-	originAllowed := false
-	for _, terminal := range composition.TerminalScreens {
-		if terminal == model.context.Origin {
-			originAllowed = true
-			break
+	if step, ok := m.steps[m.context.Step]; ok && step.Mode == ModeEditor {
+		if err := m.validateEditorCaller(m.context.EditorCaller); err != nil {
+			return m.withError(err, step.Tasks[0].Error)
 		}
 	}
-	if !originAllowed {
-		return model.withError(fmt.Errorf("flow context originating Screen %q is not an allowed terminal Screen", model.context.Origin), "")
-	}
-	return model
+	m.beginOperation()
+	return m
 }
 
-// Init starts the configured Step through an asynchronous load command.
+// Init loads and starts the configured Step.
 func (m Model) Init() tea.Cmd {
 	if m.err != nil || m.done {
 		return nil
 	}
-	return m.startStepCommand(m.context.Step)
+	return m.startStepCommand(m.context.Step, m.pendingOperation)
 }
 
-// Update applies typed operation results and navigation commands.
+// Update applies operation results and navigation commands.
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
 	case stepLoadedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
 		return m.updateStepLoaded(message)
+	case chatLoadedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
+		return m.updateChatLoaded(message)
 	case editorFinishedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
 		return m.updateEditorFinished(message)
 	case editorPreparedMsg:
-		return m.updateEditorPrepared(message)
-	case execFinishedMsg:
-		return m.updateExecFinished(message)
-	case execEvaluatedMsg:
-		return m.updateExecEvaluated(message)
-	case interactiveOutputMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
 		if message.err != nil {
 			return m.withTaskError(message.err), nil
 		}
-		m.context.ExecutionResult = message.output
-		return m, nil
-	case interactivePreparedMsg:
-		return m.updateInteractivePrepared(message)
-	case interactiveFinishedMsg:
-		return m.updateInteractiveFinished(message)
-	case stepCompletedMsg:
-		return m.updateStepCompleted(message)
+		operation := m.beginOperation()
+		return m, m.launchEditorCommand(operation)
+	case execFinishedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
+		return m.updateExecFinished(message)
+	case execEvaluatedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
+		return m.updateExecEvaluated(message)
+	case chatPreparedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
+		return m.updateChatPrepared(message)
+	case chatFinishedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
+		return m.updateChatFinished(message)
+	case taskCompletedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
+		return m.updateTaskCompleted(message)
 	case renderedMsg:
+		if !m.completeOperation(message.operation) {
+			return m, nil
+		}
 		return m.updateRendered(message)
 	case CommandMsg:
 		return m.updateCommand(message.ID)
@@ -205,28 +260,34 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the current generic Screen from model state only.
+// View renders the active generic Screen.
 func (m Model) View() string {
 	if m.done {
 		return ""
 	}
-	screen, exists := m.screens[m.screen]
+	screen := m.screens[m.screen]
 	title := screen.Title
-	if title == "" && exists {
+	if title == "" {
 		title = string(screen.Type)
 	}
 	if m.err != nil {
 		return joinView(title, m.err.Error(), "/return")
 	}
+	if m.validationErr != nil {
+		return joinView(title, m.validationErr.Error(), "/fix  /cancel")
+	}
 	switch screen.Type {
 	case ScreenExec:
 		return joinView(title, "/stop")
-	case ScreenInteractive:
-		return joinView(title, m.context.ExecutionResult, "/interactive  /edit  /cancel")
+	case ScreenChat:
+		labels := make([]string, 0, len(m.Commands()))
+		for _, command := range m.Commands() {
+			labels = append(labels, string(command))
+		}
+		return joinView(title, m.context.ExecutionResult, strings.Join(labels, "  "))
 	case ScreenPreview:
-		commands := m.Commands()
-		labels := make([]string, 0, len(commands))
-		for _, command := range commands {
+		labels := make([]string, 0, len(m.Commands()))
+		for _, command := range m.Commands() {
 			labels = append(labels, string(command))
 		}
 		return joinView(title, string(m.previewMode), m.rendered, strings.Join(labels, "  "))
@@ -239,23 +300,55 @@ func (m Model) View() string {
 	}
 }
 
-// Screen returns the active reusable Flow Screen.
-func (m Model) Screen() ScreenID {
-	return m.screen
-}
+// Screen returns the active runtime Screen.
+func (m Model) Screen() ScreenID { return m.screen }
 
-// FlowContext returns a copy of the current runtime context.
-func (m Model) FlowContext() Context {
-	return m.context
-}
+// FlowContext returns a copy of current runtime state.
+func (m Model) FlowContext() Context { return m.context }
 
-// Commands returns only commands available on the current Screen.
+// Error returns the current runtime error.
+func (m Model) Error() error { return m.err }
+
+// Rendered returns the latest Preview or Diff output.
+func (m Model) Rendered() string { return m.rendered }
+
+// Mode returns the active Preview rendering mode.
+func (m Model) Mode() PreviewMode { return m.previewMode }
+
+// Done reports whether the Flow reached a terminal Screen.
+func (m Model) Done() bool { return m.done }
+
+// TerminalScreen returns the selected terminal Screen.
+func (m Model) TerminalScreen() ScreenID { return m.terminalScreen }
+
+// Definition returns a copy of the active definition.
+func (m Model) Definition() Definition { return cloneDefinition(m.definition) }
+
+// ValidationError returns the recoverable Editor content error.
+func (m Model) ValidationError() error { return m.validationErr }
+
+// ActiveStep returns the current Step definition.
+func (m Model) ActiveStep() StepDefinition { return m.steps[m.context.Step] }
+
+// ActiveScreen returns the current Screen definition.
+func (m Model) ActiveScreen() ScreenDefinition { return m.screens[m.screen] }
+
+// Commands returns commands available on the active Screen.
 func (m Model) Commands() []CommandID {
 	if m.done {
 		return nil
 	}
+	if m.pendingOperation != 0 {
+		if m.screens[m.screen].Type == ScreenExec && m.running {
+			return []CommandID{"/stop"}
+		}
+		return nil
+	}
 	if m.err != nil {
 		return []CommandID{"/return"}
+	}
+	if m.validationErr != nil {
+		return []CommandID{"/fix", "/cancel"}
 	}
 	screen := m.screens[m.screen]
 	switch screen.Type {
@@ -263,41 +356,22 @@ func (m Model) Commands() []CommandID {
 		if m.running {
 			return []CommandID{"/stop"}
 		}
-	case ScreenInteractive:
-		return []CommandID{"/interactive", "/edit", "/cancel"}
+	case ScreenChat:
+		if m.chatLoading {
+			return nil
+		}
+		return []CommandID{"/chat", "/edit", "/cancel"}
 	case ScreenPreview:
-		commands := make([]CommandID, 0, len(screen.Commands))
+		commands := make([]CommandID, 0, len(screen.Commands)+1)
 		for _, command := range screen.Commands {
 			commands = append(commands, command.ID)
+			if command.ID == "/continue" && m.previewHasChat() && !previewDeclares(screen, "/chat") {
+				commands = append(commands, "/chat")
+			}
 		}
 		return commands
 	}
 	return nil
-}
-
-// Error returns the current concrete runtime error.
-func (m Model) Error() error {
-	return m.err
-}
-
-// Rendered returns the latest Preview or Diff output.
-func (m Model) Rendered() string {
-	return m.rendered
-}
-
-// Mode returns the current Preview rendering mode.
-func (m Model) Mode() PreviewMode {
-	return m.previewMode
-}
-
-// Done reports whether the Flow navigated to a terminal Screen.
-func (m Model) Done() bool {
-	return m.done
-}
-
-// TerminalScreen returns the selected terminal Screen after Flow completion.
-func (m Model) TerminalScreen() ScreenID {
-	return m.terminalScreen
 }
 
 func (m Model) updateStepLoaded(message stepLoadedMsg) (tea.Model, tea.Cmd) {
@@ -310,12 +384,25 @@ func (m Model) updateStepLoaded(message stepLoadedMsg) (tea.Model, tea.Cmd) {
 	}
 	m.context.Step = message.stepID
 	m.context.Artifact = message.artifact
+	m.context.WorkspaceScope = message.scope
+	m.context.TaskIndex = 0
 	m.context.ExecutionResult = ""
+	m.context.FromStep = ""
 	m.baseline = append([]byte(nil), message.baseline...)
-	m.taskIndex = 0
 	m.previewMode = PreviewArtifact
 	m.rendered = ""
+	m.validationErr = nil
 	return m.enterTask(step.Tasks[0])
+}
+
+func (m Model) updateChatLoaded(message chatLoadedMsg) (tea.Model, tea.Cmd) {
+	if message.err != nil {
+		return m.withTaskError(message.err), nil
+	}
+	m.chatLoading = false
+	m.baseline = append([]byte(nil), message.baseline...)
+	m.context.ExecutionResult = message.output
+	return m, nil
 }
 
 func (m Model) updateEditorFinished(message editorFinishedMsg) (tea.Model, tea.Cmd) {
@@ -325,29 +412,21 @@ func (m Model) updateEditorFinished(message editorFinishedMsg) (tea.Model, tea.C
 	if message.err != nil {
 		return m.withTaskError(fmt.Errorf("editor failed: %w", message.err)), nil
 	}
-	return m, m.completeStepCommand()
-}
-
-func (m Model) updateEditorPrepared(message editorPreparedMsg) (tea.Model, tea.Cmd) {
-	if message.err != nil {
-		return m.withTaskError(message.err), nil
-	}
-	return m, m.launchEditorCommand()
+	m.validationErr = nil
+	operation := m.beginOperation()
+	return m, m.completeTaskCommand(SaveByUser, operation)
 }
 
 func (m Model) updateExecFinished(message execFinishedMsg) (tea.Model, tea.Cmd) {
 	if m.done || m.screens[m.screen].Type != ScreenExec {
 		return m, nil
 	}
-	m.running = false
-	if m.cancel != nil {
-		m.cancel()
-	}
-	m.cancel = nil
+	m.stopRunning()
 	if message.err != nil {
 		return m.withTaskError(fmt.Errorf("execution failed: %w", message.err)), nil
 	}
-	return m, m.evaluateExecCommand()
+	operation := m.beginOperation()
+	return m, m.completeTaskCommand(SaveByAgent, operation)
 }
 
 func (m Model) updateExecEvaluated(message execEvaluatedMsg) (tea.Model, tea.Cmd) {
@@ -360,27 +439,21 @@ func (m Model) updateExecEvaluated(message execEvaluatedMsg) (tea.Model, tea.Cmd
 		return m.withTaskError(err), nil
 	}
 	if message.finalLine == task.ExpectedOutput {
-		return m, m.completeStepCommand()
+		return m.advanceTo(m.context.TaskIndex + 2)
 	}
-	step := m.steps[m.context.Step]
-	if m.taskIndex+1 < len(step.Tasks) && step.Tasks[m.taskIndex+1].Type == TaskInteractive {
-		m.taskIndex++
-		return m.enterTask(step.Tasks[m.taskIndex])
-	}
-	m.screen = task.UnexpectedOutput
-	return m, nil
+	return m.advanceTo(m.context.TaskIndex + 1)
 }
 
-func (m Model) updateInteractivePrepared(message interactivePreparedMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateChatPrepared(message chatPreparedMsg) (tea.Model, tea.Cmd) {
 	if message.err != nil {
 		return m.withTaskError(message.err), nil
 	}
 	m.context.SessionID = message.sessionID
-	task, err := m.activeInteractiveTask()
+	task, err := m.activeChatTask()
 	if err != nil {
 		return m.withTaskError(err), nil
 	}
-	workspace := Workspace{TempDir: m.context.TempDir, Artifact: m.context.Artifact}
+	workspace := m.workspace()
 	directory, err := workspace.Directory()
 	if err != nil {
 		return m.withTaskError(err), nil
@@ -388,47 +461,62 @@ func (m Model) updateInteractivePrepared(message interactivePreparedMsg) (tea.Mo
 	operationContext, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	m.running = true
-	request := InteractiveRequest{
-		Script:    task.Script,
-		FlowDir:   m.context.FlowDir,
-		Workspace: directory,
-		SessionID: message.sessionID,
-		ChangeID:  m.context.ChangeID,
-		ChangeRef: m.context.ChangeRef,
-		Artifact:  m.context.Artifact,
-	}
-	return m, m.operations.Interactive(operationContext, request, func(err error) tea.Msg {
-		return interactiveFinishedMsg{err: err}
+	request := ChatRequest{Script: task.Script, FlowDir: m.context.FlowDir, Workspace: directory, SessionID: message.sessionID, ChangeID: m.context.ChangeID, ChangeRef: m.context.ChangeRef, Artifact: task.Artifact}
+	operation := m.beginOperation()
+	return m, m.operations.Chat(operationContext, request, func(err error) tea.Msg {
+		return chatFinishedMsg{operation: operation, err: err}
 	})
 }
 
-func (m Model) updateInteractiveFinished(message interactiveFinishedMsg) (tea.Model, tea.Cmd) {
-	if m.done || m.screens[m.screen].Type != ScreenInteractive {
+func (m Model) updateChatFinished(message chatFinishedMsg) (tea.Model, tea.Cmd) {
+	if m.done || m.screens[m.screen].Type != ScreenChat {
 		return m, nil
 	}
-	m.running = false
-	if m.cancel != nil {
-		m.cancel()
-	}
-	m.cancel = nil
+	m.stopRunning()
 	if message.err != nil {
-		return m.withTaskError(fmt.Errorf("interactive session failed: %w", message.err)), nil
+		return m.withTaskError(fmt.Errorf("chat session failed: %w", message.err)), nil
 	}
-	return m, m.completeStepCommand()
+	operation := m.beginOperation()
+	return m, m.completeTaskCommand(SaveByAgent, operation)
 }
 
-func (m Model) updateStepCompleted(message stepCompletedMsg) (tea.Model, tea.Cmd) {
+func (m Model) updateTaskCompleted(message taskCompletedMsg) (tea.Model, tea.Cmd) {
 	if message.err != nil {
+		var validation ValidationError
+		if m.screens[m.screen].Type == ScreenEditor && errors.As(message.err, &validation) {
+			m.validationErr = validation
+			return m, nil
+		}
 		return m.withTaskError(message.err), nil
 	}
 	task, err := m.activeTask()
 	if err != nil {
 		return m.withTaskError(err), nil
 	}
-	m.screen = task.Preview
-	m.previewMode = PreviewArtifact
-	m.rendered = ""
-	return m, m.renderCommand(PreviewArtifact)
+	if m.screens[m.screen].Type == ScreenEditor {
+		if message.empty {
+			if task.Type == TaskEditor {
+				return m.finish(task.Cancel.Screen), nil
+			}
+			return m.finish(m.context.Origin), nil
+		}
+		if m.outputEqualsBaseline() {
+			return m.finishOrReturnCaller(), nil
+		}
+		if task.Type == TaskEditor {
+			m.context.WorkspaceScope = WorkspaceArtifact
+		}
+		return m.enterPreview(task.Preview)
+	}
+	switch task.Type {
+	case TaskExec:
+		operation := m.beginOperation()
+		return m, m.evaluateExecCommand(operation)
+	case TaskChat:
+		return m.advanceTo(m.context.TaskIndex + 1)
+	default:
+		return m.withTaskError(fmt.Errorf("task %q cannot complete from Screen %q", task.ID, m.screen)), nil
+	}
 }
 
 func (m Model) updateRendered(message renderedMsg) (tea.Model, tea.Cmd) {
@@ -447,8 +535,34 @@ func (m Model) updateCommand(command CommandID) (tea.Model, tea.Cmd) {
 	if m.done {
 		return m, nil
 	}
+	if m.pendingOperation != 0 {
+		if m.screens[m.screen].Type == ScreenExec && command == "/stop" && m.running {
+			m.stopRunning()
+			m.pendingOperation = 0
+			return m.finish(m.context.Origin), nil
+		}
+		return m, nil
+	}
 	if m.err != nil {
 		if command == "/return" {
+			return m.finish(m.context.Origin), nil
+		}
+		return m, nil
+	}
+	if m.validationErr != nil {
+		switch command {
+		case "/fix":
+			m.validationErr = nil
+			operation := m.beginOperation()
+			return m, m.prepareEditorCommand(operation)
+		case "/cancel":
+			task, err := m.activeTask()
+			if err != nil {
+				return m.withTaskError(err), nil
+			}
+			if task.Type == TaskEditor {
+				return m.finish(task.Cancel.Screen), nil
+			}
 			return m.finish(m.context.Origin), nil
 		}
 		return m, nil
@@ -457,41 +571,59 @@ func (m Model) updateCommand(command CommandID) (tea.Model, tea.Cmd) {
 	switch screen.Type {
 	case ScreenExec:
 		if command == "/stop" && m.running {
-			if m.cancel != nil {
-				m.cancel()
-			}
-			m.running = false
-			m.cancel = nil
+			m.stopRunning()
 			return m.finish(m.context.Origin), nil
 		}
-	case ScreenInteractive:
+	case ScreenChat:
+		if m.chatLoading {
+			return m, nil
+		}
 		switch command {
 		case "/cancel":
-			if m.cancel != nil {
-				m.cancel()
-			}
+			m.stopRunning()
 			return m.finish(m.context.Origin), nil
+		case "/chat":
+			operation := m.beginOperation()
+			return m, m.prepareChatCommand(operation)
 		case "/edit":
-			task, err := m.activeInteractiveTask()
+			task, err := m.activeChatTask()
 			if err != nil {
 				return m.withTaskError(err), nil
 			}
-			m.screen = task.Editor
-			return m, m.prepareEditorCommand()
-		case "/interactive":
-			return m, m.prepareInteractiveCommand()
+			m.rememberEditorCaller()
+			if task.Editor.Kind == DestinationStep {
+				m.context.Step = task.Editor.Step
+				operation := m.beginOperation()
+				return m, m.startStepCommand(task.Editor.Step, operation)
+			}
+			m.screen = task.Editor.Screen
+			operation := m.beginOperation()
+			return m, m.prepareEditorCommand(operation)
 		}
 	case ScreenPreview:
+		if command == "/chat" && m.previewHasChat() {
+			step := m.steps[screen.FromStep]
+			for index, task := range step.Tasks {
+				if task.Type == TaskChat {
+					m.context.Step = step.ID
+					m.context.TaskIndex = index
+					return m.enterTask(task)
+				}
+			}
+		}
 		for _, defined := range screen.Commands {
-			if defined.ID != command {
+			if defined.ID != command || command == "/chat" {
 				continue
 			}
 			if defined.Destination.Kind == DestinationStep {
+				if command == "/edit" {
+					m.rememberEditorCaller()
+				} else {
+					m.context.EditorCaller = ""
+				}
 				m.context.Step = defined.Destination.Step
-				m.context.Task = ""
-				m.context.Artifact = ""
-				m.context.ExecutionResult = ""
-				return m, m.startStepCommand(defined.Destination.Step)
+				operation := m.beginOperation()
+				return m, m.startStepCommand(defined.Destination.Step, operation)
 			}
 			return m.finish(defined.Destination.Screen), nil
 		}
@@ -500,14 +632,15 @@ func (m Model) updateCommand(command CommandID) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) togglePreview() (tea.Model, tea.Cmd) {
-	if m.err != nil || m.done || m.screens[m.screen].Type != ScreenPreview {
+	if m.err != nil || m.done || m.pendingOperation != 0 || m.screens[m.screen].Type != ScreenPreview {
 		return m, nil
 	}
 	mode := PreviewArtifact
 	if m.previewMode == PreviewArtifact {
 		mode = PreviewDiff
 	}
-	return m, m.renderCommand(mode)
+	operation := m.beginOperation()
+	return m, m.renderCommand(mode, operation)
 }
 
 func (m Model) enterTask(task TaskDefinition) (tea.Model, tea.Cmd) {
@@ -515,184 +648,224 @@ func (m Model) enterTask(task TaskDefinition) (tea.Model, tea.Cmd) {
 	m.context.Artifact = task.Artifact
 	m.screen = task.Screen
 	m.err = nil
+	m.validationErr = nil
 	switch task.Type {
 	case TaskEditor:
-		return m, m.prepareEditorCommand()
+		if err := m.validateEditorCaller(m.context.EditorCaller); err != nil {
+			return m.withTaskError(err), nil
+		}
+		operation := m.beginOperation()
+		return m, m.prepareEditorCommand(operation)
 	case TaskExec:
 		return m.startExec(task)
-	case TaskInteractive:
-		return m, m.readOptionalAgentOutputCommand()
+	case TaskChat:
+		m.chatLoading = true
+		operation := m.beginOperation()
+		return m, m.refreshChatCommand(operation)
 	default:
 		return m.withTaskError(fmt.Errorf("unsupported task type %q", task.Type)), nil
 	}
 }
 
 func (m Model) startExec(task TaskDefinition) (tea.Model, tea.Cmd) {
-	workspace := Workspace{TempDir: m.context.TempDir, Artifact: task.Artifact}
-	directory, err := workspace.Directory()
+	directory, err := m.workspace().Directory()
 	if err != nil {
 		return m.withTaskError(err), nil
 	}
 	operationContext, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	m.running = true
-	request := ExecRequest{
-		Script:    task.Script,
-		Prompt:    task.Prompt,
-		FlowDir:   m.context.FlowDir,
-		Workspace: directory,
-		ChangeID:  m.context.ChangeID,
-		ChangeRef: m.context.ChangeRef,
-		Artifact:  task.Artifact,
-	}
+	request := ExecRequest{Script: task.Script, Prompt: task.Prompt, FlowDir: m.context.FlowDir, Workspace: directory, ChangeID: m.context.ChangeID, ChangeRef: m.context.ChangeRef, Artifact: task.Artifact}
+	operation := m.beginOperation()
 	return m, m.operations.Exec(operationContext, request, func(err error) tea.Msg {
-		return execFinishedMsg{err: err}
+		return execFinishedMsg{operation: operation, err: err}
 	})
 }
 
-func (m Model) prepareEditorCommand() tea.Cmd {
-	return func() tea.Msg {
-		workspace := Workspace{TempDir: m.context.TempDir, Artifact: m.context.Artifact}
-		output, err := workspace.OutputPath()
+func (m Model) advanceTo(index int) (tea.Model, tea.Cmd) {
+	step := m.steps[m.context.Step]
+	if index >= len(step.Tasks) {
+		task, err := m.activeTask()
 		if err != nil {
-			return editorPreparedMsg{err: err}
+			return m.withTaskError(err), nil
 		}
-		if _, err := os.ReadFile(output); err != nil {
-			return editorPreparedMsg{err: fmt.Errorf("read output.md before editor: %w", err)}
-		}
-		return editorPreparedMsg{}
+		return m.enterPreview(task.Preview)
 	}
+	m.context.TaskIndex = index
+	return m.enterTask(step.Tasks[index])
 }
 
-func (m Model) launchEditorCommand() tea.Cmd {
-	workspace := Workspace{TempDir: m.context.TempDir, Artifact: m.context.Artifact}
-	output, err := workspace.OutputPath()
-	if err != nil {
-		return func() tea.Msg { return editorFinishedMsg{err: err} }
-	}
-	directory, err := workspace.Directory()
-	if err != nil {
-		return func() tea.Msg { return editorFinishedMsg{err: err} }
-	}
-	return m.operations.Editor(output, directory, func(err error) tea.Msg {
-		return editorFinishedMsg{err: err}
-	})
+func (m Model) enterPreview(preview ScreenID) (tea.Model, tea.Cmd) {
+	m.context.FromStep = m.context.Step
+	m.screen = preview
+	m.previewMode = PreviewArtifact
+	m.rendered = ""
+	operation := m.beginOperation()
+	return m, m.renderCommand(PreviewArtifact, operation)
 }
 
-func (m Model) startStepCommand(stepID StepID) tea.Cmd {
+func (m Model) startStepCommand(stepID StepID, operation uint64) tea.Cmd {
 	return func() tea.Msg {
-		if strings.TrimSpace(string(stepID)) == "" {
-			return stepLoadedMsg{err: fmt.Errorf("flow context current Step is required")}
-		}
 		step, exists := m.steps[stepID]
 		if !exists {
-			return stepLoadedMsg{stepID: stepID, err: fmt.Errorf("flow context references unknown Step %q", stepID)}
+			return stepLoadedMsg{operation: operation, stepID: stepID, err: fmt.Errorf("flow context references unknown Step %q", stepID)}
 		}
 		if m.context.ChangeID <= 0 {
-			return stepLoadedMsg{stepID: stepID, err: fmt.Errorf("flow context Change ID must be a valid positive number")}
+			return stepLoadedMsg{operation: operation, stepID: stepID, err: fmt.Errorf("flow context Change ID must be a valid positive number")}
 		}
-		artifact := step.Tasks[0].Artifact
-		workspace := Workspace{TempDir: m.context.TempDir, Artifact: artifact}
+		firstTask := step.Tasks[0]
+		artifact := firstTask.Artifact
+		scope := WorkspaceArtifact
+		if firstTask.Type == TaskEditor {
+			scope = WorkspaceEditor
+		}
+		workspace := Workspace{Root: m.context.Root, ChangeRef: m.context.ChangeRef, Artifact: artifact, Scope: scope}
 		if _, err := workspace.Directory(); err != nil {
-			return stepLoadedMsg{stepID: stepID, artifact: artifact, err: err}
+			return stepLoadedMsg{operation: operation, stepID: stepID, artifact: artifact, scope: scope, err: err}
 		}
 		content, err := m.store.Load(m.context.ChangeID, artifact)
 		if err != nil {
-			return stepLoadedMsg{stepID: stepID, artifact: artifact, err: fmt.Errorf("load %s artifact: %w", artifact, err)}
+			return stepLoadedMsg{operation: operation, stepID: stepID, artifact: artifact, scope: scope, err: fmt.Errorf("load %s artifact: %w", artifact, err)}
 		}
 		if err := workspace.replaceBaseline(content); err != nil {
-			return stepLoadedMsg{stepID: stepID, artifact: artifact, err: err}
+			return stepLoadedMsg{operation: operation, stepID: stepID, artifact: artifact, scope: scope, err: err}
 		}
-		return stepLoadedMsg{stepID: stepID, artifact: artifact, baseline: append([]byte(nil), content...)}
+		return stepLoadedMsg{operation: operation, stepID: stepID, artifact: artifact, scope: scope, baseline: append([]byte(nil), content...)}
 	}
 }
 
-func (m Model) evaluateExecCommand() tea.Cmd {
+func (m Model) refreshChatCommand(operation uint64) tea.Cmd {
 	return func() tea.Msg {
-		workspace := Workspace{TempDir: m.context.TempDir, Artifact: m.context.Artifact}
-		output, err := workspace.readAgentOutput(true)
+		content, err := m.store.Load(m.context.ChangeID, m.context.Artifact)
 		if err != nil {
-			return execEvaluatedMsg{err: err}
+			return chatLoadedMsg{operation: operation, err: fmt.Errorf("load %s artifact for Chat: %w", m.context.Artifact, err)}
 		}
-		return execEvaluatedMsg{output: output, finalLine: finalOutputLine(output)}
-	}
-}
-
-func (m Model) readOptionalAgentOutputCommand() tea.Cmd {
-	return func() tea.Msg {
-		workspace := Workspace{TempDir: m.context.TempDir, Artifact: m.context.Artifact}
+		workspace := m.workspace()
+		if err := workspace.replaceBaseline(content); err != nil {
+			return chatLoadedMsg{operation: operation, err: err}
+		}
 		output, err := workspace.readAgentOutput(false)
-		return interactiveOutputMsg{output: output, err: err}
+		return chatLoadedMsg{operation: operation, baseline: append([]byte(nil), content...), output: output, err: err}
 	}
 }
 
-func (m Model) prepareInteractiveCommand() tea.Cmd {
+func (m Model) completeTaskCommand(provenance SaveProvenance, operation uint64) tea.Cmd {
 	return func() tea.Msg {
-		workspace := Workspace{TempDir: m.context.TempDir, Artifact: m.context.Artifact}
-		session, err := workspace.readSession()
-		return interactivePreparedMsg{sessionID: session, err: err}
-	}
-}
-
-func (m Model) completeStepCommand() tea.Cmd {
-	return func() tea.Msg {
-		workspace := Workspace{TempDir: m.context.TempDir, Artifact: m.context.Artifact}
-		content, identical, err := workspace.compare(m.baseline)
+		workspace := m.workspace()
+		empty, err := workspace.outputIsEmpty()
 		if err != nil {
-			return stepCompletedMsg{err: err}
+			return taskCompletedMsg{operation: operation, err: err}
+		}
+		if empty && m.screens[m.screen].Type == ScreenEditor {
+			return taskCompletedMsg{operation: operation, empty: true}
+		}
+		content, identical, err := workspace.canonicalize(m.baseline, m.options)
+		if err != nil {
+			return taskCompletedMsg{operation: operation, err: err}
 		}
 		if identical {
-			return stepCompletedMsg{}
+			return taskCompletedMsg{operation: operation}
 		}
-		if err := m.store.Save(m.context.ChangeID, m.context.Artifact, content); err != nil {
-			return stepCompletedMsg{err: fmt.Errorf("save %s artifact: %w", m.context.Artifact, err)}
+		if err := m.store.Save(m.context.ChangeID, m.context.Artifact, content, provenance); err != nil {
+			return taskCompletedMsg{operation: operation, err: fmt.Errorf("save %s artifact: %w", m.context.Artifact, err)}
 		}
-		return stepCompletedMsg{}
+		task, err := m.activeTask()
+		if err != nil {
+			return taskCompletedMsg{operation: operation, err: err}
+		}
+		if task.Type == TaskEditor {
+			if err := workspace.publishEditorPreview(); err != nil {
+				return taskCompletedMsg{operation: operation, err: err}
+			}
+		}
+		return taskCompletedMsg{operation: operation}
 	}
 }
 
-func (m Model) renderCommand(mode PreviewMode) tea.Cmd {
-	if m.context.Artifact != ArtifactIdea && m.context.Artifact != ArtifactSpec && m.context.Artifact != ArtifactPR {
-		return func() tea.Msg {
-			return renderedMsg{mode: mode, err: fmt.Errorf("preview does not support artifact %q", m.context.Artifact)}
+func (m Model) evaluateExecCommand(operation uint64) tea.Cmd {
+	return func() tea.Msg {
+		output, err := m.workspace().readAgentOutput(true)
+		if err != nil {
+			return execEvaluatedMsg{operation: operation, err: err}
 		}
+		return execEvaluatedMsg{operation: operation, output: output, finalLine: finalOutputLine(output)}
 	}
-	workspace := Workspace{TempDir: m.context.TempDir, Artifact: m.context.Artifact}
+}
+
+func (m Model) prepareEditorCommand(operation uint64) tea.Cmd {
+	return func() tea.Msg {
+		output, err := m.workspace().OutputPath()
+		if err != nil {
+			return editorPreparedMsg{operation: operation, err: err}
+		}
+		if _, err := os.ReadFile(output); err != nil {
+			return editorPreparedMsg{operation: operation, err: fmt.Errorf("read output.md before Editor: %w", err)}
+		}
+		return editorPreparedMsg{operation: operation}
+	}
+}
+
+func (m Model) launchEditorCommand(operation uint64) tea.Cmd {
+	workspace := m.workspace()
+	output, err := workspace.OutputPath()
+	if err != nil {
+		return func() tea.Msg { return editorFinishedMsg{operation: operation, err: err} }
+	}
 	directory, err := workspace.Directory()
 	if err != nil {
-		return func() tea.Msg { return renderedMsg{mode: mode, err: err} }
+		return func() tea.Msg { return editorFinishedMsg{operation: operation, err: err} }
 	}
-	input, inputErr := workspace.InputPath()
-	if inputErr != nil {
-		return func() tea.Msg { return renderedMsg{mode: mode, err: inputErr} }
+	return m.operations.Editor(output, directory, func(err error) tea.Msg {
+		return editorFinishedMsg{operation: operation, err: err}
+	})
+}
+
+func (m Model) prepareChatCommand(operation uint64) tea.Cmd {
+	return func() tea.Msg {
+		session, err := m.workspace().readSession()
+		return chatPreparedMsg{operation: operation, sessionID: session, err: err}
 	}
-	output, outputErr := workspace.OutputPath()
-	if outputErr != nil {
-		return func() tea.Msg { return renderedMsg{mode: mode, err: outputErr} }
+}
+
+func (m Model) renderCommand(mode PreviewMode, operation uint64) tea.Cmd {
+	if m.context.Artifact != ArtifactIdea && m.context.Artifact != ArtifactSpec && m.context.Artifact != ArtifactPR {
+		return func() tea.Msg {
+			return renderedMsg{operation: operation, mode: mode, err: fmt.Errorf("preview does not support artifact %q", m.context.Artifact)}
+		}
+	}
+	workspace := m.workspace()
+	directory, err := workspace.Directory()
+	if err != nil {
+		return func() tea.Msg { return renderedMsg{operation: operation, mode: mode, err: err} }
+	}
+	input, err := workspace.InputPath()
+	if err != nil {
+		return func() tea.Msg { return renderedMsg{operation: operation, mode: mode, err: err} }
+	}
+	output, err := workspace.OutputPath()
+	if err != nil {
+		return func() tea.Msg { return renderedMsg{operation: operation, mode: mode, err: err} }
 	}
 	return func() tea.Msg {
 		if _, err := os.ReadFile(input); err != nil {
-			return renderedMsg{mode: mode, err: fmt.Errorf("read input.md before Preview: %w", err)}
+			return renderedMsg{operation: operation, mode: mode, err: fmt.Errorf("read input.md before Preview: %w", err)}
 		}
 		if _, err := os.ReadFile(output); err != nil {
-			return renderedMsg{mode: mode, err: fmt.Errorf("read output.md before Preview: %w", err)}
+			return renderedMsg{operation: operation, mode: mode, err: fmt.Errorf("read output.md before Preview: %w", err)}
 		}
-		operationContext := context.Background()
 		theme := m.screens[m.screen].Options.Theme
+		var command tea.Cmd
 		if mode == PreviewArtifact {
-			command := m.operations.Preview(operationContext, output, directory, theme, func(result RenderResult, err error) tea.Msg {
-				return renderedMsg{mode: mode, result: result, err: err}
+			command = m.operations.Preview(context.Background(), output, directory, theme, func(result RenderResult, err error) tea.Msg {
+				return renderedMsg{operation: operation, mode: mode, result: result, err: err}
 			})
-			if command == nil {
-				return renderedMsg{mode: mode, err: fmt.Errorf("preview operation returned no command")}
-			}
-			return command()
+		} else {
+			command = m.operations.Diff(context.Background(), input, output, directory, theme, func(result RenderResult, err error) tea.Msg {
+				return renderedMsg{operation: operation, mode: mode, result: result, err: err}
+			})
 		}
-		command := m.operations.Diff(operationContext, input, output, directory, theme, func(result RenderResult, err error) tea.Msg {
-			return renderedMsg{mode: mode, result: result, err: err}
-		})
 		if command == nil {
-			return renderedMsg{mode: mode, err: fmt.Errorf("diff operation returned no command")}
+			return renderedMsg{operation: operation, mode: mode, err: fmt.Errorf("%s operation returned no command", mode)}
 		}
 		return command()
 	}
@@ -700,25 +873,104 @@ func (m Model) renderCommand(mode PreviewMode) tea.Cmd {
 
 func (m Model) activeTask() (TaskDefinition, error) {
 	step, exists := m.steps[m.context.Step]
-	if !exists || m.taskIndex < 0 || m.taskIndex >= len(step.Tasks) {
+	if !exists || m.context.TaskIndex < 0 || m.context.TaskIndex >= len(step.Tasks) {
 		return TaskDefinition{}, fmt.Errorf("current Flow task is unavailable")
 	}
-	return step.Tasks[m.taskIndex], nil
+	return step.Tasks[m.context.TaskIndex], nil
 }
 
-func (m Model) activeInteractiveTask() (TaskDefinition, error) {
+func (m Model) activeChatTask() (TaskDefinition, error) {
 	task, err := m.activeTask()
-	if err == nil && task.Type == TaskInteractive {
+	if err == nil && task.Type == TaskChat {
 		return task, nil
 	}
-	for _, step := range m.definition.Steps {
-		for _, candidate := range step.Tasks {
-			if candidate.Type == TaskInteractive && candidate.Screen == m.screen && candidate.Artifact == m.context.Artifact {
-				return candidate, nil
-			}
+	return TaskDefinition{}, fmt.Errorf("Chat Screen %q has no active Chat task", m.screen)
+}
+
+func (m Model) workspace() Workspace {
+	return Workspace{Root: m.context.Root, ChangeRef: m.context.ChangeRef, Artifact: m.context.Artifact, Scope: m.context.WorkspaceScope}
+}
+
+func (m Model) outputEqualsBaseline() bool {
+	content, err := os.ReadFile(mustPath(m.workspace().OutputPath()))
+	return err == nil && string(content) == string(m.baseline)
+}
+
+func (m Model) finishOrReturnCaller() Model {
+	if _, terminal := m.terminals[m.context.EditorCaller]; terminal {
+		return m.finish(m.context.EditorCaller)
+	}
+	m.screen = m.context.EditorCaller
+	m.rendered = m.callerRendered
+	m.previewMode = m.callerMode
+	m.context.ExecutionResult = m.callerOutput
+	m.context.Step = m.callerStep
+	m.context.Task = m.callerTask
+	m.context.TaskIndex = m.callerIndex
+	m.context.Artifact = m.callerArtifact
+	m.context.WorkspaceScope = m.callerScope
+	m.baseline = append([]byte(nil), m.callerBaseline...)
+	if m.screens[m.screen].Type == ScreenPreview {
+		m.context.FromStep = m.screens[m.screen].FromStep
+	}
+	return m
+}
+
+func (m *Model) rememberEditorCaller() {
+	m.context.EditorCaller = m.screen
+	m.callerRendered = m.rendered
+	m.callerMode = m.previewMode
+	m.callerOutput = m.context.ExecutionResult
+	m.callerStep = m.context.Step
+	m.callerTask = m.context.Task
+	m.callerIndex = m.context.TaskIndex
+	m.callerArtifact = m.context.Artifact
+	m.callerBaseline = append([]byte(nil), m.baseline...)
+	m.callerScope = m.context.WorkspaceScope
+}
+
+func (m Model) validateEditorCaller(caller ScreenID) error {
+	if _, ok := m.terminals[caller]; ok {
+		return nil
+	}
+	screen, ok := m.screens[caller]
+	if !ok || (screen.Type != ScreenPreview && screen.Type != ScreenChat) {
+		return fmt.Errorf("Editor caller %q must be an allowed terminal, Preview, or Chat Screen", caller)
+	}
+	return nil
+}
+
+func (m Model) previewHasChat() bool {
+	screen := m.screens[m.screen]
+	step, ok := m.steps[screen.FromStep]
+	if !ok || (step.Mode != ModeExec && step.Mode != ModeChat) {
+		return false
+	}
+	_, ok = chatTask(step)
+	return ok
+}
+
+func previewDeclares(screen ScreenDefinition, command CommandID) bool {
+	for _, candidate := range screen.Commands {
+		if candidate.ID == command {
+			return true
 		}
 	}
-	return TaskDefinition{}, fmt.Errorf("interactive Screen %q has no configured task for artifact %q", m.screen, m.context.Artifact)
+	return false
+}
+
+func (m *Model) beginOperation() uint64 {
+	m.operationSequence++
+	m.pendingOperation = m.operationSequence
+	return m.pendingOperation
+}
+
+func (m *Model) completeOperation(operation uint64) bool {
+	if operation == 0 || operation != m.pendingOperation {
+		return false
+	}
+	m.pendingOperation = 0
+	return true
 }
 
 func (m Model) withTaskError(err error) Model {
@@ -730,12 +982,10 @@ func (m Model) withTaskError(err error) Model {
 }
 
 func (m Model) withError(err error, screen ScreenID) Model {
-	if m.cancel != nil {
-		m.cancel()
-	}
-	m.cancel = nil
-	m.running = false
+	m.stopRunning()
+	m.pendingOperation = 0
 	m.err = err
+	m.validationErr = nil
 	m.rendered = ""
 	if screen != "" {
 		m.screen = screen
@@ -745,12 +995,20 @@ func (m Model) withError(err error, screen ScreenID) Model {
 	return m
 }
 
+func (m *Model) stopRunning() {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	m.cancel = nil
+	m.running = false
+}
+
 func (m Model) finish(screen ScreenID) Model {
+	m.stopRunning()
+	m.pendingOperation = 0
 	m.done = true
 	m.terminalScreen = screen
 	m.screen = ""
-	m.running = false
-	m.cancel = nil
 	return m
 }
 
@@ -764,12 +1022,10 @@ func firstScreenOfType(definition Definition, screenType ScreenType) ScreenID {
 }
 
 func cloneDefinition(definition Definition) Definition {
-	clone := Definition{ID: definition.ID}
-	clone.Steps = make([]StepDefinition, len(definition.Steps))
+	clone := Definition{ID: definition.ID, Steps: make([]StepDefinition, len(definition.Steps)), Screens: make([]ScreenDefinition, len(definition.Screens))}
 	for index, step := range definition.Steps {
-		clone.Steps[index] = StepDefinition{ID: step.ID, Tasks: append([]TaskDefinition(nil), step.Tasks...)}
+		clone.Steps[index] = StepDefinition{ID: step.ID, Mode: step.Mode, Tasks: append([]TaskDefinition(nil), step.Tasks...)}
 	}
-	clone.Screens = make([]ScreenDefinition, len(definition.Screens))
 	for index, screen := range definition.Screens {
 		clone.Screens[index] = screen
 		clone.Screens[index].Commands = append([]CommandDefinition(nil), screen.Commands...)
@@ -784,6 +1040,13 @@ func finalOutputLine(output string) string {
 		return normalized[index+1:]
 	}
 	return normalized
+}
+
+func mustPath(path string, err error) string {
+	if err != nil {
+		return ""
+	}
+	return path
 }
 
 func joinView(parts ...string) string {

@@ -18,7 +18,11 @@ Workflow prompts that operate on an existing Change must fail fast with a clear 
 ## Change Artifacts
 A Change is the full delivery flow. Its artifacts include the branch, idea, spec, docs, code, PR body, PR, review, and follow-up fixes.
 
-The Change, Idea, and Spec share one title. When the idea title changes through an agent-assisted idea workflow, the Change title is updated with it. When the spec title changes through a supported spec edit workflow, the Idea and Change titles are updated with it.
+Only `IdeaCreate` initializes the Change title from an artifact H1: it parses the canonical Idea H1 and sends it as the explicit create `title`. Every later Idea, Spec, or PR H1 is validation-only and is independent from the Change title and every other artifact title.
+
+Every submitted Idea, Spec, or PR requires a body containing at least one non-whitespace character, then validates and canonicalizes its own optional metadata before persistence. Title-only, whitespace-body, and metadata-only documents are invalid. Types render as `Types: <type-slugs>` with valid slugs joined by `|` and no spaces. Epic renders as `Epic: <epic-title> #<epic-id>` using the canonical title and ID returned for the current project. Each artifact's Types and Epic are independent from the Change and from every other artifact; saving them never updates Change fields.
+
+Only explicit focused Change operations mutate the Change title, type set, or linked Epic. The first Flow assignment allocates `ref` and derives `slug` from the Change title at that time. Later focused Change edits and artifact saves preserve the assigned slug.
 
 The canonical Change spec structure template is `.mch/default/prompts/spec-file-structure.md`. Active workflow prompts and agent instructions must use that path, not legacy prompt locations under `agent/prompts`.
 

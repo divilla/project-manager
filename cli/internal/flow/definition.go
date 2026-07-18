@@ -1,85 +1,85 @@
-// Package flow provides the reusable, uncomposed CLI Flow runtime.
+// Package flow provides the reusable CLI Flow runtime.
 package flow
 
 // DefinitionID identifies a Flow definition.
 type DefinitionID string
 
-// StepID identifies a Step inside a Flow definition.
+// StepID identifies a Step.
 type StepID string
 
-// TaskID identifies a task inside a Flow definition.
+// TaskID identifies a Task.
 type TaskID string
 
-// ScreenID identifies a reusable Flow or terminal navigation Screen.
+// ScreenID identifies a runtime or terminal Screen.
 type ScreenID string
 
-// CommandID identifies a user-facing Screen command.
+// CommandID identifies a user-facing command.
 type CommandID string
 
-// Artifact identifies the value operated on by a Step.
+// Artifact identifies content operated on by a Step.
 type Artifact string
 
+// Supported artifact identifiers.
 const (
-	// ArtifactIdea is a Change idea.
-	ArtifactIdea Artifact = "idea"
-	// ArtifactSpec is a Change spec.
-	ArtifactSpec Artifact = "spec"
-	// ArtifactPR is a Change pull request body.
-	ArtifactPR Artifact = "pr"
-	// ArtifactImplement is implementation work.
+	ArtifactIdea      Artifact = "idea"
+	ArtifactSpec      Artifact = "spec"
+	ArtifactPR        Artifact = "pr"
 	ArtifactImplement Artifact = "implement"
-	// ArtifactReview is review work.
-	ArtifactReview Artifact = "review"
-	// ArtifactFinalize is finalization work.
-	ArtifactFinalize Artifact = "finalize"
+	ArtifactReview    Artifact = "review"
+	ArtifactFinalize  Artifact = "finalize"
 )
 
-// TaskType identifies the operation performed by a task.
+// Mode determines the exact supported Task shape of a Step.
+type Mode string
+
+// Supported Step modes.
+const (
+	// ModeEditor owns one Editor Task.
+	ModeEditor Mode = "editor"
+	ModeExec   Mode = "exec"
+	ModeChat   Mode = "chat"
+	ModeScript Mode = "script"
+)
+
+// TaskType identifies one executable unit in a Step.
 type TaskType string
 
+// Supported Task types.
 const (
-	// TaskEditor opens an artifact in an external editor.
 	TaskEditor TaskType = "editor"
-	// TaskExec runs a configured non-interactive command.
-	TaskExec TaskType = "exec"
-	// TaskInteractive resumes a configured interactive session.
-	TaskInteractive TaskType = "interactive"
+	TaskExec   TaskType = "exec"
+	TaskChat   TaskType = "chat"
 )
 
-// ScreenType identifies a reusable Flow Screen.
+// ScreenType identifies one reusable runtime Screen.
 type ScreenType string
 
+// Supported Screen types.
 const (
-	// ScreenEditor represents editor activity.
-	ScreenEditor ScreenType = "editor"
-	// ScreenExec represents a running non-interactive command.
-	ScreenExec ScreenType = "exec"
-	// ScreenInteractive represents an interactive checkpoint.
-	ScreenInteractive ScreenType = "interactive"
-	// ScreenPreview represents an artifact preview or diff.
+	ScreenEditor  ScreenType = "editor"
+	ScreenExec    ScreenType = "exec"
+	ScreenChat    ScreenType = "chat"
 	ScreenPreview ScreenType = "preview"
-	// ScreenError represents a concrete runtime error.
-	ScreenError ScreenType = "error"
+	ScreenError   ScreenType = "error"
 )
 
-// DestinationKind identifies the meaning of a command destination.
+// DestinationKind identifies a typed command target.
 type DestinationKind string
 
+// Supported destination kinds.
 const (
-	// DestinationStep starts another Step in the current Flow.
-	DestinationStep DestinationKind = "step"
-	// DestinationScreen navigates to a composition-approved terminal Screen.
+	DestinationStep   DestinationKind = "step"
 	DestinationScreen DestinationKind = "screen"
 )
 
-// Destination is a typed reference to either a Step or terminal Screen.
+// Destination references either a Step or a Screen.
 type Destination struct {
 	Kind   DestinationKind `yaml:"kind"`
 	Step   StepID          `yaml:"step,omitempty"`
 	Screen ScreenID        `yaml:"screen,omitempty"`
 }
 
-// CommandDefinition maps a user-facing command to a typed destination.
+// CommandDefinition maps a command to a typed destination.
 type CommandDefinition struct {
 	ID          CommandID   `yaml:"id"`
 	Destination Destination `yaml:"destination"`
@@ -90,49 +90,52 @@ type ScreenDefinition struct {
 	ID       ScreenID            `yaml:"id"`
 	Type     ScreenType          `yaml:"type"`
 	Title    string              `yaml:"title,omitempty"`
+	FromStep StepID              `yaml:"from_step,omitempty"`
 	Commands []CommandDefinition `yaml:"commands,omitempty"`
 	Options  ScreenOptions       `yaml:"options,omitempty"`
 }
 
-// ScreenOptions contains typed static presentation options.
+// ScreenOptions configures static rendering options.
 type ScreenOptions struct {
 	Theme string `yaml:"theme,omitempty"`
 }
 
-// TaskDefinition configures one operation and its destinations.
+// TaskDefinition configures one ordered Task.
 type TaskDefinition struct {
-	ID               TaskID   `yaml:"id"`
-	Type             TaskType `yaml:"type"`
-	Artifact         Artifact `yaml:"artifact"`
-	Screen           ScreenID `yaml:"screen"`
-	Prompt           string   `yaml:"prompt,omitempty"`
-	Script           string   `yaml:"script,omitempty"`
-	ExpectedOutput   string   `yaml:"expected_output,omitempty"`
-	Preview          ScreenID `yaml:"preview"`
-	UnexpectedOutput ScreenID `yaml:"unexpected_output,omitempty"`
-	Editor           ScreenID `yaml:"editor,omitempty"`
-	Error            ScreenID `yaml:"error"`
+	ID               TaskID      `yaml:"id"`
+	Type             TaskType    `yaml:"type"`
+	Artifact         Artifact    `yaml:"artifact"`
+	Screen           ScreenID    `yaml:"screen"`
+	Prompt           string      `yaml:"prompt,omitempty"`
+	Script           string      `yaml:"script,omitempty"`
+	ExpectedOutput   string      `yaml:"expected_output,omitempty"`
+	Preview          ScreenID    `yaml:"preview"`
+	UnexpectedOutput ScreenID    `yaml:"unexpected_output,omitempty"`
+	Editor           Destination `yaml:"editor,omitempty"`
+	Cancel           Destination `yaml:"cancel,omitempty"`
+	Error            ScreenID    `yaml:"error"`
 }
 
-// StepDefinition configures the ordered tasks for one artifact Step.
+// StepDefinition owns an ordered collection of Tasks.
 type StepDefinition struct {
 	ID    StepID           `yaml:"id"`
+	Mode  Mode             `yaml:"mode"`
 	Tasks []TaskDefinition `yaml:"tasks"`
 }
 
-// Definition is immutable static behavior supplied to the runtime.
+// Definition contains immutable static Flow behavior.
 type Definition struct {
 	ID      DefinitionID       `yaml:"id"`
 	Steps   []StepDefinition   `yaml:"steps"`
 	Screens []ScreenDefinition `yaml:"screens"`
 }
 
-// StepDestination constructs a Step destination.
+// StepDestination constructs a typed Step destination.
 func StepDestination(step StepID) Destination {
 	return Destination{Kind: DestinationStep, Step: step}
 }
 
-// ScreenDestination constructs a terminal Screen destination.
+// ScreenDestination constructs a typed Screen destination.
 func ScreenDestination(screen ScreenID) Destination {
 	return Destination{Kind: DestinationScreen, Screen: screen}
 }

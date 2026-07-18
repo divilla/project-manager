@@ -2,13 +2,11 @@ package app
 
 import (
 	"strconv"
-	"strings"
-	"time"
 
-	"mch/internal/agent"
 	"mch/internal/changes"
 	"mch/internal/dto"
 	"mch/internal/epics"
+	"mch/internal/flow"
 	"mch/internal/projects"
 	"mch/internal/styles"
 	httpclient "mch/pkg/client"
@@ -31,7 +29,6 @@ const (
 	dropdownList    dropdownKind = "list"
 	dropdownSelect  dropdownKind = "select"
 	dropdownConfirm dropdownKind = "confirm"
-	dropdownAgent   dropdownKind = "agent"
 	dropdownIdea    dropdownKind = "idea"
 )
 
@@ -137,26 +134,23 @@ type changeSavedMsg struct {
 	reloadErr error
 }
 
-type changeCreatedForRewriteMsg struct {
-	change dto.Change
-	err    error
+type ideaCreateValidatedMsg struct {
+	attemptUUID string
+	content     []byte
+	title       string
+	err         error
 }
 
-type changeIdeaUpdatedForRewriteMsg struct {
-	change dto.Change
-	err    error
+type ideaCreateAttempt struct {
+	uuid   string
+	path   string
+	cancel func()
 }
 
-type changeIdeaAgentEditSavedMsg struct {
-	change    dto.Change
-	err       error
-	reloadErr error
-}
-
-type agentSpecCreatedMsg struct {
-	change    dto.Change
-	err       error
-	reloadErr error
+type changeCreatedForIdeaFlowMsg struct {
+	attemptUUID string
+	change      dto.Change
+	err         error
 }
 
 type changeDeletedMsg struct {
@@ -164,29 +158,11 @@ type changeDeletedMsg struct {
 	err    error
 }
 
-type agentRewriteFinishedMsg struct {
-	result agent.RewriteResult
-	err    error
-}
-
-type agentInitFinishedMsg struct {
-	repoRoot string
-	err      error
-}
-
-type agentCommandOutputMsg struct {
-	output  string
-	updates <-chan string
-	done    bool
-}
-
 type optionCatalogLoadedMsg struct {
 	phases []dto.Option
 	types  []dto.Option
 	err    error
 }
-
-type agentElapsedMsg time.Time
 
 type currentProjectLoadedMsg struct {
 	id      int
@@ -210,34 +186,37 @@ type appClient interface {
 
 // Model is the root Bubble Tea model for the mch application shell.
 type Model struct {
-	input           textarea.Model
-	state           State
-	previousState   State
-	width           int
-	height          int
-	quitting        bool
-	err             string
-	status          string
-	helpQuery       string
-	promptCursorRow int
-	promptCursorCol int
-	pendingAltO     bool
-	changesFilters  changesFilters
-	optionCatalog   optionCatalog
-	changeList      changes.Model
-	agentFlow       agent.Model
-	agentRunner     agent.Runner
-	agentWorkspace  string
-	agentSpinner    spinner.Model
-	agentElapsed    int
-	currentProject  dto.Option
-	projectList     projects.Model
-	client          appClient
-	appConfig       appConfig
-	configPath      string
-	dropdown        dropdownModel
-	detailEditField detailEditField
-	activeTestCase  dto.TestCase
+	input             textarea.Model
+	state             State
+	previousState     State
+	width             int
+	height            int
+	quitting          bool
+	err               string
+	status            string
+	helpQuery         string
+	promptCursorRow   int
+	promptCursorCol   int
+	pendingAltO       bool
+	changesFilters    changesFilters
+	optionCatalog     optionCatalog
+	changeList        changes.Model
+	ideaFlow          flow.Model
+	ideaFlowActive    bool
+	flowOperations    flow.Operations
+	ideaCreateAttempt ideaCreateAttempt
+	ideaCreateBytes   []byte
+	ideaCreateTitle   string
+	spinner           spinner.Model
+	flowErrorOrigin   State
+	currentProject    dto.Option
+	projectList       projects.Model
+	client            appClient
+	appConfig         appConfig
+	configPath        string
+	dropdown          dropdownModel
+	detailEditField   detailEditField
+	activeTestCase    dto.TestCase
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.
@@ -252,7 +231,7 @@ func NewModel() Model {
 
 // NewModelWithClient creates a model with an injected backend client for tests.
 func NewModelWithClient(client appClient) Model {
-	return newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, TempDir: "configured-test-temp"})
+	return newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL})
 }
 
 func newModelWithConfig(client appClient, cfg appConfig) Model {
@@ -275,28 +254,23 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 	input.Cursor.TextStyle = input.FocusedStyle.Text
 	input.Cursor.SetMode(cursor.CursorStatic)
 	input.Focus()
-	spin := spinner.New(
-		spinner.WithSpinner(spinner.MiniDot),
-		spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("86"))),
+	processingSpinner := spinner.New(
+		spinner.WithSpinner(spinner.Line),
+		spinner.WithStyle(styles.Default.Foreground),
 	)
-
 	currentProject := dto.Option{}
 	if cfg.ProjectID > 0 {
 		currentProject = dto.Option{
 			ID: strconv.Itoa(cfg.ProjectID),
 		}
 	}
-	agentWorkspace := strings.TrimSpace(cfg.TempDir)
-
 	return Model{
 		input:          input,
 		state:          MainState,
 		width:          80,
 		height:         24,
-		agentFlow:      agent.NewModelWithWorkspace(agentWorkspace),
-		agentRunner:    agent.NewProcessRunner(),
-		agentWorkspace: agentWorkspace,
-		agentSpinner:   spin,
+		flowOperations: flow.NewProcessOperations(),
+		spinner:        processingSpinner,
 		currentProject: currentProject,
 		client:         client,
 		appConfig:      cfg,

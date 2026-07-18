@@ -8,6 +8,7 @@ import (
 
 	"mch/internal/changes"
 	"mch/internal/dto"
+	"mch/internal/flow"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -102,34 +103,13 @@ func changeCreateCommand(client appClient, projectID int, idea string) tea.Cmd {
 
 func changeUpdateCommand(client appClient, id int, projectID string, original dto.Change, spec string, validTypes []dto.Option) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := changes.ParseSpecStructure(spec); err != nil {
-			return changeSavedMsg{source: ChangeUpdateState, err: err}
-		}
-		types, epics, err := changeReferenceData(client, projectID, spec, validTypes)
+		_ = validTypes
+		canonical, err := flow.CanonicalizeDocument([]byte(spec), appDocumentOptions{client: client, projectID: projectID})
 		if err != nil {
 			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
-		parsed, err := changes.ParseSpec(spec, types, epics)
-		if err != nil {
-			return changeSavedMsg{source: ChangeUpdateState, err: err}
-		}
-		if parsed.Title != original.Title {
-			if _, err := client.UpdateChangeTitle(id, parsed.Title); err != nil {
-				return changeSavedMsg{source: ChangeUpdateState, err: err}
-			}
-		}
-		if parsed.Spec != original.Spec {
-			if _, err := client.UpdateChangeSpec(id, parsed.Spec, false); err != nil {
-				return changeSavedMsg{source: ChangeUpdateState, err: err}
-			}
-		}
-		if !changes.SameTypes(parsed.ChangeTypes, original.ChangeTypes) {
-			if _, err := client.UpdateChangeTypes(id, parsed.ChangeTypes); err != nil {
-				return changeSavedMsg{source: ChangeUpdateState, err: err}
-			}
-		}
-		if !sameEpicID(parsed.EpicID, original.EpicID) {
-			if _, err := client.UpdateChangeEpic(id, parsed.EpicID); err != nil {
+		if string(canonical.Bytes) != original.Spec {
+			if _, err := client.UpdateChangeSpec(id, string(canonical.Bytes), false); err != nil {
 				return changeSavedMsg{source: ChangeUpdateState, err: err}
 			}
 		}
@@ -285,7 +265,7 @@ func changeDetailTestCaseDoneUpdateCommand(client appClient, change dto.Change, 
 	}
 }
 
-func changeDetailTextUpdateCommand(client appClient, source State, change dto.Change, field detailEditField, value string) tea.Cmd {
+func changeDetailTextUpdateCommand(client appClient, source State, projectID string, change dto.Change, field detailEditField, value string) tea.Cmd {
 	return func() tea.Msg {
 		id, err := changeNumericID(change)
 		if err != nil {
@@ -297,21 +277,19 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditSpec:
-			if strings.TrimSpace(value) == "" {
-				return changeSavedMsg{source: source, err: fmt.Errorf("spec is required")}
-			}
-			if _, err := client.UpdateChangeSpec(id, value, false); err != nil {
+			canonical, err := flow.CanonicalizeDocument([]byte(value), appDocumentOptions{client: client, projectID: projectID})
+			if err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
-		case detailEditIdea:
-			if _, err := client.UpdateChangeIdea(id, value, false); err != nil {
+			if _, err := client.UpdateChangeSpec(id, string(canonical.Bytes), false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditPullRequest:
-			if strings.TrimSpace(value) == "" {
-				return changeSavedMsg{source: source, err: fmt.Errorf("PR is required")}
+			canonical, err := flow.CanonicalizeDocument([]byte(value), appDocumentOptions{client: client, projectID: projectID})
+			if err != nil {
+				return changeSavedMsg{source: source, err: err}
 			}
-			if _, err := client.UpdateChangePR(id, value, false); err != nil {
+			if _, err := client.UpdateChangePR(id, string(canonical.Bytes), false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 		case detailEditPRUrl:
@@ -327,20 +305,6 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 		change, err := client.GetChange(id)
 		return changeSavedMsg{source: source, change: change, err: err}
 	}
-}
-
-func changeReferenceData(client appClient, projectID string, spec string, types []dto.Option) ([]dto.Option, []dto.Option, error) {
-	if len(types) == 0 {
-		return nil, nil, fmt.Errorf("backend change type options are not loaded")
-	}
-	if changes.SpecEpicName(spec) == "" {
-		return types, nil, nil
-	}
-	epics, err := client.ListEpics(projectID)
-	if err != nil {
-		return nil, nil, err
-	}
-	return types, epics, nil
 }
 
 func changeNumericID(change dto.Change) (int, error) {
@@ -365,14 +329,6 @@ func currentProjectNumericID(projectID string) (int, error) {
 		return 0, fmt.Errorf("current project must be numeric")
 	}
 	return id, nil
-}
-
-func sameEpicID(parsed *int, original string) bool {
-	original = strings.TrimSpace(original)
-	if parsed == nil {
-		return original == ""
-	}
-	return original == strconv.Itoa(*parsed)
 }
 
 func toggleChangeType(current []string, selected dto.Option) []string {

@@ -23,7 +23,8 @@ type execProcessFinishedMsg struct {
 
 func TestProcessOperationsExecCancellationTerminatesChildProcesses(t *testing.T) {
 	flowDir := t.TempDir()
-	workspace := t.TempDir()
+	workspace := filepath.Join(flowDir, TmpDir)
+	require.NoError(t, os.MkdirAll(workspace, 0o755))
 	promptPath := filepath.Join(flowDir, "prompt.md")
 	scriptPath := filepath.Join(flowDir, "exec.sh")
 	require.NoError(t, os.WriteFile(promptPath, []byte("prompt"), 0o644))
