@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"mch/internal/agent"
 	"mch/internal/dto"
 	"mch/internal/styles"
 
@@ -180,11 +181,47 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
+	if m.dropdown.kind == dropdownPersistedIdea {
+		selected := m.selectedOption()
+		m.dropdown = dropdownModel{}
+		switch selected.ID {
+		case "/fix":
+			if err := m.agentFlow.Workspace.PromoteOutput(); err != nil {
+				m = m.showPersistedChangeError(err)
+				return m, nil
+			}
+			content, err := m.agentFlow.Workspace.ReadIdea()
+			if err != nil {
+				m = m.showPersistedChangeError(err)
+				return m, nil
+			}
+			m.agentFlow.IdeaEntryContent = content
+			m.agentFlow.Stage = agent.StagePersistedIdeaEntry
+			m.state = UpdateIdeaState
+			m.status = "agent idea"
+			return m.openPersistentEditor(UpdateIdeaState, m.agentFlow.Workspace.IdeaPath())
+		case "/cancel":
+			m.agentFlow.Stage = agent.StageIdle
+			m.state = ChangeDetailsState
+			m.status = "cancel"
+			return m, nil
+		default:
+			m.err = "unknown command"
+			return m, nil
+		}
+	}
 	if m.dropdown.kind == dropdownIdea {
 		selected := m.selectedOption()
 		previous := m.dropdown.previous
 		m.dropdown = dropdownModel{}
 		switch selected.ID {
+		case "/fix":
+			if err := m.agentFlow.Workspace.PromoteOutput(); err != nil {
+				m.err = err.Error()
+				m.status = "agent failed"
+				return m, nil
+			}
+			return m.openAgentIdeaEditor(false, m.agentFlow.IdeaEntryContent)
 		case "/edit":
 			if previous == UpdateIdeaState {
 				m.state = UpdateIdeaState

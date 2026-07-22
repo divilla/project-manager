@@ -1,7 +1,7 @@
 # Documentation Rules
 
 ## Purpose
-Documentation in `docs` is the product source of truth for developers and agents. It records product vocabulary, behavior, architecture, local operation, and delivery plans.
+Documentation in `docs` records product vocabulary, behavior, architecture, local operation, and delivery plans. Code is the source of truth for current behavior and technical contracts; documentation must follow and accurately describe the code.
 
 ## Structure
 Use this structure for current documentation:
@@ -33,6 +33,7 @@ docs/
 
 ## Rules
 - Keep each Markdown file at or below 300 lines.
+- Update documentation when it conflicts with implemented behavior; do not treat stale documentation as authority over code.
 - Write current product documentation, not migration notes.
 - Use `change`, `epic`, `test case`, and `history` as the core product vocabulary.
 - Use `title`, `idea`, `spec`, `pr`, `pr_url`, and `agent_edit` for change text, PR fields, and agent-edit state.

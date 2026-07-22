@@ -1,8 +1,8 @@
 PKG := "mch"
-PKG_LIST := $(shell go list ${PKG}/... | grep -v '/api-tests')
+PKG_LIST := $(shell go list ${PKG}/... | grep -v '/api-tests' | grep -v '/integration')
 
 .DEFAULT_GOAL := check
-check: lint vet race ## Check project
+check: lint vet race integration-test terminal-test ## Check project
 
 init:
 	@go install golang.org/x/lint/golint@latest
@@ -21,6 +21,12 @@ test: ## Run tests
 
 race: ## Run tests with data race detector
 	@go test -race ${PKG_LIST}
+
+integration-test: ## Run CLI and default Flow program integration tests
+	@go test ./integration
+
+terminal-test: ## Run CLI pseudo-terminal integration tests
+	@go test ./integration/terminal/...
 
 benchmark: ## Run benchmarks
 	@go test -run="-" -benchmem -bench=".*" ${PKG_LIST}

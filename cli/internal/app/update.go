@@ -16,7 +16,7 @@ import (
 
 // Init starts any initial asynchronous command required by the model.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{tea.ClearScreen, optionCatalogCommand(m.client)}
+	cmds := []tea.Cmd{tea.ClearScreen, optionCatalogCommand(m.client, m.appConfig.FlowDir)}
 	if m.needsProjectSelection() {
 		selectProject := func() tea.Msg {
 			return startupProjectSelectionMsg{}
@@ -182,8 +182,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.err != nil {
-			m.err = msg.err.Error()
-			m.status = "save failed"
+			m = m.showNewChangeError(msg.err)
+			return m, nil
+		}
+		m.changeList = m.changeList.WithDetail(msg.change)
+		m.state = ChangeDetailsState
+		m.agentFlow.Stage = agent.StageIdle
+		if m.agentFlow.Workspace.RootDir != "" {
+			if err := m.agentFlow.Workspace.PromoteOutput(); err != nil {
+				m = m.showPersistedChangeError(err)
+				return m, nil
+			}
+		}
+		if msg.changeTypesPresent {
+			m.status = "saving change types"
+			return m, changeTypesUpdateForRewriteCommand(m.client, msg.change, msg.changeTypes)
+		}
+		return m.startAgentRewrite("")
+	case changeTypesUpdatedForRewriteMsg:
+		if m.state != ChangeDetailsState || m.changeList.Detail.ID != msg.change.ID {
+			return m, nil
+		}
+		if msg.err != nil {
+			m = m.showPersistedChangeError(msg.err)
 			return m, nil
 		}
 		m.changeList = m.changeList.WithDetail(msg.change)
@@ -193,24 +214,67 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if msg.err != nil {
+			if msg.change.ID != "" {
+				m.changeList = m.changeList.WithDetail(msg.change)
+			}
+			if m.agentFlow.Workspace.RootDir != "" {
+				m = m.showPersistedChangeError(msg.err)
+				return m, nil
+			}
 			m.err = msg.err.Error()
 			m.status = "save failed"
 			return m, nil
 		}
 		m.changeList = m.changeList.WithDetail(msg.change)
 		return m.startAgentRewrite("")
-	case changeIdeaAgentEditSavedMsg:
+	case changeArtifactEditLoadedMsg:
+		return m.handleArtifactEditLoaded(msg)
+	case changeArtifactUpdatedForWriteMsg:
+		if m.state != ChangeDetailsState || m.agentFlow.Stage != agent.StageArtifactEntry {
+			return m, nil
+		}
+		if msg.err != nil {
+			if msg.change.ID != "" {
+				m.changeList = m.changeList.WithDetail(msg.change)
+				m.agentFlow.Stage = agent.StageIdle
+				m.detailEditField = ""
+				m = m.setPromptValue("")
+			}
+			m.err = msg.err.Error()
+			m.status = "save failed"
+			return m, nil
+		}
+		m.changeList = m.changeList.WithDetail(msg.change)
+		if err := m.agentFlow.Workspace.PromoteOutput(); err != nil {
+			m.agentFlow.Stage = agent.StageIdle
+			m.detailEditField = ""
+			m.err = err.Error()
+			m.status = "agent failed"
+			return m, nil
+		}
+		return m.startAgentRewrite(m.agentFlow.SessionID)
+	case changeArtifactAgentEditSavedMsg:
 		if m.state != RewriteIdeaState {
 			return m, nil
 		}
 		if msg.err != nil {
+			if msg.change.ID != "" {
+				m.changeList = m.changeList.WithDetail(msg.change)
+				m.detailEditField = ""
+				m = m.setPromptValue("")
+			}
 			m.agentFlow.Stage = agent.StageIdle
 			m.agentElapsed = 0
 			if m.changeList.Detail.ID != "" {
 				m.state = ChangeDetailsState
+				m.agentViewport.SetContent("")
+				m.agentViewport.GotoTop()
 			}
 			m.err = msg.err.Error()
 			m.status = "save failed"
+			if m.state == ChangeDetailsState {
+				return m, tea.ClearScreen
+			}
 			return m, nil
 		}
 		m.changeList = m.changeList.WithDetail(msg.change)
@@ -221,11 +285,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "load failed"
 		}
 		m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+		m.agentViewport.SetContent("")
+		m.agentViewport.GotoTop()
 		m.agentElapsed = 0
 		m.detailEditField = ""
 		m.activeTestCase = dto.TestCase{}
 		m = m.setPromptValue("")
-		return m, nil
+		return m, tea.ClearScreen
 	case agentSpecCreatedMsg:
 		if msg.err != nil {
 			m.err = msg.err.Error()
@@ -255,7 +321,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.arrive(msg.target, "deleted")
 	case optionCatalogLoadedMsg:
 		if msg.err != nil {
-			m.optionCatalog = optionCatalog{}
+			m.optionCatalog = optionCatalog{err: msg.err}
 			m.err = msg.err.Error()
 			m.status = "option catalog failed"
 			return m, nil
@@ -318,6 +384,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.source == UpdateIdeaState {
 			return m.handleUpdateIdeaEditorFinished(msg)
 		}
+		if msg.source == ChangeDetailsState && m.agentFlow.Stage == agent.StageArtifactEntry {
+			return m.handleArtifactEditorFinished(msg)
+		}
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			m.status = "editor failed"
@@ -338,9 +407,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Sequence(tea.ClearScreen, cmd)
 	case tea.WindowSizeMsg:
+		followOutput := m.agentViewport.AtBottom()
 		m.width = msg.Width
 		m.height = msg.Height
+		m.refreshAgentViewport(followOutput)
 		return m, nil
+	case tea.MouseMsg:
+		if m.agentRunningScreen() {
+			var cmd tea.Cmd
+			m.agentViewport, cmd = m.agentViewport.Update(msg)
+			return m, cmd
+		}
+		var cmd tea.Cmd
+		m.input, cmd = m.input.Update(msg)
+		return m, cmd
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -359,6 +439,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == FindInputState {
 		return m.handleFindKey(key, msg)
+	}
+	if m.agentRunningScreen() {
+		switch key {
+		case "home", "g":
+			m.agentViewport.GotoTop()
+			return m, nil
+		case "end", "G":
+			m.agentViewport.GotoBottom()
+			return m, nil
+		case "up", "down", "pgup", "pgdown", "k", "j", "b", "f", "u", "d", "ctrl+u", "ctrl+d", " ":
+			var cmd tea.Cmd
+			m.agentViewport, cmd = m.agentViewport.Update(msg)
+			return m, cmd
+		}
 	}
 
 	if updated, cmd, ok := m.handleListNavigationKey(key, msg); ok {
@@ -788,6 +882,9 @@ func (m Model) executeCommandFrom(source State, command string) (tea.Model, tea.
 			m.err = "/edit-spec is only available from ChangeDetailsState"
 			return m, nil
 		}
+		if command == "/edit-spec" {
+			return m.beginDetailTextEditor(detailEditSpec)
+		}
 		m.state = navigation.UpdateTarget(source)
 		if m.state == UpdateIdeaState {
 			m = m.setPromptValue(m.changeList.Detail.Idea)
@@ -946,16 +1043,15 @@ func (m Model) beginDetailTitleEdit() (tea.Model, tea.Cmd) {
 func (m Model) beginDetailTextEditor(field detailEditField) (tea.Model, tea.Cmd) {
 	m.detailEditField = field
 	switch field {
-	case detailEditIdea:
-		m.state = UpdateIdeaState
-		m = m.setPromptValue(m.changeList.Detail.Idea)
-		m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
-		m.agentFlow.Stage = agent.StageIdeaEntry
-		return m.openPromptEditor(UpdateIdeaState)
-	case detailEditSpec:
-		m = m.setPromptValue(m.changeList.Detail.Spec)
-	case detailEditPullRequest:
-		m = m.setPromptValue(m.changeList.Detail.PR)
+	case detailEditIdea, detailEditSpec, detailEditPullRequest:
+		id, err := changeNumericID(m.changeList.Detail)
+		if err != nil {
+			m.err = err.Error()
+			m.status = "validation failed"
+			return m, nil
+		}
+		m.status = "loading change"
+		return m, changeArtifactEditLoadCommand(m.client, id, field)
 	case detailEditPRUrl:
 		m = m.setPromptValue(m.changeList.Detail.PRUrl)
 	default:

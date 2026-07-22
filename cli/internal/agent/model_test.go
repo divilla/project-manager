@@ -91,30 +91,69 @@ func TestFormatCommandOutputHumanizesJSONLines(t *testing.T) {
 
 func TestCodexPromptsUseExpectedSkills(t *testing.T) {
 	workspace := Workspace{Dir: "/tmp/custom-mch"}
-	assert.Equal(t, `Use $change-idea-tmp. The configured temp_dir is "/tmp/custom-mch". Read and replace "/tmp/custom-mch/initial-idea.md".`, RewritePrompt(workspace))
+	assert.Equal(t, `Use $change-idea-tmp. The temporary workspace is "/tmp/custom-mch". Read and replace "/tmp/custom-mch/initial-idea.md".`, RewritePrompt(workspace))
+	changeWorkspace := NewChangeModel("/repo/.mch/tmp", "0198a86f-9b8a-7d89-ae5b-6f25b528b04c").Workspace
+	assert.Contains(t, RewritePrompt(changeWorkspace), changeWorkspace.InputPath())
+	assert.Contains(t, RewritePrompt(changeWorkspace), changeWorkspace.OutputPath())
+	for _, operation := range []WriteOperation{IdeaWriteOperation, SpecWriteOperation, PRWriteOperation} {
+		workspace := NewArtifactModel("/repo/.mch/tmp", "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", operation).Workspace
+		assert.Equal(t, IdeaStage, workspace.Stage)
+		assert.Contains(t, RewritePrompt(workspace), filepath.Join(DefaultDir, "prompts", string(operation)+".md"))
+	}
 	assert.Equal(t, "Use $change-spec-tmp.", InitPrompt)
 }
 
-func generatedChangeTypes() []string {
-	return []string{"feature", "test"}
+func TestExistingArtifactPreparationPreservesIdeaWorkspaceSession(t *testing.T) {
+	workspace := NewArtifactModel(t.TempDir(), "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", SpecWriteOperation).Workspace
+	require.NoError(t, workspace.Ensure())
+	require.NoError(t, os.WriteFile(workspace.SessionPath(), []byte("session-1\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(workspace.Dir, "events.jsonl"), []byte("events"), 0o644))
+	require.NoError(t, workspace.PrepareArtifact("# Existing spec"))
+
+	assert.Equal(t, "# Existing spec", readWorkspaceFile(t, workspace.InputPath()))
+	assert.Equal(t, "# Existing spec", readWorkspaceFile(t, workspace.OutputPath()))
+	sessionID, err := workspace.ReadSessionID()
+	require.NoError(t, err)
+	assert.Equal(t, "session-1", sessionID)
+	assert.Equal(t, "events", readWorkspaceFile(t, filepath.Join(workspace.Dir, "events.jsonl")))
+}
+
+func readWorkspaceFile(t *testing.T, path string) string {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return string(content)
+}
+
+func TestWorkflowEnvironmentOverridesInheritedValues(t *testing.T) {
+	workspace := Workspace{RefUUID: "0198a86f-9b8a-7d89-ae5b-6f25b528b04c"}
+	env := workflowEnvironment([]string{"PATH=/bin", "MCH_STAGE=spec", "MCH_TEMP_DIR=/unsafe"}, workspace)
+	assert.ElementsMatch(t, []string{
+		"PATH=/bin",
+		"MCH_DEFAULT_DIR=.mch/default",
+		"MCH_TEMP_DIR=.mch/tmp",
+		"MCH_REF_UUID=0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
+		"MCH_STAGE=idea",
+	}, env)
 }
 
 func TestParseGeneratedChange(t *testing.T) {
-	spec := "\n# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First scenario.\n- Second scenario spans\n  more detail.\n1. Numbered scenario.\n\n## Review Focus\n\n- Parser."
+	spec := "# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First scenario.\n- Second scenario spans\n  more detail.\n1. Numbered scenario.\n\n## Review Focus\n\n- Parser."
 
-	parsed, err := ParseGeneratedChange(spec, generatedChangeTypes())
+	parsed, err := ParseGeneratedChange(spec)
 	require.NoError(t, err)
 
 	assert.Equal(t, "Generated Change", parsed.Title)
 	assert.Equal(t, []string{"feature", "test"}, parsed.ChangeTypes)
+	assert.True(t, parsed.ChangeTypesPresent)
 	assert.Equal(t, []string{"First scenario.", "Second scenario spans more detail.", "Numbered scenario."}, parsed.TestCases)
-	assert.Equal(t, "\n# Generated Change\n\nTypes: feature|test\n\n## Goal\nShip it.\n\n## QA Test Cases\n\n- First scenario.\n- Second scenario spans\n  more detail.\n1. Numbered scenario.\n\n## Review Focus\n\n- Parser.", parsed.Spec)
+	assert.Equal(t, spec, parsed.Spec)
 }
 
 func TestParseGeneratedChangeSkipsNoneQATestCase(t *testing.T) {
 	spec := "# Generated Change\n\nTypes: feature\n\n## QA Test Cases\n\n- None.\n\n## Review Focus\n\n- Parser."
 
-	parsed, err := ParseGeneratedChange(spec, generatedChangeTypes())
+	parsed, err := ParseGeneratedChange(spec)
 	require.NoError(t, err)
 
 	assert.Empty(t, parsed.TestCases)
@@ -148,7 +187,7 @@ Types: feature|test
 
 - Generated Change parser strictness for H1 title, ` + "`Types:`" + ` metadata, type slugs, full spec preservation, and ` + "`## QA Test Cases`" + ` extraction.`
 
-	parsed, err := ParseGeneratedChange(spec, generatedChangeTypes())
+	parsed, err := ParseGeneratedChange(spec)
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{
@@ -193,18 +232,38 @@ func TestParseGeneratedChangeValidation(t *testing.T) {
 		spec string
 	}{
 		{name: "missing title", spec: "Types: feature\n\n## Goal\nShip it."},
-		{name: "missing types", spec: "# Generated Change\n\n## Goal\nShip it."},
-		{name: "blank types", spec: "# Generated Change\n\nTypes: \n\n## Goal\nShip it."},
-		{name: "malformed types", spec: "# Generated Change\n\nTypes: feature | test\n\n## Goal\nShip it."},
-		{name: "empty type", spec: "# Generated Change\n\nTypes: feature|\n\n## Goal\nShip it."},
-		{name: "comma separator", spec: "# Generated Change\n\nTypes: feature,test\n\n## Goal\nShip it."},
-		{name: "unsupported type", spec: "# Generated Change\n\nTypes: spike\n\n## Goal\nShip it."},
+		{name: "leading blank", spec: "\n# Generated Change\n\nTypes: feature\n\n## Goal\nShip it."},
+		{name: "no blank after title", spec: "# Generated Change\nTypes: feature\n\n## Goal\nShip it."},
+		{name: "missing body", spec: "# Generated Change\n\nTypes: feature"},
+		{name: "blank body", spec: "# Generated Change\n\nTypes:\n\n"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseGeneratedChange(tt.spec, generatedChangeTypes())
+			_, err := ParseGeneratedChange(tt.spec)
 			require.Error(t, err)
+		})
+	}
+}
+
+func TestParseGeneratedChangeAllowsOmittedEmptyAndUnsupportedTypes(t *testing.T) {
+	tests := []struct {
+		name    string
+		spec    string
+		present bool
+		values  []string
+	}{
+		{name: "omitted", spec: "# Generated Change\n\n## Goal\nShip it."},
+		{name: "empty", spec: "# Generated Change\n\nTypes:\n\n## Goal\nShip it.", present: true, values: []string{}},
+		{name: "pipe-delimited unsupported and punctuation", spec: "# Generated Change\n\nTypes: fix|feature|unsupported!\n\n## Goal\nShip it.", present: true, values: []string{"fix", "feature", "unsupported"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := ParseGeneratedChange(tt.spec)
+			require.NoError(t, err)
+			assert.Equal(t, tt.present, parsed.ChangeTypesPresent)
+			assert.Equal(t, tt.values, parsed.ChangeTypes)
 		})
 	}
 }

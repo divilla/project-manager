@@ -1,6 +1,6 @@
 Extract `<change-slug>` from the current Git branch using this regex:
 
-`^change/([0-9]+-[a-z0-9_-]+)$`
+`^change/([0-9]+-[0-9A-Za-z_-]+)$`
 
 If the current branch does not match, stop and output one concise error explaining that the branch must be named `change/<change-slug>`.
 
@@ -58,7 +58,7 @@ The final Change must satisfy:
 - `Follow-Ups`: future work outside scope, or `- None.`.
 
 Stop without writing or committing if:
-- the branch name does not match `^change/([0-9]+-[a-z0-9_-]+)$`
+- the branch name does not match `^change/([0-9]+-[0-9A-Za-z_-]+)$`
 - `agent/ideas/<change-slug>.md` does not exist
 - `.mch/default/prompts/spec-file-structure.md` does not exist
 - clarification is required

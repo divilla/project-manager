@@ -302,6 +302,7 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 
 	created, err := client.CreateChange(dto.ChangeCreateInput{
 		ProjectID: 7,
+		RefUUID:   "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
 		Title:     "New Change",
 		Idea:      "# New Change\n\nInitial idea",
 	})
@@ -389,6 +390,7 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 	assert.Equal(t, map[string]any{"project_id": float64(7)}, payloads[0])
 	assert.Equal(t, map[string]any{
 		"project_id": float64(7),
+		"ref_uuid":   "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
 		"title":      "New Change",
 		"idea":       "# New Change\n\nInitial idea",
 	}, payloads[1])

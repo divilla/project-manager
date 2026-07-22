@@ -37,6 +37,7 @@ type TestCase struct {
 // ChangeCreateInput is the backend payload for creating a change.
 type ChangeCreateInput struct {
 	ProjectID int
+	RefUUID   string
 	Title     string
 	Idea      string
 }

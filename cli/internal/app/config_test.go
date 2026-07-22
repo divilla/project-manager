@@ -20,7 +20,6 @@ func TestAppConfigLoadsRepositoryMCHConfigFlowAndHelp(t *testing.T) {
 	assert.Equal(t, root, cfg.RepositoryRoot)
 	assert.Equal(t, filepath.Join(root, ".mch", "config.yaml"), cfg.ConfigPath)
 	assert.Equal(t, "http://backend.test", cfg.BackendURL)
-	assert.Equal(t, "/workspace/custom-mch", cfg.TempDir)
 	assert.Equal(t, 7, cfg.ProjectID)
 	assert.Equal(t, filepath.Join(root, ".mch", "default"), cfg.FlowDir)
 	assert.Equal(t, "default", cfg.Flow.Slug)
@@ -48,7 +47,7 @@ func TestAppConfigAllowsMissingAndZeroProjectID(t *testing.T) {
 	assert.Zero(t, zero.ProjectID)
 }
 
-func TestSaveAppConfigPersistsRepositoryProjectIDAndTempDir(t *testing.T) {
+func TestSaveAppConfigPersistsRepositoryProjectIDAndDropsLegacyTempDir(t *testing.T) {
 	root := t.TempDir()
 	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n"+"project_id: 0\n")
 	path := filepath.Join(root, ".mch", "config.yaml")
@@ -61,12 +60,11 @@ func TestSaveAppConfigPersistsRepositoryProjectIDAndTempDir(t *testing.T) {
 	loaded, err := loadAppConfig(root)
 	require.NoError(t, err)
 	assert.Equal(t, "http://backend.test", loaded.BackendURL)
-	assert.Equal(t, "/workspace/custom-mch", loaded.TempDir)
 	assert.Equal(t, 11, loaded.ProjectID)
 	body, err := os.ReadFile(path)
 	require.NoError(t, err)
 	assert.Contains(t, string(body), "backend_url: http://backend.test")
-	assert.Contains(t, string(body), "temp_dir: /workspace/custom-mch")
+	assert.NotContains(t, string(body), "temp_dir:")
 	assert.Contains(t, string(body), "project_id: 11")
 }
 
@@ -180,7 +178,6 @@ func testAppConfig(overrides appConfig) appConfig {
 		RepositoryRoot: "/repo",
 		ConfigPath:     "/repo/.mch/config.yaml",
 		BackendURL:     defaultBackendURL,
-		TempDir:        "/workspace/mch",
 		FlowDir:        "/repo/.mch/default",
 		Flow: flowConfig{
 			Version:        1,
@@ -207,9 +204,6 @@ func testAppConfig(overrides appConfig) appConfig {
 	}
 	if overrides.BackendURL != "" {
 		cfg.BackendURL = overrides.BackendURL
-	}
-	if overrides.TempDir != "" {
-		cfg.TempDir = overrides.TempDir
 	}
 	if overrides.ProjectID != 0 {
 		cfg.ProjectID = overrides.ProjectID

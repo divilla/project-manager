@@ -7,7 +7,7 @@ Use this only for a post-code documentation pass. The implementation already exi
 
 ## Preconditions
 
-Extract `<change-slug>` from the current Git branch using `^change/([0-9]+-[a-z0-9-_]+)$`.
+Extract `<change-slug>` from the current Git branch using `^change/([0-9]+-[0-9A-Za-z_-]+)$`.
 
 If the current branch does not match, stop with: `Branch must be change/<change-slug>.`
 
@@ -69,7 +69,7 @@ Edit only:
 - `specs/<change-slug>.md`
 - files under `docs/`
 
-Update the Change spec only to clarify accepted final behavior, acceptance criteria, verification notes, QA test cases, review focus, follow-ups, or unresolved ambiguity discovered after implementation.
+Update the Change spec only to clarify accepted final behavior, requirements, verification notes, QA test cases, review focus, follow-ups, or unresolved ambiguity discovered after implementation.
 
 Update docs enough that future work can align code, tests, frontend, CLI, and seed data with the intended behavior without relying on chat history.
 

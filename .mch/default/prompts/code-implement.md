@@ -3,7 +3,7 @@ name: change-code
 description: Implement code according to active change file
 ---
 
-Extract `<change-slug>` from the current Git branch using this regex: `^change/([0-9]+-[a-z0-9-_]+)$`
+Extract `<change-slug>` from the current Git branch using this regex: `^change/([0-9]+-[0-9A-Za-z_-]+)$`
 
 If the current branch does not match, stop and output one concise error explaining that the branch must be named `change/<change-slug>`.
 
@@ -11,18 +11,18 @@ Stop without editing if `specs/<change-slug>.md` does not exist.
 
 Implement Change spec `specs/<change-slug>.md` with senior-level discipline.
 
-The Change spec is the implementation contract. The current branch documentation under `docs/` is the behavioral reference. Implement the smallest coherent code, test, seed, and database-file changes needed to satisfy that contract.
+The Change spec defines the requested implementation scope. Existing code is the source of truth for current behavior and technical contracts; documentation must follow code. Implement the smallest coherent code, test, seed, and database-file changes needed to satisfy the requested Change.
 
 Before coding:
 1. Read the full Change spec.
 2. Read every relevant doc under `docs/`, especially the docs listed in the Change spec.
-3. Compare the Change spec and docs for conflicts.
+3. Compare the Change spec, code, and docs for conflicts; treat code as current behavior and the Spec as the requested change.
 4. Inspect the existing backend, frontend, CLI, database, seed, and test patterns before choosing an approach.
 5. Inspect the current worktree and preserve unrelated local changes.
-6. Verify the Change spec is implementation-ready: it must follow the standard Change structure, define a clear Goal, Scope, Requirements, Acceptance Criteria, Non-Goals, Relevant Specs, Verification, and QA Test Cases, and contain enough detail to implement and verify the behavior without relying on chat history. 
+6. Verify the Change spec is implementation-ready: it must follow the standard Change structure, define a clear Goal, Scope, Requirements, Non-Goals, Verification, and QA Test Cases, and contain enough detail to implement and verify the behavior without relying on chat history.
 
 Stop conditions:
-- If the Change spec and docs conflict, stop before coding and report the exact file/section conflict.
+- If the Change spec conflicts with existing code in a way that is not clearly an intentional requested change, stop before coding and report the exact conflict.
 - If any Change spec required section is missing, ambiguous, untestable, or conflicts with the linked docs, stop before coding and report the exact readiness gap.
 - If the required external behavior, API contract, persistence contract, field naming, endpoint naming, history behavior, seed behavior, or verification expectation is unclear, stop and ask one specific clarifying question.
 - If unrelated local changes block a safe implementation, stop and describe the conflict.

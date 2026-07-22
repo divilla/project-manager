@@ -7,4 +7,4 @@ if [[ -z "${stage}" ]]; then
   exit 2
 fi
 
-printf 'mch demo exec: %s\n' "${stage}"
+printf 'mch demo exec: %s (%s)\n' "${stage}" "${MCH_STAGE:-unset}"

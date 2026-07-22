@@ -10,7 +10,7 @@ sub fail {
 @ARGV == 1 or fail("usage: scripts/change-new.pl <change-slug>");
 
 my $change_name = $ARGV[0];
-$change_name =~ /\A[A-Za-z0-9][A-Za-z0-9._-]*\z/
+$change_name =~ m{^[0-9]+-[0-9A-Za-z_-]+$}
     or fail("invalid change name: $change_name");
 
 my $branch = "change/$change_name";

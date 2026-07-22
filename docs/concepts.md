@@ -16,7 +16,7 @@ A change is the primary unit of delivery and PR construction. It has a fixed str
 Important fields:
 
 - `ref`: optional project-scoped numeric reference allocated by backend Flow assignment.
-- `ref_uuid`: backend-generated, globally unique UUID identity returned on Change responses.
+- `ref_uuid`: globally unique UUID identity resolved during creation and returned on Change responses.
 - `slug`: optional backend-owned branch identifier generated from the Change reference and title.
 - `title`: short human-readable name.
 - `idea`: required user intent captured when the Change is created and replaceable by an agent rewrite.
@@ -39,7 +39,7 @@ Important fields:
 
 `ref` is unique only inside its project. Two projects may both have a change with the same `ref`, but a single project must not.
 
-Users and clients cannot set or edit `ref`, `ref_uuid`, `slug`, Flow snapshot fields, or Run state fields directly. New changes may have no assigned `ref`, `slug`, or Flow snapshot; clients must render that state without deriving identity locally. The backend assigns or refreshes `ref` and `slug` only through Flow assignment and returns identity on Change responses.
+Clients may optionally supply `ref_uuid` only when creating a Change; the backend preserves a supplied value or generates one when it is omitted or null. Once created, clients cannot replace or clear `ref_uuid`. Users and clients cannot set or edit `ref`, `slug`, Flow snapshot fields, or Run state fields directly. New changes may have no assigned `ref`, `slug`, or Flow snapshot; clients must render that state without deriving identity locally. The backend assigns or refreshes `ref` and `slug` only through Flow assignment and returns identity on Change responses.
 
 ## Flow and Run
 A Flow is a reusable automation definition for moving a Change through ordered Steps. A Step is one named stage inside that Flow. A Run is one execution attempt of the Flow copied onto a Change. A Task performs one Step within a Run. A Worker is the executor, tool, or process that performs the Task.

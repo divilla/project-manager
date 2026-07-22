@@ -19,15 +19,16 @@ import (
 // View renders the root application shell and active screen.
 func (m Model) View() string {
 	width := terminalWidth(m.width)
+	agentRunning := m.agentRunningScreen()
 	lines := []string{m.headerLine(width)}
 	if m.state == ProjectsListState && !m.hasDropdown() {
 		lines = append(lines, "")
 		lines = append(lines, projects.TableView(m.projectList, width))
 	}
-	if (m.state == ChangesListState || m.state == RewriteIdeaState) && !m.hasDropdown() {
-		if m.agentFlow.Stage == agent.StageAIRunning {
+	if m.state == ChangesListState || m.state == RewriteIdeaState {
+		if agentRunning {
 			lines = append(lines, "", m.agentRunningView(width))
-		} else if m.state == ChangesListState {
+		} else if m.state == ChangesListState && !m.hasDropdown() {
 			table := changes.TableView(m.changeList, m.changeFilters(), width, m.changeTableRows(), phaseColorMap(m.optionCatalog.phases))
 			lines = append(lines, m.changeFiltersLine(table), table)
 		}
@@ -56,6 +57,9 @@ func (m Model) View() string {
 	} else if m.hasDropdown() {
 		lines = append(lines, "")
 		lines = append(lines, m.dropdownView(width))
+	} else if agentRunning {
+		lines = append(lines, "")
+		lines = append(lines, m.agentInputBand(width))
 	} else {
 		lines = append(lines, "")
 		lines = append(lines, m.inputBand(width))
@@ -95,19 +99,90 @@ func (m Model) headerRight() string {
 }
 
 func (m Model) agentRunningView(width int) string {
+	viewport := m.agentViewport
+	viewport.Width = width
+	viewport.Height = agentViewportHeight(m.height)
+	viewport.Style = agentViewportStyle()
+	viewport.SetContent(agentOutputView(m.agentFlow.CommandOutput))
+
 	message := "Agent running: rewriting idea"
-	if m.agentFlow.SessionID != "" {
-		message = "Agent running: updating idea"
+	switch m.agentFlow.Workspace.Operation {
+	case agent.SpecWriteOperation:
+		message = "Agent running: writing spec"
+	case agent.PRWriteOperation:
+		message = "Agent running: writing PR"
+	default:
+		if m.agentFlow.SessionID != "" {
+			message = "Agent running: updating idea"
+		}
 	}
 	unit := "seconds"
 	if m.agentElapsed == 1 {
 		unit = "second"
 	}
-	lines := []string{fmt.Sprintf("%s %s... %d %s", m.agentSpinner.View(), message, m.agentElapsed, unit)}
-	if strings.TrimSpace(m.agentFlow.CommandOutput) != "" {
-		lines = append(lines, "", "Codex output:", strings.TrimSpace(m.agentFlow.CommandOutput))
+	progress := fmt.Sprintf(
+		"%s %s %s",
+		m.agentSpinner.View(),
+		styles.Default.AccentCyan.Bold(true).Render(message+"..."),
+		styles.Default.Muted.Render(fmt.Sprintf("%d %s", m.agentElapsed, unit)),
+	)
+	progress = lipgloss.NewStyle().
+		Background(lipgloss.Color("0")).
+		Width(width).
+		Render(progress)
+	return viewport.View() + "\n\n" + progress
+}
+
+func (m Model) agentRunningScreen() bool {
+	return (m.state == ChangesListState || m.state == RewriteIdeaState) && m.agentFlow.Stage == agent.StageAIRunning
+}
+
+func (m *Model) refreshAgentViewport(followOutput bool) {
+	m.agentViewport.Width = terminalWidth(m.width)
+	m.agentViewport.Height = agentViewportHeight(m.height)
+	m.agentViewport.Style = agentViewportStyle()
+	m.agentViewport.SetContent(agentOutputView(m.agentFlow.CommandOutput))
+	if followOutput {
+		m.agentViewport.GotoBottom()
 	}
-	return styles.Default.InputBand.Width(width).Render(strings.Join(lines, "\n"))
+}
+
+func agentViewportHeight(height int) int {
+	const reservedRows = 10
+	available := height - reservedRows
+	if available < 3 {
+		return 3
+	}
+	return available
+}
+
+func agentViewportStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Background(lipgloss.Color("0")).
+		Foreground(lipgloss.Color("252"))
+}
+
+func agentOutputView(output string) string {
+	lines := []string{styles.Default.AccentPurple.Bold(true).Render("Codex output:")}
+	if strings.TrimSpace(output) == "" {
+		return strings.Join(append(lines, styles.Default.Muted.Render("Waiting for output...")), "\n")
+	}
+	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+		trimmed := strings.TrimSpace(line)
+		style := styles.Default.Foreground
+		switch {
+		case trimmed == "stderr:" || strings.HasPrefix(trimmed, "error:"):
+			style = styles.Default.Error
+		case strings.HasPrefix(trimmed, "thread started:") || strings.HasPrefix(trimmed, "running command:"):
+			style = styles.Default.AccentCyan
+		case trimmed == "turn started" || strings.HasPrefix(trimmed, "assistant:"):
+			style = styles.Default.AccentPurple
+		case strings.HasPrefix(trimmed, "turn completed") || trimmed == "final output:":
+			style = styles.Default.Success
+		}
+		lines = append(lines, style.Render(line))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) configView(width int) string {
@@ -147,7 +222,12 @@ func (m Model) helpText() string {
 		}
 		return "<return> select  |  <esc> cancel"
 	}
+	if m.agentRunningScreen() {
+		return "<up/down> scroll  |  <pgup/pgdown> page  |  <home/end> jump"
+	}
 	switch m.state {
+	case RewriteIdeaState:
+		return "</> command  |  <esc> cancel"
 	case ChangesListState:
 		return "<ctrl+n> new change  |  <return> view  |  </> command"
 	case ChangeDetailsState:
@@ -170,33 +250,41 @@ func (m Model) helpText() string {
 }
 
 func (m Model) inputBand(width int) string {
+	return m.promptBand(width, styles.Default.InputBand, lipgloss.Color("0"))
+}
+
+func (m Model) agentInputBand(width int) string {
+	return m.promptBand(width, agentViewportStyle(), lipgloss.Color("245"))
+}
+
+func (m Model) promptBand(width int, base lipgloss.Style, placeholderColor lipgloss.TerminalColor) string {
 	width = ui.NormalizeWidth(width)
-	content := m.inputLines(width)
+	content := m.promptLines(width, base, placeholderColor)
 	blank := strings.Repeat(" ", width)
-	lines := []string{styles.Default.InputBand.Render(blank)}
+	lines := []string{base.Render(blank)}
 	lines = append(lines, content...)
-	lines = append(lines, styles.Default.InputBand.Render(blank))
+	lines = append(lines, base.Render(blank))
 	return strings.Join(lines, "\n")
 }
 
-func (m Model) inputLines(width int) []string {
+func (m Model) promptLines(width int, base lipgloss.Style, placeholderColor lipgloss.TerminalColor) []string {
 	lines := promptValueLines(m.input.Value())
 	padded := make([]string, 0, len(lines))
 	for index, value := range lines {
 		showCursor := m.input.Focused() && m.input.Value() != "" && index == m.promptCursorRow
-		line := m.renderPromptLine(value, showCursor)
+		line := m.renderPromptLineWithStyle(value, showCursor, base, placeholderColor)
 		if visible := lipgloss.Width(line); visible < width {
-			line += styles.Default.InputBand.Render(strings.Repeat(" ", width-visible))
+			line += base.Render(strings.Repeat(" ", width-visible))
 		}
 		padded = append(padded, line)
 	}
 	return padded
 }
 
-func (m Model) renderPromptLine(value string, showCursor bool) string {
-	prompt := styles.Default.InputBand.Foreground(lipgloss.Color("183")).Render("> ")
+func (m Model) renderPromptLineWithStyle(value string, showCursor bool, base lipgloss.Style, placeholderColor lipgloss.TerminalColor) string {
+	prompt := base.Foreground(lipgloss.Color("183")).Render("> ")
 	if m.input.Value() == "" {
-		placeholder := styles.Default.InputBand.Foreground(lipgloss.Color("0")).Render(m.input.Placeholder)
+		placeholder := base.Foreground(placeholderColor).Render(m.input.Placeholder)
 		return prompt + placeholder
 	}
 	if showCursor {
@@ -208,15 +296,15 @@ func (m Model) renderPromptLine(value string, showCursor bool) string {
 		if col > len(runes) {
 			col = len(runes)
 		}
-		before := styles.Default.InputBand.Foreground(lipgloss.Color("15")).Render(string(runes[:col]))
-		after := styles.Default.InputBand.Foreground(lipgloss.Color("15")).Render(string(runes[col:]))
-		return prompt + before + promptCursor() + after
+		before := base.Foreground(lipgloss.Color("15")).Render(string(runes[:col]))
+		after := base.Foreground(lipgloss.Color("15")).Render(string(runes[col:]))
+		return prompt + before + promptCursorWithStyle(base) + after
 	}
-	return prompt + styles.Default.InputBand.Foreground(lipgloss.Color("15")).Render(value)
+	return prompt + base.Foreground(lipgloss.Color("15")).Render(value)
 }
 
-func promptCursor() string {
-	return styles.Default.InputBand.
+func promptCursorWithStyle(base lipgloss.Style) string {
+	return base.
 		Background(lipgloss.Color("15")).
 		Foreground(lipgloss.Color("0")).
 		Render(" ")

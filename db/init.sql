@@ -357,7 +357,7 @@ begin
 end;
 $$;
 
-create function public.fn_change_insert(_project_id bigint, _title text, _idea text) returns bigint
+create function public.fn_change_insert(_project_id bigint, _ref_uuid uuid, _title text, _idea text) returns bigint
     language plpgsql
 as
 $$
@@ -367,16 +367,16 @@ declare
     _modified timestamptz;
 begin
     insert into public.change (
-        project_id, title, idea
+        project_id, ref_uuid, title, idea
     ) values (
-        _project_id, _title, _idea
-    ) returning id, agent_edit, modified into _id, _agent_edit, _modified;
+                 _project_id, _ref_uuid, _title, _idea
+             ) returning id, agent_edit, modified into _id, _agent_edit, _modified;
 
     insert into public.change_history (
         id, version, doc_type, body, agent_edit, modified
     ) values (
-        _id, 0, 'idea', _idea, false, _modified
-    );
+                 _id, 0, 'idea', _idea, false, _modified
+             );
 
     return _id;
 end;

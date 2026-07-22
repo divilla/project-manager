@@ -2,6 +2,8 @@ package dto
 
 import (
 	"time"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 type (
@@ -98,9 +100,10 @@ type (
 
 	// ChangeCreateRequest defines ChangeCreateRequest values.
 	ChangeCreateRequest struct {
-		ProjectID int    `json:"project_id"`
-		Title     string `json:"title"`
-		Idea      string `json:"idea"`
+		ProjectID int        `json:"project_id"`
+		RefUUID   *uuid.UUID `json:"ref_uuid"`
+		Title     string     `json:"title"`
+		Idea      string     `json:"idea"`
 	}
 
 	// ChangeUpdatePhaseRequest defines ChangeUpdatePhaseRequest values.

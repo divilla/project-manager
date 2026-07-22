@@ -23,6 +23,7 @@ type (
 		List(ctx context.Context, projectID int) ([]dto.ChangeListItem, error)
 		Get(ctx context.Context, id int) (dto.ChangeDetail, error)
 		Artifacts(ctx context.Context, ids []int) ([]dto.Change, error)
+		AvailableChangeTypes(ctx context.Context) ([]string, error)
 		Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error)
 		UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error)
 		UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error)
@@ -172,8 +173,8 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 
 	var id int
 	err = tx.QueryRow(ctx, `
-		select public.fn_change_insert($1, $2, $3)
-	`, req.ProjectID, req.Title, req.Idea).Scan(&id)
+		select public.fn_change_insert($1, $2, $3, $4)
+	`, req.ProjectID, *req.RefUUID, req.Title, req.Idea).Scan(&id)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -181,11 +182,27 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	return finishMutation(ctx, tx, id)
 }
 
+// AvailableChangeTypes returns the type slugs currently accepted by the backend.
+func (r *Repo) AvailableChangeTypes(ctx context.Context) ([]string, error) {
+	rows, err := r.pool.Query(ctx, "select slug from public.change_type order by priority, slug")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	values := make([]string, 0)
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
 // UpdateChangeTypes executes UpdateChangeTypes behavior.
 func (r *Repo) UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {
-	if err := r.ensureReferences(ctx, "change_type", req.ChangeTypes); err != nil {
-		return dto.Change{}, err
-	}
 	return r.updateField(ctx, req.ID, func(current state) bool {
 		return slices.Equal(current.ChangeTypes, req.ChangeTypes)
 	}, `
@@ -486,15 +503,6 @@ func (r *Repo) ensureReference(ctx context.Context, table, slug string) error {
 	}
 	if !exists {
 		return ErrInvalidReference
-	}
-	return nil
-}
-
-func (r *Repo) ensureReferences(ctx context.Context, table string, slugs []string) error {
-	for _, slug := range slugs {
-		if err := r.ensureReference(ctx, table, slug); err != nil {
-			return err
-		}
 	}
 	return nil
 }

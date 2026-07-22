@@ -10,18 +10,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"mch/internal/agent"
+
 	goconfig "github.com/ridgelines/go-config"
 	"gopkg.in/yaml.v3"
 )
 
 const defaultConfigPath = ".mch/config.yaml"
-const defaultFlowDir = ".mch/default"
 
 type appConfig struct {
 	RepositoryRoot string
 	ConfigPath     string
 	BackendURL     string
-	TempDir        string
 	ProjectID      int
 	FlowDir        string
 	Flow           flowConfig
@@ -30,7 +30,6 @@ type appConfig struct {
 
 type configFile struct {
 	BackendURL string `yaml:"backend_url"`
-	TempDir    string `yaml:"temp_dir"`
 	ProjectID  int    `yaml:"project_id"`
 }
 
@@ -87,7 +86,7 @@ func loadAppConfig(repoRoot string) (appConfig, error) {
 	}
 	cfg.RepositoryRoot = repoRoot
 	cfg.ConfigPath = configPath
-	cfg.FlowDir = filepath.Join(repoRoot, defaultFlowDir)
+	cfg.FlowDir = filepath.Join(repoRoot, agent.DefaultDir)
 	flow, err := loadFlowConfig(cfg.FlowDir)
 	if err != nil {
 		return cfg, err
@@ -117,19 +116,11 @@ func loadConfigFile(path string) (appConfig, error) {
 	if backendURL == "" {
 		return appConfig{}, fmt.Errorf("backend_url is required in %s", path)
 	}
-	tempDir, err := cfg.StringOr("temp_dir", "")
-	if err != nil {
-		return appConfig{}, fmt.Errorf("load temp_dir from %s: %w", path, err)
-	}
-	tempDir = strings.TrimSpace(tempDir)
-	if tempDir == "" {
-		return appConfig{}, fmt.Errorf("temp_dir is required in %s", path)
-	}
 	projectID, err := cfg.IntOr("project_id", 0)
 	if err != nil {
 		return appConfig{}, fmt.Errorf("load project_id from %s: %w", path, err)
 	}
-	return appConfig{BackendURL: backendURL, TempDir: tempDir, ProjectID: projectID}, nil
+	return appConfig{BackendURL: backendURL, ProjectID: projectID}, nil
 }
 
 func resolveGitRepositoryRoot(ctx context.Context) (string, error) {
@@ -220,13 +211,8 @@ func saveAppConfig(path string, cfg appConfig) error {
 	if backendURL == "" {
 		return fmt.Errorf("backend_url is required")
 	}
-	tempDir := strings.TrimSpace(cfg.TempDir)
-	if tempDir == "" {
-		return fmt.Errorf("temp_dir is required")
-	}
 	body, err := yaml.Marshal(configFile{
 		BackendURL: backendURL,
-		TempDir:    tempDir,
 		ProjectID:  cfg.ProjectID,
 	})
 	if err != nil {
@@ -240,7 +226,6 @@ func renderResolvedConfig(cfg appConfig) string {
 	writeConfigLine(&b, "repository_root", cfg.RepositoryRoot)
 	writeConfigLine(&b, "config_path", cfg.ConfigPath)
 	writeConfigLine(&b, "backend_url", cfg.BackendURL)
-	writeConfigLine(&b, "temp_dir", cfg.TempDir)
 	fmt.Fprintf(&b, "project_id: %d\n", cfg.ProjectID)
 	writeConfigLine(&b, "flow_dir", cfg.FlowDir)
 	fmt.Fprintf(&b, "flow:\n")

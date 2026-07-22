@@ -11,7 +11,7 @@ Draft a reviewer-focused GitHub PR body for the current Change. Do not create, u
 
 - Read repository instructions first when `AGENTS.md` is present. Follow repository instructions when they are stricter than this skill.
 - Do not edit code, docs, tests, database files, fixtures, snapshots, generated artifacts, or application data.
-- Only create or update the PR draft file at `agent/prs/<change-slug>.md`. Creating `agent/prs/` for that file is allowed.
+- Only create or update the PR artifact at `/stg-tmp-dir/output.md`.
 - Do not stage, commit, reset, restore, format, migrate, seed, or mutate any database.
 - Do not post PR comments.
 
@@ -27,7 +27,7 @@ Draft a reviewer-focused GitHub PR body for the current Change. Do not create, u
 - The branch must match:
 
   ```text
-  ^change/([0-9]+-[0-9a-z-_]+)$
+  ^change/([0-9]+-[0-9A-Za-z_-]+)$
   ```
 
 - If the branch does not match, stop with exactly:
@@ -71,7 +71,7 @@ Report the exact conflict with file paths and the specific Change requirement or
 
 ## Draft Requirements
 
-Write the PR body to `agent/prs/<change-slug>.md`.
+Write the complete PR body to `/stg-tmp-dir/output.md`, intentionally overwriting that file.
 
 The first line must be the title, formatted exactly:
 
@@ -115,9 +115,6 @@ Omit `## Behavior` only when the branch has no externally observable behavior or
 
 ## Final Response
 
-After writing the draft, respond with:
+After successfully writing `/stg-tmp-dir/output.md`, output exactly:
 
-- the PR draft path
-- a brief summary of what the body covers
-- verification commands observed or noted as not run
-- any conflicts or residual risks that remain
+Done.

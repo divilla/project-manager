@@ -1,6 +1,7 @@
 package app
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -16,8 +17,10 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gofrs/uuid/v5"
 )
 
 const defaultBackendURL = "http://localhost:8080"
@@ -27,12 +30,13 @@ const defaultInputPlaceholder = "Type / for commands"
 type dropdownKind string
 
 const (
-	dropdownCommand dropdownKind = "command"
-	dropdownList    dropdownKind = "list"
-	dropdownSelect  dropdownKind = "select"
-	dropdownConfirm dropdownKind = "confirm"
-	dropdownAgent   dropdownKind = "agent"
-	dropdownIdea    dropdownKind = "idea"
+	dropdownCommand       dropdownKind = "command"
+	dropdownList          dropdownKind = "list"
+	dropdownSelect        dropdownKind = "select"
+	dropdownConfirm       dropdownKind = "confirm"
+	dropdownAgent         dropdownKind = "agent"
+	dropdownIdea          dropdownKind = "idea"
+	dropdownPersistedIdea dropdownKind = "persisted idea"
 )
 
 type selectorSource string
@@ -77,6 +81,7 @@ type optionCatalog struct {
 	phases []dto.Option
 	types  []dto.Option
 	loaded bool
+	err    error
 }
 
 type dropdownModel struct {
@@ -138,6 +143,13 @@ type changeSavedMsg struct {
 }
 
 type changeCreatedForRewriteMsg struct {
+	change             dto.Change
+	changeTypes        []string
+	changeTypesPresent bool
+	err                error
+}
+
+type changeTypesUpdatedForRewriteMsg struct {
 	change dto.Change
 	err    error
 }
@@ -147,7 +159,19 @@ type changeIdeaUpdatedForRewriteMsg struct {
 	err    error
 }
 
-type changeIdeaAgentEditSavedMsg struct {
+type changeArtifactEditLoadedMsg struct {
+	id     int
+	field  detailEditField
+	change dto.Change
+	err    error
+}
+
+type changeArtifactUpdatedForWriteMsg struct {
+	change dto.Change
+	err    error
+}
+
+type changeArtifactAgentEditSavedMsg struct {
 	change    dto.Change
 	err       error
 	reloadErr error
@@ -206,6 +230,7 @@ type appClient interface {
 	projects.API
 	changes.API
 	epics.API
+	ListTypes() ([]dto.Option, error)
 }
 
 // Model is the root Bubble Tea model for the mch application shell.
@@ -229,7 +254,9 @@ type Model struct {
 	agentRunner     agent.Runner
 	agentWorkspace  string
 	agentSpinner    spinner.Model
+	agentViewport   viewport.Model
 	agentElapsed    int
+	newChangeUUID   func() (uuid.UUID, error)
 	currentProject  dto.Option
 	projectList     projects.Model
 	client          appClient
@@ -252,7 +279,10 @@ func NewModel() Model {
 
 // NewModelWithClient creates a model with an injected backend client for tests.
 func NewModelWithClient(client appClient) Model {
-	return newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL, TempDir: "configured-test-temp"})
+	m := newModelWithConfig(client, appConfig{BackendURL: defaultBackendURL})
+	m.agentWorkspace = "configured-test-temp"
+	m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
+	return m
 }
 
 func newModelWithConfig(client appClient, cfg appConfig) Model {
@@ -279,6 +309,8 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 		spinner.WithSpinner(spinner.MiniDot),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("86"))),
 	)
+	agentViewport := viewport.New(80, agentViewportHeight(24))
+	agentViewport.Style = agentViewportStyle()
 
 	currentProject := dto.Option{}
 	if cfg.ProjectID > 0 {
@@ -286,7 +318,10 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 			ID: strconv.Itoa(cfg.ProjectID),
 		}
 	}
-	agentWorkspace := strings.TrimSpace(cfg.TempDir)
+	agentWorkspace := ""
+	if strings.TrimSpace(cfg.RepositoryRoot) != "" {
+		agentWorkspace = filepath.Join(cfg.RepositoryRoot, agent.TempDir)
+	}
 
 	return Model{
 		input:          input,
@@ -297,6 +332,8 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 		agentRunner:    agent.NewProcessRunner(),
 		agentWorkspace: agentWorkspace,
 		agentSpinner:   spin,
+		agentViewport:  agentViewport,
+		newChangeUUID:  uuid.NewV7,
 		currentProject: currentProject,
 		client:         client,
 		appConfig:      cfg,

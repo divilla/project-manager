@@ -2,8 +2,8 @@ package changes
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"mch/internal/dto"
@@ -53,18 +53,21 @@ type DetailRow struct {
 
 // ParsedSpec stores metadata extracted from spec markdown.
 type ParsedSpec struct {
-	Title       string
-	Spec        string
-	ChangeTypes []string
-	EpicID      *int
-	EpicName    string
+	Title              string
+	Spec               string
+	ChangeTypes        []string
+	ChangeTypesPresent bool
 }
 
 // ParsedIdea stores the title and full idea text extracted from idea markdown.
 type ParsedIdea struct {
-	Title string
-	Idea  string
+	Title              string
+	Idea               string
+	ChangeTypes        []string
+	ChangeTypesPresent bool
 }
+
+var invalidArtifactTypeCharacters = regexp.MustCompile(`[^A-Za-z\-_]`)
 
 // StartLoading returns a changes model in loading state.
 func StartLoading() Model {
@@ -582,167 +585,123 @@ func ParseIdeaStructure(idea string) (ParsedIdea, error) {
 	if title == "" {
 		return ParsedIdea{}, fmt.Errorf("idea title is required")
 	}
-	if strings.TrimSpace(normalized) == "" {
-		return ParsedIdea{}, fmt.Errorf("idea is required")
+	types, typesPresent := ParseArtifactTypes(normalized)
+	bodyLines := lines[firstIndex+1:]
+	firstBodyLine := firstNonBlankLine(bodyLines, 0)
+	if firstBodyLine >= 0 && isArtifactTypesLine(bodyLines[firstBodyLine]) {
+		bodyLines = bodyLines[firstBodyLine+1:]
 	}
-	return ParsedIdea{Title: title, Idea: normalized}, nil
+	if strings.TrimSpace(strings.Join(bodyLines, "\n")) == "" {
+		return ParsedIdea{}, fmt.Errorf("idea body is required")
+	}
+	return ParsedIdea{
+		Title:              title,
+		Idea:               normalized,
+		ChangeTypes:        types,
+		ChangeTypesPresent: typesPresent,
+	}, nil
 }
 
-// ParseSpec extracts backend fields while preserving the full spec.
-func ParseSpec(spec string, validTypes, epics []dto.Option) (ParsedSpec, error) {
-	parsed, err := ParseSpecStructure(spec)
-	if err != nil {
-		return ParsedSpec{}, err
-	}
-	validTypeSet := optionSet(validTypes)
-	for _, typ := range parsed.ChangeTypes {
-		if _, ok := validTypeSet[typ]; !ok {
-			return ParsedSpec{}, fmt.Errorf("invalid change type: %s", typ)
-		}
-	}
-	if parsed.EpicName == "" {
-		return parsed, nil
-	}
-	epicID, ok := resolveEpic(parsed.EpicName, epics)
-	if !ok {
-		return ParsedSpec{}, fmt.Errorf("unknown epic: %s", parsed.EpicName)
-	}
-	parsed.EpicID = &epicID
-	return parsed, nil
-}
-
-// ParseSpecStructure extracts locally validated metadata before reference lookups.
+// ParseSpecStructure extracts the title, optional Types metadata, and body.
 func ParseSpecStructure(spec string) (ParsedSpec, error) {
 	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
-	firstIndex := firstNonBlankLine(lines, 0)
-	if firstIndex < 0 || !strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "# ") || strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "## ") {
+	if len(lines) == 0 || !strings.HasPrefix(lines[0], "# ") || strings.HasPrefix(lines[0], "## ") {
 		return ParsedSpec{}, fmt.Errorf("spec title is required")
 	}
-	title := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[firstIndex]), "# "))
+	title := strings.TrimSpace(strings.TrimPrefix(lines[0], "# "))
 	if title == "" {
 		return ParsedSpec{}, fmt.Errorf("spec title is required")
 	}
-
-	types := []string{}
-	metadataEndIndex := firstIndex
-	typeIndex := firstNonBlankLine(lines, firstIndex+1)
-	if typeIndex >= 0 {
-		typeLine := strings.TrimSpace(lines[typeIndex])
-		if strings.HasPrefix(typeLine, "Types:") {
-			metadataEndIndex = typeIndex
-			typeValue := strings.TrimPrefix(typeLine, "Types:")
-			if strings.TrimSpace(typeValue) != "" {
-				if !strings.HasPrefix(typeValue, " ") || strings.Contains(strings.TrimPrefix(typeValue, " "), " ") {
-					return ParsedSpec{}, fmt.Errorf("types line must contain backend type slugs joined by |")
-				}
-				types = strings.Split(strings.TrimPrefix(typeValue, " "), "|")
-				for _, typ := range types {
-					if typ == "" {
-						return ParsedSpec{}, fmt.Errorf("types line must contain backend type slugs joined by |")
-					}
-				}
-			}
-		}
+	if len(lines) < 2 || strings.TrimSpace(lines[1]) != "" {
+		return ParsedSpec{}, fmt.Errorf("spec title must be followed by one blank line")
+	}
+	types, typesPresent := ParseArtifactTypes(normalized)
+	bodyLines := lines[2:]
+	firstBodyLine := firstNonBlankLine(bodyLines, 0)
+	if firstBodyLine >= 0 && isArtifactTypesLine(bodyLines[firstBodyLine]) {
+		bodyLines = bodyLines[firstBodyLine+1:]
+	}
+	if strings.TrimSpace(strings.Join(bodyLines, "\n")) == "" {
+		return ParsedSpec{}, fmt.Errorf("spec body is required")
 	}
 
-	parsed := ParsedSpec{
-		Title:       title,
-		Spec:        normalized,
-		ChangeTypes: types,
-	}
-	epicIndex := firstNonBlankLine(lines, metadataEndIndex+1)
-	if epicIndex < 0 {
-		return parsed, nil
-	}
-	epicLine := strings.TrimSpace(lines[epicIndex])
-	if !strings.HasPrefix(epicLine, "Epic:") {
-		return parsed, nil
-	}
-	epicName := strings.TrimSpace(strings.TrimPrefix(epicLine, "Epic:"))
-	if epicName == "" {
-		return parsed, nil
-	}
-	parsed.EpicName = epicName
-	return parsed, nil
+	return ParsedSpec{
+		Title:              title,
+		Spec:               normalized,
+		ChangeTypes:        types,
+		ChangeTypesPresent: typesPresent,
+	}, nil
 }
 
-// SpecEpicName returns the non-blank Epic metadata value when present.
-func SpecEpicName(spec string) string {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
+// ParseArtifactTypes returns optional Types metadata without catalog validation.
+func ParseArtifactTypes(artifact string) ([]string, bool) {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(artifact, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
 	if firstIndex < 0 {
-		return ""
+		return nil, false
 	}
-	epicIndex := firstMetadataLineAfterTypes(lines, firstIndex)
-	if epicIndex < 0 {
-		return ""
+	metadataIndex := firstIndex
+	firstLine := strings.TrimSpace(lines[firstIndex])
+	if strings.HasPrefix(firstLine, "# ") && !strings.HasPrefix(firstLine, "## ") {
+		metadataIndex = firstNonBlankLine(lines, firstIndex+1)
 	}
-	epicLine := strings.TrimSpace(lines[epicIndex])
-	if !strings.HasPrefix(epicLine, "Epic:") {
-		return ""
+	if metadataIndex < 0 || !isArtifactTypesLine(lines[metadataIndex]) {
+		return nil, false
 	}
-	return strings.TrimSpace(strings.TrimPrefix(epicLine, "Epic:"))
+	value := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[metadataIndex]), "Types:"))
+	fields := strings.Fields(strings.ReplaceAll(value, "|", " "))
+	values := make([]string, 0, len(fields))
+	for _, field := range fields {
+		cleaned := invalidArtifactTypeCharacters.ReplaceAllString(field, "")
+		if cleaned != "" {
+			values = append(values, cleaned)
+		}
+	}
+	return values, true
+}
+
+func isArtifactTypesLine(line string) bool {
+	line = strings.TrimSpace(line)
+	return strings.HasPrefix(line, "Types:")
 }
 
 // SpecMarkdown returns editable spec markdown for a change.
 func SpecMarkdown(change dto.Change) string {
-	spec := strings.TrimSpace(change.Spec)
-	if spec != "" && hasSpecMetadata(spec) {
-		return specMarkdownWithBackendEpic(change.Spec, change.EpicName)
+	spec := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(change.Spec, "\r\n", "\n"), "\r", "\n"))
+	if _, err := ParseSpecStructure(spec); err == nil {
+		return change.Spec
 	}
-	var lines []string
-	if strings.TrimSpace(change.Title) != "" {
-		lines = append(lines, "# "+strings.TrimSpace(change.Title), "")
-	}
-	if len(change.ChangeTypes) > 0 {
-		lines = append(lines, "Types: "+strings.Join(change.ChangeTypes, "|"), "")
-	}
-	if strings.TrimSpace(change.EpicName) != "" {
-		lines = append(lines, "Epic: "+strings.TrimSpace(change.EpicName), "")
-	}
-	if spec != "" {
-		lines = append(lines, change.Spec)
-	}
-	return strings.TrimRight(strings.Join(lines, "\n"), "\n")
-}
 
-func specMarkdownWithBackendEpic(spec, epicName string) string {
-	epicName = strings.TrimSpace(epicName)
-	if epicName == "" || hasSpecEpicLine(spec) {
-		return spec
-	}
-	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
-	lines := strings.Split(normalized, "\n")
-	firstIndex := firstNonBlankLine(lines, 0)
-	epicIndex := firstMetadataLineAfterTypes(lines, firstIndex)
-	if epicIndex < 0 {
-		epicIndex = len(lines)
-	}
-	insert := []string{}
-	if epicIndex > 0 && strings.TrimSpace(lines[epicIndex-1]) != "" {
-		insert = append(insert, "")
-	}
-	insert = append(insert, "Epic: "+epicName)
-	if epicIndex < len(lines) && strings.TrimSpace(lines[epicIndex]) != "" {
-		insert = append(insert, "")
-	}
-	lines = append(lines[:epicIndex], append(insert, lines[epicIndex:]...)...)
-	return strings.Join(lines, "\n")
-}
-
-// SameTypes reports whether two type slices contain the same values in order.
-func SameTypes(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
+	title := strings.TrimSpace(change.Title)
+	body := spec
+	lines := strings.Split(spec, "\n")
+	if len(lines) > 0 && strings.HasPrefix(lines[0], "# ") && !strings.HasPrefix(lines[0], "## ") {
+		title = strings.TrimSpace(strings.TrimPrefix(lines[0], "# "))
+		bodyLines := lines[1:]
+		for len(bodyLines) > 0 && strings.TrimSpace(bodyLines[0]) == "" {
+			bodyLines = bodyLines[1:]
 		}
+		if len(bodyLines) > 0 && (bodyLines[0] == "Types:" || strings.HasPrefix(bodyLines[0], "Types: ")) {
+			bodyLines = bodyLines[1:]
+			for len(bodyLines) > 0 && strings.TrimSpace(bodyLines[0]) == "" {
+				bodyLines = bodyLines[1:]
+			}
+		}
+		body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
 	}
-	return true
+
+	result := "# " + title + "\n\n"
+	typeLine := "Types:"
+	if len(change.ChangeTypes) > 0 {
+		typeLine += " " + strings.Join(change.ChangeTypes, "|")
+	}
+	result += typeLine + "\n\n"
+	if body != "" {
+		result += body
+	}
+	return strings.TrimRight(result, "\n")
 }
 
 func firstNonBlankLine(lines []string, start int) int {
@@ -752,77 +711,6 @@ func firstNonBlankLine(lines []string, start int) int {
 		}
 	}
 	return -1
-}
-
-func hasSpecMetadata(spec string) bool {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
-	lines := strings.Split(normalized, "\n")
-	firstIndex := firstNonBlankLine(lines, 0)
-	if firstIndex < 0 {
-		return false
-	}
-	titleLine := strings.TrimSpace(lines[firstIndex])
-	if !strings.HasPrefix(titleLine, "# ") || strings.HasPrefix(titleLine, "## ") || strings.TrimSpace(strings.TrimPrefix(titleLine, "# ")) == "" {
-		return false
-	}
-	return true
-}
-
-func hasSpecEpicLine(spec string) bool {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
-	lines := strings.Split(normalized, "\n")
-	firstIndex := firstNonBlankLine(lines, 0)
-	if firstIndex < 0 {
-		return false
-	}
-	epicIndex := firstMetadataLineAfterTypes(lines, firstIndex)
-	if epicIndex < 0 {
-		return false
-	}
-	return strings.HasPrefix(strings.TrimSpace(lines[epicIndex]), "Epic:")
-}
-
-func firstMetadataLineAfterTypes(lines []string, titleIndex int) int {
-	nextIndex := firstNonBlankLine(lines, titleIndex+1)
-	if nextIndex < 0 {
-		return -1
-	}
-	if strings.HasPrefix(strings.TrimSpace(lines[nextIndex]), "Types:") {
-		return firstNonBlankLine(lines, nextIndex+1)
-	}
-	return nextIndex
-}
-
-// SpecHasEpicLine reports whether the editable spec metadata includes an Epic line.
-func SpecHasEpicLine(spec string) bool {
-	return hasSpecEpicLine(spec)
-}
-
-func optionSet(options []dto.Option) map[string]struct{} {
-	values := make(map[string]struct{}, len(options)*2)
-	for _, option := range options {
-		if option.ID != "" {
-			values[option.ID] = struct{}{}
-		}
-		if option.Label != "" {
-			values[option.Label] = struct{}{}
-		}
-	}
-	return values
-}
-
-func resolveEpic(name string, epics []dto.Option) (int, bool) {
-	for _, epic := range epics {
-		if strings.TrimSpace(epic.Label) != name {
-			continue
-		}
-		id, err := strconv.Atoi(strings.TrimSpace(epic.ID))
-		if err != nil || id <= 0 {
-			return 0, false
-		}
-		return id, true
-	}
-	return 0, false
 }
 
 func hasChangeType(change dto.Change, values ...string) bool {

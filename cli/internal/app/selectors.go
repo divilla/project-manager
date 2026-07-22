@@ -152,7 +152,7 @@ func selectorSourceForState(state State) selectorSource {
 	}
 }
 
-func optionCatalogCommand(client appClient) tea.Cmd {
+func optionCatalogCommand(client appClient, flowDir string) tea.Cmd {
 	return func() tea.Msg {
 		phases, err := client.ListPhases()
 		if err != nil {
@@ -162,6 +162,12 @@ func optionCatalogCommand(client appClient) tea.Cmd {
 		if err != nil {
 			return optionCatalogLoadedMsg{err: err}
 		}
+		if flowDir != "" {
+			if err := rebuildChangeTypeSlugsFile(flowDir, types); err != nil {
+				return optionCatalogLoadedMsg{err: err}
+			}
+		}
+		cacheChangeTypes(types)
 		return optionCatalogLoadedMsg{phases: phases, types: types}
 	}
 }

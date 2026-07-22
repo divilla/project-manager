@@ -1,6 +1,6 @@
 ---
 name: change-fix
-description: Implement and commit local fixes for review findings on a Change branch using the active Change spec and docs as the contract. Use when the user asks to fix, address, implement findings, implement review findings, or implement review comments for a Change without pushing or rerunning the full PR workflow. Do not use when the user explicitly declines implementation or only asks to ignore, explain, discuss, review, document, or summarize findings.
+description: Implement and commit local fixes for review findings on a Change branch using the active Change spec as scope and code as the source of truth. Use when the user asks to fix, address, implement findings, implement review findings, or implement review comments for a Change without pushing or rerunning the full PR workflow. Do not use when the user explicitly declines implementation or only asks to ignore, explain, discuss, review, document, or summarize findings.
 ---
 
 Implement only review-fix work for the active Change.
@@ -9,7 +9,7 @@ Implement only review-fix work for the active Change.
 
 If the user explicitly says not to implement findings, or asks only to ignore, explain, discuss, review, document, or summarize findings, stop and answer without making changes.
 
-Extract `<change-slug>` from the current Git branch using `^change/([0-9]+-[a-z0-9-_]+)$`.
+Extract `<change-slug>` from the current Git branch using `^change/([0-9]+-[0-9A-Za-z_-]+)$`.
 
 If the branch does not match, stop with: `Branch must be change/<change-slug>.`
 
@@ -32,8 +32,8 @@ Only fix actionable review-finding comments: comments with finding-style content
 ## Before Editing
 
 1. Read `AGENTS.md` and obey it.
-2. Read `specs/<change-slug>.md`; treat it as the implementation contract.
-3. Read linked or relevant docs under `docs/`; treat docs as the behavioral source of truth.
+2. Read `specs/<change-slug>.md`; treat it as the requested Change scope.
+3. Inspect the relevant code as the source of truth for current behavior, then read linked or relevant docs under `docs/` and identify anything that must follow the code.
 4. Inspect and remember starting `git status`, unstaged diff, and staged diff.
 5. Stop if pre-existing staged changes are not explicitly part of the supplied findings.
 6. Stop if existing unstaged changes overlap with files needed for the fix and cannot be safely preserved.

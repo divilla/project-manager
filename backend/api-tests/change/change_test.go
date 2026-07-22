@@ -10,9 +10,70 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestChangeCreateIdentityContract(t *testing.T) {
+	client := shared.NewClient(t)
+	projectID := createProject(t, client)
+	defer shared.CleanupProject(t, client, projectID)
+
+	create := func(name string, ref any) (int, change) {
+		t.Helper()
+		payload := map[string]any{"project_id": projectID, "title": name, "idea": "# " + name}
+		if ref != "omitted" {
+			payload["ref_uuid"] = ref
+		}
+		var got change
+		return client.Post(t, "/api/v1/change/create", payload, &got), got
+	}
+
+	suppliedUUID := uuid.Must(uuid.NewV7()).String()
+	status, supplied := create("supplied identity", suppliedUUID)
+	require.Equal(t, http.StatusCreated, status)
+	assert.Equal(t, suppliedUUID, supplied.RefUUID)
+
+	status, omitted := create("omitted identity", "omitted")
+	require.Equal(t, http.StatusCreated, status)
+	parsedOmitted, err := uuid.FromString(omitted.RefUUID)
+	require.NoError(t, err)
+	assert.Equal(t, byte(7), parsedOmitted.Version())
+
+	status, explicitNull := create("null identity", nil)
+	require.Equal(t, http.StatusCreated, status)
+	parsedNull, err := uuid.FromString(explicitNull.RefUUID)
+	require.NoError(t, err)
+	assert.Equal(t, byte(7), parsedNull.Version())
+
+	for _, invalid := range []string{"", "not-a-uuid"} {
+		status, _ = create("invalid identity "+invalid, invalid)
+		assert.Equal(t, http.StatusBadRequest, status)
+	}
+
+	status, _ = create("duplicate identity", suppliedUUID)
+	assert.NotEqual(t, http.StatusCreated, status)
+
+	var listed []change
+	status = client.Post(t, "/api/v1/change/list", map[string]any{"project_id": projectID}, &listed)
+	require.Equal(t, http.StatusOK, status)
+	require.Len(t, listed, 3)
+	identities := map[int]string{supplied.ID: suppliedUUID, omitted.ID: omitted.RefUUID, explicitNull.ID: explicitNull.RefUUID}
+	for _, item := range listed {
+		assert.Equal(t, identities[item.ID], item.RefUUID)
+	}
+
+	var updated change
+	status = client.Post(t, "/api/v1/change/update-title", map[string]any{"id": supplied.ID, "title": "mutated title", "ref_uuid": omitted.RefUUID}, &updated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, suppliedUUID, updated.RefUUID)
+	var fetched detail
+	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": supplied.ID}, &fetched)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, suppliedUUID, fetched.Change.RefUUID)
+	assert.Equal(t, int16(0), fetched.Change.Version)
+}
 
 type project struct {
 	ID      int   `json:"id"`
@@ -360,10 +421,17 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 
 	status = client.Post(t, "/api/v1/change/update-change-types", map[string]any{
 		"id":           created.ID,
-		"change_types": []string{"docs"},
+		"change_types": []string{"docs", "missing-type"},
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, []string{"docs"}, updated.ChangeTypes)
+
+	status = client.Post(t, "/api/v1/change/update-change-types", map[string]any{
+		"id":           created.ID,
+		"change_types": []string{"missing-type"},
+	}, &updated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Empty(t, updated.ChangeTypes)
 
 	status = client.Post(t, "/api/v1/change/update-phase", map[string]any{"id": created.ID, "change_phase": "review"}, &updated)
 	require.Equal(t, http.StatusOK, status)
@@ -1009,7 +1077,7 @@ func TestChangeRejectsInvalidInputAndMissingRows(t *testing.T) {
 		"id":           999999999,
 		"change_types": []string{"missing-type"},
 	}, nil)
-	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Equal(t, http.StatusNotFound, status)
 
 	status = client.Post(t, "/api/v1/change/update-epic", map[string]any{"id": 999999999, "epic_id": nil}, nil)
 	assert.Equal(t, http.StatusNotFound, status)

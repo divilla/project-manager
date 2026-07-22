@@ -39,7 +39,7 @@ func (m Model) saveChangeUpdateValue(spec string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.status = "saving"
-	return m, changeUpdateCommand(m.client, id, m.currentProject.ID, m.changeList.Detail, spec, m.optionCatalog.types)
+	return m, changeUpdateCommand(m.client, id, m.changeList.Detail, spec)
 }
 
 func (m Model) saveTestCaseCreateValue(scenario string) (tea.Model, tea.Cmd) {
@@ -92,6 +92,9 @@ func changeCreateCommand(client appClient, projectID int, idea string) tea.Cmd {
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
 		}
+		if err := updateArtifactTypes(client, id, parsed.ChangeTypes, parsed.ChangeTypesPresent); err != nil {
+			return changeSavedMsg{source: ChangeCreateState, change: created, err: err}
+		}
 		change, err := client.GetChange(id)
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, change: created, reloadErr: err}
@@ -100,16 +103,9 @@ func changeCreateCommand(client appClient, projectID int, idea string) tea.Cmd {
 	}
 }
 
-func changeUpdateCommand(client appClient, id int, projectID string, original dto.Change, spec string, validTypes []dto.Option) tea.Cmd {
+func changeUpdateCommand(client appClient, id int, original dto.Change, spec string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := changes.ParseSpecStructure(spec); err != nil {
-			return changeSavedMsg{source: ChangeUpdateState, err: err}
-		}
-		types, epics, err := changeReferenceData(client, projectID, spec, validTypes)
-		if err != nil {
-			return changeSavedMsg{source: ChangeUpdateState, err: err}
-		}
-		parsed, err := changes.ParseSpec(spec, types, epics)
+		parsed, err := parseChangeArtifact(spec)
 		if err != nil {
 			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
@@ -123,15 +119,8 @@ func changeUpdateCommand(client appClient, id int, projectID string, original dt
 				return changeSavedMsg{source: ChangeUpdateState, err: err}
 			}
 		}
-		if !changes.SameTypes(parsed.ChangeTypes, original.ChangeTypes) {
-			if _, err := client.UpdateChangeTypes(id, parsed.ChangeTypes); err != nil {
-				return changeSavedMsg{source: ChangeUpdateState, err: err}
-			}
-		}
-		if !sameEpicID(parsed.EpicID, original.EpicID) {
-			if _, err := client.UpdateChangeEpic(id, parsed.EpicID); err != nil {
-				return changeSavedMsg{source: ChangeUpdateState, err: err}
-			}
+		if err := updateArtifactTypes(client, id, parsed.ChangeTypes, parsed.ChangeTypesPresent); err != nil {
+			return changeSavedMsg{source: ChangeUpdateState, err: err}
 		}
 		change, err := client.GetChange(id)
 		return changeSavedMsg{source: ChangeUpdateState, change: change, err: err}
@@ -291,6 +280,8 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 		if err != nil {
 			return changeSavedMsg{source: source, err: err}
 		}
+		artifactTypes := []string(nil)
+		artifactTypesPresent := false
 		switch field {
 		case detailEditTitle:
 			if _, err := client.UpdateChangeTitle(id, value); err != nil {
@@ -303,10 +294,12 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 			if _, err := client.UpdateChangeSpec(id, value, false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
+			artifactTypes, artifactTypesPresent = changes.ParseArtifactTypes(value)
 		case detailEditIdea:
 			if _, err := client.UpdateChangeIdea(id, value, false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
+			artifactTypes, artifactTypesPresent = changes.ParseArtifactTypes(value)
 		case detailEditPullRequest:
 			if strings.TrimSpace(value) == "" {
 				return changeSavedMsg{source: source, err: fmt.Errorf("PR is required")}
@@ -314,6 +307,7 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 			if _, err := client.UpdateChangePR(id, value, false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
+			artifactTypes, artifactTypesPresent = changes.ParseArtifactTypes(value)
 		case detailEditPRUrl:
 			if strings.TrimSpace(value) == "" {
 				return changeSavedMsg{source: source, err: fmt.Errorf("PR URL is required")}
@@ -324,23 +318,54 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 		default:
 			return changeSavedMsg{source: source, err: fmt.Errorf("unsupported change detail text field: %s", field)}
 		}
+		if err := updateArtifactTypes(client, id, artifactTypes, artifactTypesPresent); err != nil {
+			return changeSavedMsg{source: source, err: err}
+		}
 		change, err := client.GetChange(id)
 		return changeSavedMsg{source: source, change: change, err: err}
 	}
 }
 
-func changeReferenceData(client appClient, projectID string, spec string, types []dto.Option) ([]dto.Option, []dto.Option, error) {
-	if len(types) == 0 {
-		return nil, nil, fmt.Errorf("backend change type options are not loaded")
+func updateArtifactAndReload(client appClient, id int, field detailEditField, value string, agentEdit bool) (dto.Change, error) {
+	if err := validateArtifactWrite(field, value); err != nil {
+		return dto.Change{}, err
 	}
-	if changes.SpecEpicName(spec) == "" {
-		return types, nil, nil
+	var updated dto.Change
+	var err error
+	switch field {
+	case detailEditIdea:
+		updated, err = client.UpdateChangeIdea(id, value, agentEdit)
+	case detailEditSpec:
+		updated, err = client.UpdateChangeSpec(id, value, agentEdit)
+	case detailEditPullRequest:
+		updated, err = client.UpdateChangePR(id, value, agentEdit)
+	default:
+		return dto.Change{}, fmt.Errorf("unsupported artifact write field: %s", field)
 	}
-	epics, err := client.ListEpics(projectID)
 	if err != nil {
-		return nil, nil, err
+		return updated, err
 	}
-	return types, epics, nil
+	changeTypes, present := changes.ParseArtifactTypes(value)
+	if err := updateArtifactTypes(client, id, changeTypes, present); err != nil {
+		return updated, err
+	}
+	change, err := client.GetChange(id)
+	if err != nil {
+		return updated, err
+	}
+	return change, nil
+}
+
+func parseChangeArtifact(spec string) (changes.ParsedSpec, error) {
+	return changes.ParseSpecStructure(spec)
+}
+
+func updateArtifactTypes(client appClient, id int, changeTypes []string, present bool) error {
+	if !present {
+		return nil
+	}
+	_, err := client.UpdateChangeTypes(id, changeTypes)
+	return err
 }
 
 func changeNumericID(change dto.Change) (int, error) {
@@ -365,14 +390,6 @@ func currentProjectNumericID(projectID string) (int, error) {
 		return 0, fmt.Errorf("current project must be numeric")
 	}
 	return id, nil
-}
-
-func sameEpicID(parsed *int, original string) bool {
-	original = strings.TrimSpace(original)
-	if parsed == nil {
-		return original == ""
-	}
-	return original == strconv.Itoa(*parsed)
 }
 
 func toggleChangeType(current []string, selected dto.Option) []string {

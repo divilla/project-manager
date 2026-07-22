@@ -1,6 +1,6 @@
 ---
 name: change-review
-description: Review a Change branch or PR against origin/stage using the active Change spec and linked docs as the contract like a very senior engineer. Use when asked to review a Change, review the current changes branch, review a Change PR, find blocking issues, or produce review findings without implementing fixes.
+description: Review a Change branch or PR against origin/stage using the active Change spec as scope and code as the source of truth like a very senior engineer. Use when asked to review a Change, review the current changes branch, review a Change PR, find blocking issues, or produce review findings without implementing fixes.
 ---
 
 Review the current branch against `origin/stage` like a very senior engineer.
@@ -15,7 +15,7 @@ Before review:
   ```
 - The branch must match, extracted text is `<change-slug>`:
   ```text
-  ^change/([0-9]+\-[0-9a-z-_]+)$
+  ^change/([0-9]+-[0-9A-Za-z_-]+)$
   ```
 - If it does not match, stop with this exact error:
   ```text
@@ -40,7 +40,7 @@ Review process:
 - Inspect the full diff against `origin/stage`.
 - Identify changed public contracts, API behavior, data model changes, migrations, tests, docs, and workflows.
 - Run or inspect the listed verification commands when feasible.
-- Verify every Requirement and Acceptance Criteria item in the Change spec against the diff and tests.
+- Verify every Requirement in the Change spec against the diff and tests.
 
 Return findings only, in this exact format:
 

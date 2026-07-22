@@ -23,5 +23,4 @@ type API interface {
 	DeleteTestCase(id int) (dto.Change, error)
 	DeleteChange(id int) error
 	ListPhases() ([]dto.Option, error)
-	ListTypes() ([]dto.Option, error)
 }

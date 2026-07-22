@@ -13,6 +13,13 @@ This file provides guidance to Agent when working with code in this repository. 
 
 AGENTS.md file must never be altered unless there is an explicit prompt to override rule and make change in AGENTS.md.
 
+## Communication style
+
+- Use relaxed, conversational language.
+- Avoid corporate or overly formal phrasing.
+- Keep explanations concise and natural.
+- Technical accuracy still takes priority.
+
 ## Artifacts
 
 ### Epics
@@ -30,8 +37,11 @@ AGENTS.md file must never be altered unless there is an explicit prompt to overr
 ### Documentation
 
 - Documentation is stored in the `docs` folder
-- Documentation precisely defines the desired external behavior and constraints
-- Documentation is the single source of truth for developers and supports every decision relevant to the project
+- The PR is the de facto Change and the single source of truth for the Change
+- Before a PR is published, the complete branch diff is the prospective PR and provisional source of truth
+- Code in the PR defines current behavior and technical contracts
+- Documentation must follow the PR code and accurately describe its observable behavior and constraints
+- When documentation conflicts with code, update the documentation; do not change code solely to match stale documentation
 - Documentation must not be overly detailed and a single doc file has a maximum of 300 lines
 - Documentation rules are defined in `docs/docs-rules.md`
 
@@ -40,13 +50,18 @@ AGENTS.md file must never be altered unless there is an explicit prompt to overr
 - A Change is the basic unit of work in this workflow.
 - Change specs are stored as `specs/<change-name>.md`.
 - Change specs must use the standard structure from the Change workflow:
-  Goal, Scope, Requirements, Acceptance Criteria, Non-Goals, Design Notes,
-  Relevant Specs, Verification, QA Test Cases, Review Focus, and Follow-Ups.
+  Goal, Scope, Requirements, Non-Goals, Design Notes,
+  Verification, QA Test Cases, Review Focus, and Follow-Ups.
 - Change branches use `change/<change-name>`.
 - If implementation or PR work starts on a branch other than `change/<change-name>`, stop and alert the user.
 - Change lifecycle: backlog -> branch/rejected -> pull-request -> stage/rejected -> master/rejected.
-- The Change spec is the PR contract.
-- Keep implementation scoped to the active Change. Record useful out-of-scope work as Follow-Ups instead of expanding the PR.
+- The PR is the de facto Change and its full diff is the Change contract.
+- Before publication, treat the complete branch diff as the prospective PR.
+- Before implementation, the Change spec is a provisional implementation guide derived from the Idea, existing code, and any branch changes already applied.
+- Once the PR exists, it becomes authoritative and the Change spec becomes a structured representation of it.
+- Final Spec reconciliation must include all material PR behavior regardless of whether a developer, agent, or other process applied it before or after the original Spec was written.
+- The reconciled Change spec must follow accepted PR behavior and must never override the PR.
+- Keep implementation scoped to the active PR. Record useful work not present in the PR as Follow-Ups instead of describing it as part of the Change.
 
 ## GitHub PR Reviews
 
@@ -56,11 +71,12 @@ When explicitly asked to review a PR, the agent must post the review comment wit
 
 When reviewing a PR, build fresh context from the repository instead of conversation memory:
 
-- Read the active Change spec and linked docs.
-- Inspect the full diff against the PR base branch.
+- Inspect the full PR diff against its base branch first.
+- Read the active Change spec as a structured representation of that PR.
 - Identify changed public contracts, data model changes, migrations, tests, docs, and workflows.
 - Run or inspect the listed verification commands when feasible.
-- Treat `specs/<change-name>.md` as the PR contract; verify every Requirement and Acceptance Criteria item against the diff and tests.
+- Verify that every material PR change is represented by the Spec and that every Spec Requirement is supported by the PR diff and tests.
+- Treat a Spec/PR mismatch as a Spec reconciliation issue unless the PR behavior itself is incorrect.
 
 Prioritize findings only. Focus on correctness bugs, behavioral regressions, data loss or migration risk, security or privacy issues, broken API/UI contracts, missing tests for changed behavior, and brittle tests that can pass while behavior is broken.
 
@@ -68,7 +84,6 @@ For each finding include severity (`P0`, `P1`, `P2`, or `P3`), file and line ref
 
 Strong constraints:
 
-- Do not post PR comments unless the user explicitly requested a review.
 - Do not post PR comments on repositories outside the `divilla` account/organization.
 
 ## Database Hard Boundary
@@ -164,6 +179,57 @@ Repositories must contain the minimum code required to work with database access
 - Race condition testing is required (`make race`)
 - Test files follow `*_test.go` naming convention
 - Build all test types for all the code built by AI or fix existing tests
+
+## CLI Testing
+
+The backend service-only unit-test rule does not prohibit CLI model tests. CLI Changes must use
+all applicable test tiers below in the same Change.
+
+### Model Tests
+
+- Keep model tests beside the CLI code under `cli/internal/**` using `*_test.go`.
+- Drive Bubble Tea models with messages such as `tea.KeyMsg`, execute returned commands, and assert
+  state, rendered views, client calls, and side effects.
+- Add or update model tests whenever a Change modifies CLI state, update logic, commands,
+  navigation, rendering, or error handling.
+- Model tests are fast behavioral tests, but they do not satisfy Spec QA Test Cases by themselves.
+
+### Program Integration Tests
+
+- Store CLI program integration tests under `cli/integration/**`.
+- Exercise the complete CLI program through controlled input and output, using temporary
+  configuration and files plus fake clients or `httptest.Server` for backend behavior.
+- Every CLI scenario under the Spec's `QA Test Cases` must map to at least one named program
+  integration test. Unit tests, model tests, and manual checks cannot replace this coverage.
+- Assert observable output, exit behavior, requests, persisted files, and other side effects
+  required by the QA scenario.
+- Do not contact live services or mutate a live/local database from CLI integration tests.
+
+### PTY Terminal Tests
+
+- Store pseudo-terminal tests under `cli/integration/terminal/**`.
+- Build and launch the real `mch` executable inside a PTY, set a fixed terminal size and terminal
+  environment, send actual key bytes or escape sequences, and assert rendered terminal output,
+  process exit, and externally visible side effects.
+- Add PTY coverage whenever behavior depends on TTY detection, raw mode, key-sequence decoding,
+  terminal resizing, ANSI colors, cursor movement, full-screen redraws, scrolling, or interactive
+  subprocess/editor transitions.
+- PTY tests are additional coverage and do not replace the program integration test required for
+  each CLI QA Test Case.
+- Use bounded timeouts and read-until-marker synchronization instead of fixed sleeps. Always clean
+  up child processes and PTYs, including on failure.
+- Stub editors and other external commands with controlled test executables resolved through a
+  test-specific `PATH`; never open real interactive tools during automated tests.
+
+### CLI Test Harness and Commands
+
+- Test infrastructure required to cover an in-scope QA Test Case is part of that Change unless the
+  Spec explicitly excludes it. If such an exclusion makes required QA coverage impossible, stop
+  and report the Spec conflict instead of omitting or downgrading the test.
+- `cli/Makefile` must expose `integration-test` for program integration tests and `terminal-test`
+  for PTY tests once those tiers exist. `make check` must run every applicable CLI test tier.
+- Run focused model, program integration, and PTY tests while implementing, then run every
+  applicable CLI test command until all tests pass.
 
 ## API-tests (integration tests)
 

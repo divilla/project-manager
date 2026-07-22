@@ -1,7 +1,10 @@
 # Agent Interaction
 
 ## Purpose
-Agents help refine planning, maintain documentation, implement scoped changes, and run verification. They operate against the Change spec as the contract.
+Agents help refine planning, maintain documentation, implement scoped changes, and run
+verification. Before implementation, they use the Change spec as the requested scope. During and
+after implementation, they treat the complete branch diff or published PR code as accepted
+behavior and reconcile the Spec and documentation to it.
 
 ## Commands
 Supported workflow prompts:
@@ -21,6 +24,8 @@ A Change is the full delivery flow. Its artifacts include the branch, idea, spec
 The Change, Idea, and Spec share one title. When the idea title changes through an agent-assisted idea workflow, the Change title is updated with it. When the spec title changes through a supported spec edit workflow, the Idea and Change titles are updated with it.
 
 The canonical Change spec structure template is `.mch/default/prompts/spec-file-structure.md`. Active workflow prompts and agent instructions must use that path, not legacy prompt locations under `agent/prompts`.
+
+`mch` refreshes `.mch/default/prompts/change-types.md` from the startup-loaded Change type catalog. Writing prompts such as `spec-write.md` may read that file to select allowed slugs. The canonical structure template keeps `Types:` optional and validates only metadata placement and formatting, so review, implementation, documentation, and reconciliation prompts do not need the catalog. Prompt Markdown must not call backend APIs.
 
 ## Planning Behavior
 During planning, the agent:

@@ -58,12 +58,13 @@ func (ProcessRunner) Rewrite(ctx context.Context, repoRoot string, sessionID str
 	args := []string{"exec"}
 	prompt := RewritePrompt(workspace)
 	if sessionID == "" {
-		args = append(args, "--json", "-C", repoRoot, "-o", workspace.OutputPath(), prompt)
+		args = append(args, "--json", "-C", repoRoot, "-o", workspace.AgentOutputPath(), prompt)
 	} else {
-		args = append(args, "resume", "-o", workspace.OutputPath(), sessionID, prompt)
+		args = append(args, "resume", "-o", workspace.AgentOutputPath(), sessionID, prompt)
 	}
 	cmd := exec.CommandContext(ctx, "codex", args...)
 	cmd.Dir = repoRoot
+	cmd.Env = workflowEnvironment(os.Environ(), workspace)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return RewriteResult{RepoRoot: repoRoot}, err
@@ -106,7 +107,7 @@ func (ProcessRunner) Rewrite(ctx context.Context, repoRoot string, sessionID str
 		}
 		sessionID = ExtractSessionID(stdout.String())
 	}
-	output, err := readFile(workspace.OutputPath())
+	output, err := readFile(workspace.AgentOutputPath())
 	if err != nil && runErr == nil {
 		return RewriteResult{RepoRoot: repoRoot, SessionID: sessionID, CommandOutput: commandOutput}, err
 	}
@@ -118,6 +119,29 @@ func (ProcessRunner) Rewrite(ctx context.Context, repoRoot string, sessionID str
 		return result, runErr
 	}
 	return result, nil
+}
+
+func workflowEnvironment(base []string, workspace Workspace) []string {
+	overrides := map[string]string{
+		"MCH_DEFAULT_DIR": DefaultDir,
+		"MCH_TEMP_DIR":    TempDir,
+		"MCH_REF_UUID":    workspace.RefUUID,
+		"MCH_STAGE":       IdeaStage,
+	}
+	result := make([]string, 0, len(base)+len(overrides))
+	for _, entry := range base {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok {
+			if _, replaced := overrides[key]; replaced {
+				continue
+			}
+		}
+		result = append(result, entry)
+	}
+	for _, key := range []string{"MCH_DEFAULT_DIR", "MCH_TEMP_DIR", "MCH_REF_UUID", "MCH_STAGE"} {
+		result = append(result, key+"="+overrides[key])
+	}
+	return result
 }
 
 func captureCommandOutput(reader io.Reader, prefix string, output *bytes.Buffer, progress RewriteProgress) error {

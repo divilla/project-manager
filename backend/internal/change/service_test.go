@@ -7,9 +7,28 @@ import (
 
 	"aipm/internal/dto"
 
+	"github.com/gofrs/uuid/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestServiceResolvesChangeCreateIdentity(t *testing.T) {
+	repo := &fakeChangeRepository{}
+	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
+
+	generated, err := service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, Title: "Generated", Idea: "Idea"})
+	require.NoError(t, err)
+	require.NotNil(t, repo.createReq.RefUUID)
+	assert.Equal(t, byte(7), repo.createReq.RefUUID.Version())
+	assert.Equal(t, repo.createReq.RefUUID.String(), generated.RefUUID)
+
+	supplied := uuid.Must(uuid.FromString("0198a86f-9b8a-7d89-ae5b-6f25b528b04c"))
+	preserved, err := service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, RefUUID: &supplied, Title: "Supplied", Idea: "Idea"})
+	require.NoError(t, err)
+	require.NotNil(t, repo.createReq.RefUUID)
+	assert.Equal(t, supplied, *repo.createReq.RefUUID)
+	assert.Equal(t, supplied.String(), preserved.RefUUID)
+}
 
 func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 	service := &Service{}
@@ -60,7 +79,7 @@ func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 }
 
 func TestServiceNormalizesChangeRequests(t *testing.T) {
-	repo := &fakeChangeRepository{}
+	repo := &fakeChangeRepository{availableTypes: []string{"fix"}}
 	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 	epicID := 4
 	agentEdit := false
@@ -77,9 +96,12 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	assert.Equal(t, "Change Title", repo.createReq.Title)
 	assert.Equal(t, "Idea", repo.createReq.Idea)
 
-	_, err = service.UpdateChangeTypes(context.Background(), dto.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{" fix ", "fix "}})
+	_, err = service.UpdateChangeTypes(context.Background(), dto.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{" fix ", "missing", "fix "}})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"fix"}, repo.updateTypesReq.ChangeTypes)
+	_, err = service.UpdateChangeTypes(context.Background(), dto.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{"missing"}})
+	require.NoError(t, err)
+	assert.Empty(t, repo.updateTypesReq.ChangeTypes)
 	_, err = service.UpdateTitle(context.Background(), dto.ChangeUpdateTitleRequest{ID: 2, Title: " Focused Title "})
 	require.NoError(t, err)
 	assert.Equal(t, "Focused Title", repo.updateTitleReq.Title)
@@ -209,6 +231,7 @@ func (fakeMarkdownSanitizer) Parse(source string) string {
 type fakeChangeRepository struct {
 	projectID      int
 	id             int
+	availableTypes []string
 	phase          string
 	open           *bool
 	specIDs        []int
@@ -221,6 +244,13 @@ type fakeChangeRepository struct {
 	updatePRUrlReq dto.ChangeUpdatePRUrlRequest
 	updateRunReq   dto.ChangeUpdateRunRequest
 	err            error
+}
+
+func (r *fakeChangeRepository) AvailableChangeTypes(_ context.Context) ([]string, error) {
+	if r.err != nil {
+		return nil, r.err
+	}
+	return append([]string(nil), r.availableTypes...), nil
 }
 
 func (r *fakeChangeRepository) List(_ context.Context, projectID int) ([]dto.ChangeListItem, error) {
@@ -256,7 +286,11 @@ func (r *fakeChangeRepository) Create(_ context.Context, req dto.ChangeCreateReq
 		return dto.Change{}, r.err
 	}
 	r.createReq = req
-	return dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, Idea: req.Idea}, nil
+	change := dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, Idea: req.Idea}
+	if req.RefUUID != nil {
+		change.RefUUID = req.RefUUID.String()
+	}
+	return change, nil
 }
 
 func (r *fakeChangeRepository) UpdateChangeTypes(_ context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error) {

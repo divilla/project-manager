@@ -1,4 +1,4 @@
-# Test Cases And Acceptance
+# Requirements And Test Cases
 
 ## Purpose
 Test cases define what complete means for a change. They convert broad intent into binary checks that can be reviewed by a human or agent.
@@ -23,8 +23,8 @@ If a change has no test cases, it should not appear complete unless explicit pro
 ## Display And Mutation Behavior
 Change detail views show linked test cases in numeric ID order. Test case create, update, done toggle, reassignment, and delete actions run through the backend. Responses should provide enough current data for clients to refresh visible completeness and done state without guessing.
 
-## Acceptance Criteria
-Acceptance criteria define the user-visible or system-visible outcomes required for a change to be considered done. They should be written as testable statements, not vague goals.
+## Requirements
+Requirements define the user-visible or system-visible behavior a change must deliver. They should be written as testable obligations rather than vague goals or implementation tasks.
 
 ## Planning Output
 LLM-assisted planning first rewrites the user's idea. The user confirms creation before the rewritten idea is saved as a Change.

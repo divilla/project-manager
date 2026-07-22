@@ -131,6 +131,9 @@ func (c HTTPClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error
 		"title":      input.Title,
 		"idea":       input.Idea,
 	}
+	if strings.TrimSpace(input.RefUUID) != "" {
+		payload["ref_uuid"] = input.RefUUID
+	}
 	return c.postChange("/api/v1/change/create", payload)
 }
 

@@ -3,9 +3,9 @@
 ## Overview
 A change is the delivery unit. It can exist independently or reference one epic. It is never part of a nested change tree.
 
-Each change has a backend-generated `ref_uuid` and may have a backend-owned `ref` and `slug`. The `ref_uuid` is a non-null read-only UUID identity. The `ref` is a project-scoped numeric reference allocated from the owning project. The `slug` is a branch identifier generated from the assigned reference and current title.
+Each change has a resolved `ref_uuid` and may have a backend-owned `ref` and `slug`. A create request may supply `ref_uuid`; when it is omitted or null, the backend generates one. The resolved identity is non-null and read-only after creation. The `ref` is a project-scoped numeric reference allocated from the owning project. The `slug` is a branch identifier generated from the assigned reference and current title.
 
-Users and clients must not create, edit, or overwrite `ref`, `ref_uuid`, `slug`, Flow snapshot fields, Run state fields, or the project's reference counter. New Changes may exist without a `ref`, `slug`, or Flow snapshot; those fields are assigned or refreshed only by backend Flow assignment and returned to clients as read-only data.
+Clients may set `ref_uuid` only as an optional Change create field. Later requests cannot replace or clear it. Users and clients must not create, edit, or overwrite `ref`, `slug`, Flow snapshot fields, Run state fields, or the project's reference counter. New Changes may exist without a `ref`, `slug`, or Flow snapshot; those fields are assigned or refreshed only by backend Flow assignment and returned to clients as read-only data.
 
 ## Create
 Creating a change requires:
@@ -14,9 +14,9 @@ Creating a change requires:
 - title
 - idea
 
-The title and idea must be non-blank after validation. `spec`, `pr`, and `pr_url` are optional artifact strings and default to empty text when omitted. `epic_id` defaults to null, `change_types` defaults to an empty array when omitted or explicitly empty, and `change_phase` defaults to `backlog` when clients do not provide a phase.
+The title and idea must be non-blank after validation. `ref_uuid` is optional: the backend preserves a supplied UUID or generates a UUIDv7 when the field is omitted or null. Blank or malformed non-null values fail request binding without creating a Change or initial history. `spec`, `pr`, and `pr_url` are optional artifact strings and default to empty text when omitted. `epic_id` defaults to null, `change_types` defaults to an empty array when omitted or explicitly empty, and `change_phase` defaults to `backlog` when clients do not provide a phase.
 
-After a successful create, the returned change includes its database ID, generated `ref_uuid`, string artifact fields, and may have unassigned `ref` and `slug` values. Creating a Change does not advance the project reference sequence.
+After a successful create, the returned change includes its database ID, resolved `ref_uuid`, string artifact fields, and may have unassigned `ref` and `slug` values. Creating a Change does not advance the project reference sequence.
 
 Codex-assisted planning tools create Changes after the user confirms `Create Change?`, then may run an agent rewrite and save the rewritten idea through `POST /api/v1/change/update-idea` with `agent_edit` set to true. These Changes use the backend default phase until the user moves them through the normal lifecycle.
 
@@ -69,6 +69,10 @@ Frontend and CLI controls for Flow assignment, per-Change stage modes, Run claim
 Editing a change can update title, `idea`, `spec`, `pr`, `pr_url`, type classification, epic reference, phase, and open state. Artifact responses use strings; empty text is the no-value state for optional artifacts that have not been submitted and for rendered artifact HTML. Focused artifact and PR URL update payloads must be non-empty. Open-state updates use an explicit boolean value and return refreshed backend state.
 
 Artifact update payloads for `idea`, `spec`, and `pr` include `agent_edit` to record whether that artifact save was agent-produced. After create, `agent_edit` is changed only by those artifact update flows.
+
+The CLI edits existing Idea, Spec, and PR artifacts in `.mch/tmp/<ref_uuid>/idea`. It reloads the Change before editing, refreshes `output.md` and then `input.md` from the backend artifact, and preserves the stage session and logs. Changed user output is first saved with `agent_edit=false`, then copied from `output.md` to `input.md`; only after both steps succeed does the matching `idea-write`, `spec-write`, or `pr-write` prompt run with `MCH_STAGE=idea` and the shared session. Agent output is saved with `agent_edit=true`. Unchanged output sends no artifact update. Both accepted saves apply present type metadata and reload the Change before continuing.
+
+Idea, Spec, and PR artifacts share one optional `Types:` metadata contract. Omitting `Types:` leaves the Change's existing types untouched and sends no type update. When `Types:` is present, it always sends a request to `POST /api/v1/change/update-change-types`: an empty value sends an empty string array, while a non-empty value treats pipes and whitespace as separators, then removes every `[^A-Za-z\-_]` character from each value and discards empty values. Clients do not load the type options catalog first. The backend intersects every submitted array with its currently available type values, silently removes unsupported values, and replaces the Change's complete type set with the filtered result, including an empty array. Unsupported artifact type values are not validation errors. Existing-Change artifact saves reload the Change through `POST /api/v1/change/get`; initial creation uses the complete Change returned by its post-create type update.
 
 Focused updates return the refreshed change with its existing `ref` and `slug`. Updates must work before and after Flow assignment. Updating the title does not let clients supply replacement identity values.
 

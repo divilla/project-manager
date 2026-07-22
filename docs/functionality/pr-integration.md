@@ -9,7 +9,6 @@ A Change spec records:
 - goal
 - scope
 - requirements
-- acceptance criteria
 - non-goals
 - design notes
 - relevant docs
@@ -23,6 +22,10 @@ Change branches use:
 ```text
 change/<change-slug>
 ```
+
+The Change slug is valid if and only if it matches `^[0-9]+-[0-9A-Za-z_-]+$`. The `change/`
+namespace is not part of the slug. Validation uses that exact expression everywhere, while
+extraction from a full branch name uses `^change/([0-9]+-[0-9A-Za-z_-]+)$`.
 
 The matching Change spec lives at:
 

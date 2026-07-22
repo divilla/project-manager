@@ -5,11 +5,13 @@ From `backend`:
 
 ```sh
 make lint
+make vet
 make test
+make race
 make api-test
 ```
 
-Backend checks should cover service logic, repository behavior where feasible, API contracts, history behavior, and health diagnostics. Change API coverage should include title plus idea creation, generated `ref_uuid`, missing or blank title and idea validation, null and empty artifact update rejection, empty-string artifact response values, `agent_edit` on idea/spec/PR update payloads, empty `change_types`, unassigned `ref` and `slug`, Flow assignment, repeated Flow assignment that preserves the existing `ref` and copied Flow arrays, removal of old Change routes, Run claiming, duplicate claim handling, stale claim rejection, completed Run handling, invalid Run IDs and claim IDs, informational Run values, and Change detail response field shapes.
+Backend checks should cover service logic, repository behavior where feasible, API contracts, history behavior, and health diagnostics. Change API coverage should include title plus idea creation; preserved caller-supplied `ref_uuid`; generated UUIDv7 identities for omitted and null values; blank, malformed, and duplicate identity rejection; immutable identity across later mutations; missing or blank title and idea validation; null and empty artifact update rejection; empty-string artifact response values; `agent_edit` on idea/spec/PR update payloads; empty and unsupported `change_types`; unassigned `ref` and `slug`; Flow assignment; repeated Flow assignment that preserves the existing `ref` and copied Flow arrays; removal of old Change routes; Run claiming; duplicate claim handling; stale claim rejection; completed Run handling; invalid Run IDs and claim IDs; informational Run values; and Change detail response field shapes.
 
 After every backend code change, agents must run `make lint` from `backend` and fix all findings before handoff. `make lint` may rewrite imports or formatting; review and include those intentional changes with the backend code change.
 
@@ -24,17 +26,23 @@ From `cli`:
 
 ```sh
 make lint
+make vet
 go test ./...
+make race
 go build -o /tmp/mch ./cmd/mch
 ```
 
-Verification commands may write build outputs and fixtures under the system temp directory. That use is separate from runtime `mch` planning behavior, where temporary planning files must use the loaded `.mch/config.yaml` `temp_dir` value and must not fall back to a built-in temp path.
+Verification commands may write build outputs and fixtures under the system temp directory. That use is separate from runtime `mch` planning behavior, where workspaces use the fixed repository-relative `.mch/tmp` root and never a configured or system temporary path.
 
 After every `mch` code change, agents must run `make lint` from `cli` and fix all findings before handoff. `make lint` may rewrite imports or formatting; review and include those intentional changes with the `mch` code change.
 
-Changes to the `mch` AI-assisted `/new-change` and idea edit flows should also be verified with tests that fake editor, backend, Codex execution, and Git execution. Coverage should include temporary planning files, `/resume`, `/clear`, and `/cancel`, unparsable idea titles with `error parsing title:`, `/edit`, and `/cancel`, raw idea previews before parse errors and confirmation prompts, `Create Change?` No as a no-op, create-before-rewrite behavior, update-before-rewrite behavior, rewrite failures, title plus idea create payload fields, `update-idea` saves with `agent_edit` false for user edits and true for agent rewrites, backend save failures, absence of unsupported Flow assignment and branch reconciliation commands, and refreshed detail navigation.
+Changes to `/new-change` should be verified through the complete Bubble Tea program with controlled key input and rendered output, an HTTP test backend, a subprocess-backed fake editor, and an injected agent runner. Coverage should enforce UUIDv7 generation before workspace creation, blank `idea/input.md` and `idea/output.md` creation before editing `output.md`, byte comparison after editor exit, equal-file cancellation with workspace removal, `Create Change?` confirmation before artifact validation, No-choice cleanup without a request, missing-title and blank-body validation after Yes with retained files and no request, optional and unsupported `Types:` values without client-side rejection, `Epic:` as ordinary artifact text, Yes-choice generated `ref_uuid` submission, partial-initialization cleanup, backend failure retry state, and protection of existing Change workspaces. Program integration tests must not call model workflow helpers or construct completion messages directly.
 
-Changes to `mch` configuration loading should verify repository-root resolution from nested directories, `.mch/config.yaml` parsing, `.mch/default/flow.yaml` and `.mch/default/help.yaml` parsing, configured `temp_dir` use, shared numeric `project_id` persistence, `/config` command routing, read-only `/config` rendering from in-memory structs, exact hook command display without execution, custom Flow help option slugs, empty or missing Flow help option groups, duplicate Flow Step slug rejection, missing or unsupported Flow Step mode rejection, and verbose startup errors for missing or malformed `.mch` files without fallback to old config paths.
+Existing Idea, Spec, and PR editor coverage should reload the Change, use `.mch/tmp/<ref_uuid>/idea`, refresh only `input.md` and `output.md`, preserve the saved session and logs, and skip updates for unchanged output. Changed output must exercise the matching user save, type update when present, Change reload, post-save `output.md`-to-`input.md` promotion, `idea-write`, `spec-write`, or `pr-write` prompt, agent save, and final reload. Every operation must assert `MCH_STAGE=idea`, including Spec and PR writing. Program integration coverage should drive the complete CLI with controlled input/output and fake editor, Codex, and backend processes.
+
+Changes to `mch` configuration loading should verify repository-root resolution from nested directories, `.mch/config.yaml` parsing without `temp_dir`, ignored legacy `temp_dir` values, `.mch/default/flow.yaml` and `.mch/default/help.yaml` parsing, fixed `.mch/tmp` workspace use, shared numeric `project_id` persistence, `/config` command routing, read-only config rendering, exact hook display without execution, custom Flow help option slugs, empty or missing help option groups, Flow Step validation, and verbose startup errors without fallback to old config paths. Artifact-write process checks should verify `MCH_DEFAULT_DIR=.mch/default`, `MCH_TEMP_DIR=.mch/tmp`, the created or loaded Change UUID as `MCH_REF_UUID`, `MCH_STAGE=idea`, inherited-value replacement, and command-failure propagation without Flow-profile stage lookup.
+
+Startup option-catalog checks should verify one Change type request, backend-order caching, defensive copies from `app.ChangeTypes()`, and exact atomic replacement of `.mch/default/prompts/change-types.md`. Failure coverage should preserve the previous cache and file when loading or prompt writing fails and report prompt-write failures through the option-catalog error path. Prompt checks should verify writing prompts use the generated catalog, the Spec structure validates optional `Types:` syntax without the catalog, and no prompt Markdown contains a backend call instruction.
 
 ## Frontend
 From the repository root:
@@ -50,9 +58,9 @@ Frontend checks should cover feature logic, visible component behavior, routing,
 ## Documentation
 Documentation checks should list files, enforce the 300-line limit, and run the vocabulary checks from the active Change spec.
 
-For Change artifact contract changes, documentation checks should confirm active docs describe `ref_uuid` as read-only response data, string artifact fields with empty strings as the no-value state, and `agent_edit` on `update-idea`, `update-spec`, and `update-pr` payloads.
+For Change artifact contract changes, documentation checks should confirm active docs describe `ref_uuid` as an optional create input that is read-only after creation, including the generated `/new-change` value, string artifact fields with empty strings as the no-value state, and `agent_edit` on `update-idea`, `update-spec`, and `update-pr` payloads.
 
-For CLI config Changes, documentation checks should confirm active docs describe repository-root `.mch/config.yaml`, `.mch/default` Flow loading, `/config`, `temp_dir`, and no active `cli/.config/config.yaml` contract.
+For CLI config Changes, documentation checks should confirm active docs describe repository-root `.mch/config.yaml`, fixed repository-relative `.mch/tmp`, `.mch/default` Flow loading, `/config` without `temp_dir`, ignored legacy `temp_dir` values, and no active `cli/.config/config.yaml` contract.
 
 For Change workflow branch or spec-path changes, documentation checks should confirm active behavior docs use `change/<change-slug>` for repository workflow branches, `agent/ideas/<change-slug>.md` for ideas, `specs/<change-slug>.md` for Change specs, and `.mch/default/prompts/spec-file-structure.md` for the spec structure template. Remaining `changes/` matches must be application routes, package paths, or historical research/spec context.
 

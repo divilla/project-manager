@@ -5,57 +5,32 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"mch/internal/changes"
 )
 
 // ParsedChange stores the backend fields parsed from generated Change markdown.
 type ParsedChange struct {
-	Title       string
-	Spec        string
-	ChangeTypes []string
-	TestCases   []string
+	Title              string
+	Spec               string
+	ChangeTypes        []string
+	ChangeTypesPresent bool
+	TestCases          []string
 }
 
 // ParseGeneratedChange extracts the title and Types metadata from a generated Change spec.
-func ParseGeneratedChange(spec string, validTypes []string) (ParsedChange, error) {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(spec, "\r\n", "\n"), "\r", "\n")
-	lines := strings.Split(normalized, "\n")
-	titleIndex := firstNonBlankLine(lines, 0)
-	if titleIndex < 0 {
-		return ParsedChange{}, fmt.Errorf("change title is required")
+func ParseGeneratedChange(spec string) (ParsedChange, error) {
+	parsed, err := changes.ParseSpecStructure(spec)
+	if err != nil {
+		return ParsedChange{}, err
 	}
-	titleLine := strings.TrimSpace(lines[titleIndex])
-	if !strings.HasPrefix(titleLine, "# ") || strings.HasPrefix(titleLine, "## ") {
-		return ParsedChange{}, fmt.Errorf("change title is required")
-	}
-	title := strings.TrimSpace(strings.TrimPrefix(titleLine, "# "))
-	if title == "" {
-		return ParsedChange{}, fmt.Errorf("change title is required")
-	}
-
-	typeIndex := firstNonBlankLine(lines, titleIndex+1)
-	if typeIndex < 0 {
-		return ParsedChange{}, fmt.Errorf("types line is required")
-	}
-	typeLine := strings.TrimSpace(lines[typeIndex])
-	if !strings.HasPrefix(typeLine, "Types: ") {
-		return ParsedChange{}, fmt.Errorf("types line is required")
-	}
-	typeValue := strings.TrimPrefix(typeLine, "Types: ")
-	if strings.TrimSpace(typeValue) == "" || strings.Contains(typeValue, " ") {
-		return ParsedChange{}, fmt.Errorf("types line must contain backend type slugs joined by |")
-	}
-	types := strings.Split(typeValue, "|")
-	validTypeSet := stringSet(validTypes)
-	for _, typ := range types {
-		if typ == "" {
-			return ParsedChange{}, fmt.Errorf("types line must contain backend type slugs joined by |")
-		}
-		if _, ok := validTypeSet[typ]; !ok {
-			return ParsedChange{}, fmt.Errorf("invalid change type: %s", typ)
-		}
-	}
-
-	return ParsedChange{Title: title, Spec: normalized, ChangeTypes: types, TestCases: ExtractQATestCases(normalized)}, nil
+	return ParsedChange{
+		Title:              parsed.Title,
+		Spec:               parsed.Spec,
+		ChangeTypes:        parsed.ChangeTypes,
+		ChangeTypesPresent: parsed.ChangeTypesPresent,
+		TestCases:          ExtractQATestCases(parsed.Spec),
+	}, nil
 }
 
 // ExtractQATestCases extracts QA scenarios listed under the generated Change QA section.
@@ -131,17 +106,6 @@ func markdownListItemText(line string) (string, bool) {
 	return "", false
 }
 
-func stringSet(values []string) map[string]struct{} {
-	set := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			set[value] = struct{}{}
-		}
-	}
-	return set
-}
-
 // ExtractSessionID returns the Codex thread/session ID from JSON event output.
 func ExtractSessionID(jsonLines string) string {
 	if sessionID := extractThreadStartedIDWithJQ(jsonLines); sessionID != "" {
@@ -201,15 +165,6 @@ func parseJSONLineEvents(jsonLines string) []map[string]any {
 		events = append(events, event)
 	}
 	return events
-}
-
-func firstNonBlankLine(lines []string, start int) int {
-	for i := start; i < len(lines); i++ {
-		if strings.TrimSpace(lines[i]) != "" {
-			return i
-		}
-	}
-	return -1
 }
 
 func stringField(values map[string]any, key string) string {

@@ -3,13 +3,13 @@ name: change-docs
 description: Update repository documentation under docs from the active agent changes file on a changes branch, without editing code, tests, database files, or generated artifacts.
 ---
 
-Extract `<change-slug>` from the current Git branch using this regex: `^change/([0-9]+-[a-z0-9-_]+)$`
+Extract `<change-slug>` from the current Git branch using this regex: `^change/([0-9]+-[0-9A-Za-z_-]+)$`
 
 If the current branch does not match, stop and output one concise error explaining that the branch must be named `change/<change-slug>`.
 
 Stop without editing if `specs/<change-slug>.md` does not exist.
 
-Using Change spec `specs/<change-slug>.md` as the source of truth, update or create only the documentation needed to precisely describe the desired external behavior for this Change.
+Using code as the source of truth and Change spec `specs/<change-slug>.md` as the requested scope, update or create only the documentation needed to precisely describe implemented external behavior for this Change.
 
 Before editing anything:
 1. Read the Change spec.
@@ -19,18 +19,18 @@ Before editing anything:
 
 Documentation rules:
 - Follow `docs/docs-rules.md` exactly.
-- Treat the Change spec as the contract for this documentation pass.
+- Treat code as the source of truth for current behavior and the Change spec as the requested scope.
 - Keep docs concise, product-focused, and testable.
 - Describe intended external behavior, user-visible/API-visible contracts, persistence constraints, validation behavior, and verification expectations.
 - Do not describe implementation internals unless they are part of the observable product or API contract.
-- Resolve conflicts between existing docs and the Change spec in favor of `specs/<change-slug>.md`.
+- Resolve conflicts between existing docs and code in favor of code. If the Change spec requests behavior that code does not implement, report the gap instead of documenting it as current behavior.
 - Preserve established project vocabulary.
 - Keep each doc under the repository’s documented line limit.
 - Do not create duplicate documentation if an existing doc is the right home for the behavior.
 
 Scope:
 - Update only files under `docs/`.
-- Update all affected docs enough that a future implementer can align code, tests, frontend, CLI, and seed data with the Change without relying on chat history.
+- Update all affected docs enough that they accurately describe the implemented code without relying on chat history.
 - Remove or revise stale references to the old active Change field names when they conflict with the Change.
 - Add concise notes for any new external contract introduced by the Change, such as new Change field names, history behavior, API payloads, frontend display behavior, and verification expectations.
 

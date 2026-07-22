@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"aipm/internal/dto"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 var (
@@ -82,6 +84,13 @@ func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest)
 	if req.ProjectID <= 0 || req.Title == "" || req.Idea == "" {
 		return dto.Change{}, ErrInvalidInput
 	}
+	if req.RefUUID == nil {
+		u, err := uuid.NewV7()
+		if err != nil {
+			return dto.Change{}, err
+		}
+		req.RefUUID = &u
+	}
 	change, err := s.repo.Create(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
@@ -95,6 +104,11 @@ func (s *Service) UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateCha
 	if req.ID <= 0 {
 		return dto.Change{}, ErrInvalidInput
 	}
+	available, err := s.repo.AvailableChangeTypes(ctx)
+	if err != nil {
+		return dto.Change{}, err
+	}
+	req.ChangeTypes = intersectTypes(req.ChangeTypes, available)
 	change, err := s.repo.UpdateChangeTypes(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
@@ -284,6 +298,20 @@ func normalizeTypes(values []string) []string {
 		normalized = append(normalized, value)
 	}
 	return normalized
+}
+
+func intersectTypes(values, available []string) []string {
+	availableSet := make(map[string]struct{}, len(available))
+	for _, value := range available {
+		availableSet[value] = struct{}{}
+	}
+	filtered := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := availableSet[value]; ok {
+			filtered = append(filtered, value)
+		}
+	}
+	return filtered
 }
 
 func invalidOptionalID(value *int) bool {

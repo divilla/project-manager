@@ -1,10 +1,35 @@
 FLOW_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
 GIT_ROOT := $(shell git rev-parse --show-toplevel 2>/dev/null)
 GIT_BRANCH := $(shell git branch --show-current 2>/dev/null)
-CHANGE_NAME := $(patsubst change/%,%,$(GIT_BRANCH))
+CHANGE_SLUG := $(patsubst change/%,%,$(GIT_BRANCH))
+TEMP_DIR := $(GIT_ROOT)/$${MCH_TEMP_DIR}/$${MCH_REF_UUID}/$${MCH_STAGE}
+SPEC_TEMP_DIR := $(GIT_ROOT)/$${MCH_TEMP_DIR}/$${MCH_REF_UUID}/spec
+SPEC_REVIEW_TEMP_DIR := $(GIT_ROOT)/$${MCH_TEMP_DIR}/$${MCH_REF_UUID}/spec-review
+IDEAS_DIR := $(GIT_ROOT)/agent/ideas
+SPECS_DIR := $(GIT_ROOT)/specs
+FLOW_STEPS := idea-write idea-review idea-chat spec-write pr-write spec-review spec-review-chat
+FLOW_PROMPT_STEPS := idea-write idea-review spec-write pr-write spec-review
+FLOW_ENTRY_TARGETS := $(addsuffix -entry,$(FLOW_STEPS))
+FLOW_EXEC_TARGETS := $(addsuffix -exec,$(FLOW_STEPS))
+FLOW_EXIT_TARGETS := $(addsuffix -exit,$(FLOW_STEPS))
+FLOW_BEFORE_TARGETS := $(addsuffix -before,$(FLOW_STEPS))
+FLOW_RUN_TARGETS := $(addsuffix -run,$(FLOW_STEPS))
+FLOW_LEAVE_TARGETS := $(addsuffix -leave,$(FLOW_STEPS))
+FLOW_PROMPT_TARGETS := $(addsuffix -prompt,$(FLOW_PROMPT_STEPS))
 
-.PHONY: help list git-root root require-repo-root init idea-init idea-exec idea-review idea-exit idea spec-exit commit
-.PHONY: %-entry %-exec %-exit %-before %-run %-leave %-prompt
+.PHONY: help list init diff idea-prepare idea-init idea-write idea-review idea-chat
+.PHONY: spec-prepare spec-init spec-write pr-write spec-review spec-review-chat verify-exit fix-exit commit extract-session
+.PHONY: $(FLOW_ENTRY_TARGETS) $(FLOW_EXEC_TARGETS) $(FLOW_EXIT_TARGETS)
+.PHONY: $(FLOW_BEFORE_TARGETS) $(FLOW_RUN_TARGETS) $(FLOW_LEAVE_TARGETS) $(FLOW_PROMPT_TARGETS)
+
+idea-% spec-%: export MCH_STAGE := idea
+spec-review%: export MCH_STAGE := spec-review
+docs-%: export MCH_STAGE := docs
+code-% polish-%: export MCH_STAGE := code
+pr-%: export MCH_STAGE := idea
+review-% fix-%: export MCH_STAGE := code-review
+sync-%: export MCH_STAGE := code-docs
+merge-% stage-% master-%: export MCH_STAGE := merge
 
 help: list
 
@@ -20,32 +45,69 @@ list:
 
 init:
 	@if [ -z "$(GIT_ROOT)" ]; then printf '%s\n' 'cannot extract repo root' >&2; exit 1; fi
-	@mkdir -p "$(GIT_ROOT)/.mch/tmp";
+	@if [ -z "$$MCH_TEMP_DIR" ]; then printf '%s\n' 'missing MCH_TEMP_DIR' >&2; exit 1; fi
+	@if [ -z "$$MCH_REF_UUID" ]; then printf '%s\n' 'missing MCH_REF_UUID' >&2; exit 1; fi
+	@if [ -z "$$MCH_STAGE" ]; then printf '%s\n' 'missing MCH_STAGE' >&2; exit 1; fi
+	@case "$$MCH_TEMP_DIR" in /*|*..*) printf 'invalid MCH_TEMP_DIR: %s\n' "$$MCH_TEMP_DIR" >&2; exit 1;; esac
+	@printf '%s\n' "$$MCH_REF_UUID" | grep -Eq '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$$' || { printf 'invalid MCH_REF_UUID: %s\n' "$$MCH_REF_UUID" >&2; exit 1; }
+	@case "$$MCH_STAGE" in idea|spec|spec-review|docs|code|pr|code-review|code-docs|merge) ;; *) printf 'invalid MCH_STAGE: %s\n' "$$MCH_STAGE" >&2; exit 1;; esac
+	@mkdir -p "$(TEMP_DIR)"
+	@mkdir -p "$(SPEC_TEMP_DIR)"
+	@mkdir -p "$(SPEC_REVIEW_TEMP_DIR)"
+
+idea-prepare: init
+	@cp "$(IDEAS_DIR)/$(CHANGE_SLUG).md" "$(TEMP_DIR)/output.md";
+
+spec-prepare: init
+	@cp "$(SPECS_DIR)/$(CHANGE_SLUG).md" "$(SPEC_TEMP_DIR)/output.md";
 
 idea-init: init
-	@if [ -z "$$MCH_TEMP_UUID" ]; then printf '%s\n' 'missing MCH_TEMP_UUID' >&2; exit 1; fi
-	@mkdir -p "$(GIT_ROOT)/.mch/tmp/$$MCH_TEMP_UUID";
+	@cp "$(TEMP_DIR)/output.md" "$(TEMP_DIR)/input.md";
+
+spec-init: init
+	@cp "$(SPEC_TEMP_DIR)/output.md" "$(SPEC_TEMP_DIR)/input.md";
+
+diff:
+	@git diff --no-index --color=never --unified=1 -- "$(TEMP_DIR)/input.md" "$(TEMP_DIR)/output.md" | bat --language=diff -pp --theme 'Coldark-Dark' --style=plain --color=always --paging=never
+
+idea-write: idea-prepare idea-init
+	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/idea-write.md"
 
 idea-review: idea-init
 	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/idea-review.md"
 
-idea-refine: init
-	@codex -C "$(GIT_ROOT)" resume "$$(cat ../tmp/sessions/$(CHANGE_NAME))"
+idea-chat: init
+	@$(FLOW_DIR)scripts/codex-resume-session.sh
+
+spec-write: idea-init
+	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/spec-write.md"
+
+pr-write: idea-init
+	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/pr-write.md"
+
+spec-review: init
+	@cp "$(SPECS_DIR)/$(CHANGE_SLUG).md" "$(SPEC_REVIEW_TEMP_DIR)/output.md"
+	@cp "$(SPEC_REVIEW_TEMP_DIR)/output.md" "$(SPEC_REVIEW_TEMP_DIR)/input.md"
+	@$(FLOW_DIR)scripts/codex-exec-new-session.sh \
+		"$(FLOW_DIR)prompts/spec-review.md"
+
+spec-review-chat: init
+	@$(FLOW_DIR)scripts/codex-resume-session.sh
 
 verify-exit: init
 	@git add -A
-	@git commit -m "Spec fix for $(CHANGE_NAME) by agent" || true
-	@git push origin "change/$(CHANGE_NAME)"
+	@git commit -m "Spec fix for $(CHANGE_SLUG) by agent" || true
+	@git push origin "change/$(CHANGE_SLUG)"
 
 fix-exit: init
 	@git add -A
-	@git commit -m "Code fix for $(CHANGE_NAME) by agent" || true
-	@git push origin "change/$(CHANGE_NAME)"
+	@git commit -m "Code fix for $(CHANGE_SLUG) by agent" || true
+	@git push origin "change/$(CHANGE_SLUG)"
 
 commit:
 	@git add -A
-	@git commit -m "Update for $(CHANGE_NAME) by user"
-	@git push origin "change/$(CHANGE_NAME)"
+	@git commit -m "Update for $(CHANGE_SLUG) by user"
+	@git push origin "change/$(CHANGE_SLUG)"
 
 
 extract-session: init
@@ -91,23 +153,23 @@ extract-session: init
 	  codex -C "$$repo" resume "$$session_id"; \
 	fi
 
-%-entry:
-	@$(FLOW_DIR)scripts/demo-entry.sh "$*"
+$(FLOW_ENTRY_TARGETS):
+	@$(FLOW_DIR)scripts/demo-entry.sh "$(patsubst %-entry,%,$@)"
 
-%-exec:
-	@$(FLOW_DIR)scripts/demo-exec.sh "$*"
+$(FLOW_EXEC_TARGETS):
+	@$(FLOW_DIR)scripts/demo-exec.sh "$(patsubst %-exec,%,$@)"
 
-%-exit:
-	@$(FLOW_DIR)scripts/demo-exit.sh "$*"
+$(FLOW_EXIT_TARGETS):
+	@$(FLOW_DIR)scripts/demo-exit.sh "$(patsubst %-exit,%,$@)"
 
-%-before:
-	@$(MAKE) --no-print-directory -f $(lastword $(MAKEFILE_LIST)) "$*-entry"
+$(FLOW_BEFORE_TARGETS):
+	@$(MAKE) --no-print-directory -f $(lastword $(MAKEFILE_LIST)) "$(patsubst %-before,%-entry,$@)"
 
-%-run:
-	@$(MAKE) --no-print-directory -f $(lastword $(MAKEFILE_LIST)) "$*-exec"
+$(FLOW_RUN_TARGETS):
+	@$(MAKE) --no-print-directory -f $(lastword $(MAKEFILE_LIST)) "$(patsubst %-run,%-exec,$@)"
 
-%-leave:
-	@$(MAKE) --no-print-directory -f $(lastword $(MAKEFILE_LIST)) "$*-exit"
+$(FLOW_LEAVE_TARGETS):
+	@$(MAKE) --no-print-directory -f $(lastword $(MAKEFILE_LIST)) "$(patsubst %-leave,%-exit,$@)"
 
-%-prompt:
-	@$(FLOW_DIR)scripts/show-prompt.sh "$(FLOW_DIR)" "$*"
+$(FLOW_PROMPT_TARGETS):
+	@$(FLOW_DIR)scripts/show-prompt.sh "$(FLOW_DIR)" "$(patsubst %-prompt,%,$@)"

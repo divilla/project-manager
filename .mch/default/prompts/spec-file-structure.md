@@ -1,133 +1,99 @@
 # Spec File Structure
 
-Use this structure exactly for every Spec file. Replace placeholders with concrete spec content. Keep sections concise, specific, and testable.
+Use this structure exactly for every Spec file. Replace all placeholders and instructional text with concrete Spec content. Keep every section concise, specific, and testable.
 
-A Spec belongs to a Change, but when referring to the file or artifact, call it `Spec` or `spec`, not `Change`. Use `Change` only when referring to the parent workflow item, branch, lifecycle, or implementation effort.
+A Spec begins as a provisional implementation guide and becomes a structured representation of the final PR during reconciliation. The PR is the de facto Change and single source of truth once published; before publication, the complete branch diff is the prospective PR. Use `Spec` or `spec` for the artifact and `Change` for the PR-backed delivery unit.
 
-Do not add, remove, rename, or reorder top-level `##` sections unless the user explicitly changes the Spec workflow.
+For the initial Spec, combine the Idea with existing code and every relevant branch change already applied manually, by an agent, or by another process. After implementation, reconcile the Spec with every material change in the final PR. The final Spec must follow accepted PR behavior and must not override it. Do not add implementation-progress statuses or a change diary; Git and the PR preserve that history.
 
-Specs may use optional nested `###` and `####` headings inside the required top-level sections when the Change needs structured implementation detail. Use nested headings for flows, screen designs, glossary terms, naming conventions, command contracts, data models, state machines, lifecycle rules, or other detailed contracts that would be unclear as a flat bullet list. Do not create new top-level sections for those details.
+Do not add, remove, rename, or reorder top-level `##` sections unless the user explicitly changes the Spec workflow. Optional `###` and `####` headings may organize details within a required section.
 
-Before writing, perform a structure pass. If the idea or docs describe screens, flows, states, commands, keybindings, configuration, persistence, external commands, errors, glossary terms, naming conventions, relationships, screen navigation, or data movement, the Spec must use relevant nested headings instead of leaving the contract as one long flat bullet list. Applicable nested headings include Screen Inventory, Screen Layout, Screen Flow, Commands and Keybindings, State Model, Flow Model, Glossary, Naming Conventions, Error Handling, Persistence Rules, External Commands, and Configuration.
+Use nested headings when a flat list would obscure screens, flows, states, commands, keybindings, configuration, persistence, error handling, glossary terms, naming conventions, relationships, navigation, or data movement.
 
-Specs may include Markdown-native diagrams when the idea or docs describe flows, state transitions, relationships, screen navigation, or data movement that would be clearer visually. Prefer Mermaid fenced blocks such as `flowchart`, `sequenceDiagram`, or `stateDiagram-v2` when the renderer supports them; otherwise use concise Markdown tables or ASCII diagrams. Diagrams must clarify the written requirements and must not replace testable prose.
+Use a Markdown-native diagram when a non-trivial workflow, screen flow, state transition, relationship, or data flow would be clearer visually. Prefer Mermaid fenced blocks such as `flowchart`, `sequenceDiagram`, or `stateDiagram-v2` when supported; otherwise use a concise Markdown table or ASCII diagram. A diagram must clarify, not replace, testable prose. If a non-trivial flow has no diagram, explain why in `Design Notes`.
 
-Workflow-heavy, screen-heavy, state-heavy, or data-flow-heavy Specs must include at least one diagram unless the flow is trivial enough that a diagram would duplicate a short bullet list. If no diagram is included for a non-trivial flow, state the reason in `Design Notes`.
+The generated Spec must begin with one H1 title. An optional `Types:` metadata line may appear
+immediately after the title. When it is present, place exactly one blank line between the title
+and metadata and exactly one blank line between the metadata and Spec body. When it is omitted,
+place exactly one blank line between the title and Spec body. Do not place blank lines or other
+content before the H1 title.
 
-The first non-blank line must be the Spec title as one H1. The first non-blank line after the title must be the type metadata line.
+Format populated metadata as `Types: <type-slugs>`. Join multiple slugs with `|` and no spaces,
+as in `Types: feature|fix|test`. `Types:` with an empty value is also structurally valid. Structural
+validation checks only the line's placement and format; it does not restrict which slugs may
+appear.
 
-Select one or more backend type slugs that best describe the parent Change. Do not hardcode, invent, or assume allowed type slugs. Use the type options supplied by the active workflow context. If no current type options are supplied, retrieve them from `POST /api/v1/options/change-types-list` when the environment supports backend access. Otherwise, stop and ask for valid backend type slugs.
+Use these subsystem tags where instructed:
 
-Format the metadata line exactly as `Types: <type-slugs>`, with selected backend slugs joined by `|` and no spaces.
+- `DOC` - documentation
+- `DB` - database
+- `BE` - backend
+- `FE` - frontend
+- `CLI` - CLI
+- `SP` - scripts and prompts
+- `OTH` - work that does not fit another tag
+
+Format a tagged item as `- <TAG> - <statement>`. When one item spans multiple subsystems, join its tags with `|` and no spaces, as in `- BE|CLI - <statement>`.
 
 Do not wrap the generated Spec in a code block.
 
 # <Spec Title>
 
-Types: <type-slugs>
+Types: feature|fix|test
 
 ## Goal
 
-Describe the single outcome this Spec must define. Write this as the end state the user should observe, not as a list of implementation tasks.
+Describe the observable end state or end states this Spec must define. Use multiple goal statements when the Spec has distinct required outcomes. Do not write a list of implementation tasks.
 
 ## Scope
 
-- List the behavior, documentation, architecture, or implementation areas included in this Spec.
-- Keep every bullet directly tied to the Spec.
-- Exclude adjacent work that is useful but not required for this Spec.
+- List the behavior, documentation, architecture, and implementation areas included in the provisional Change or final PR.
+- Keep every item directly tied to the Goal.
+- During final reconciliation, account for every material PR change and exclude adjacent work not present in the PR.
 
 ## Requirements
 
-### Docs
-
-### DB
-
-### Backend
-
-### Frontend
-
-### CLI
-
-### Other
-
-- Divide requirements into Docs, DB, Backend, Frontend, CLI, and Other sections.
-- Include only sections that have items.
-- Use nested headings inside a subsection when needed to make the implementation contract clear. Useful examples include Screen Inventory, Screen Layout, Screen Flow, Commands and Keybindings, State Model, Flow Model, Glossary, Naming Conventions, Error Handling, Persistence Rules, External Commands, and Configuration.
-- For workflow-heavy, screen-heavy, state-heavy, or command-heavy Changes, nested headings under the affected subsection are required when they make the contract clearer than a flat list.
-- State testable requirements using product vocabulary from `docs`.
-- Include expected behavior, important boundaries, and failure handling where relevant.
-- Write requirements as obligations the implementation must satisfy.
-- Put CLI screen designs and screen flows under `### CLI` using nested headings rather than adding new top-level sections.
-- Put backend or workflow state machines under the relevant subsystem subsection using nested headings rather than scattering them across unrelated sections.
-
-## Acceptance Criteria
-
-### Docs
-
-### DB
-
-### Backend
-
-### Frontend
-
-### CLI
-
-### Other
-
-- Divide acceptance criteria into Docs, DB, Backend, Frontend, CLI, and Other sections.
-- Include only sections that have items.
-- Use nested headings inside a subsection when the criteria need to mirror screen flows, workflow stages, command groups, state transitions, or persistence cases.
-- Define observable success conditions for this Spec.
-- Include routes, commands, API behavior, UI states, persistence behavior, generated files, or workflow outcomes when relevant.
-- Make each criterion verifiable by inspection, automated tests, or a concrete manual check.
+- State testable obligations the implementation must satisfy. During final reconciliation, every obligation must be supported by the PR.
+- Include expected behavior, important boundaries, validation, and failure handling where relevant.
+- Prefix each subsystem-specific requirement with all applicable subsystem tags. Leave an item untagged only when it is genuinely cross-cutting.
+- Write behavioral requirements, not task summaries. For example:
+  - `- CLI - The Change details view displays the Ref UUID label and value when a value is present.`
+  - `- SP - The session restore script resumes the selected session using the configured default and temporary directories.`
 
 ## Non-Goals
 
-- List related work that is intentionally out of scope.
+- List related work that is intentionally outside the Spec.
 - Include decisions that prevent accidental scope expansion.
-- Move useful but non-essential ideas here or to Follow-Ups instead of expanding Scope.
+- Move useful but non-essential work here or to `Follow-Ups` instead of expanding Scope.
+- Use `- None.` when there are no non-goals.
 
 ## Design Notes
 
-- Record important implementation constraints, data model assumptions, UX details, or workflow rules.
-- Use nested headings here for Glossary, Naming Conventions, State Model, Flow Model, Screen Design Notes, Data Shape Notes, or Compatibility Notes when those details are needed to preserve intent.
-- Link to authoritative docs instead of repeating long explanations.
-- Note assumptions that reviewers or future agents must preserve.
-
-## Relevant Specs
-
-- `specs/<change-slug>.md`
-- `docs/<path>.md`
+- Record implementation decisions already evidenced by code, plus constraints, data model assumptions, UX details, and workflow rules needed to guide remaining work. During final reconciliation, make these notes match the PR.
+- Use nested headings for a glossary, naming conventions, state or flow models, screen design, data shapes, compatibility, or other structured detail when useful.
+- Link to relevant documentation instead of repeating it, and ensure documentation follows accepted PR code.
+- State assumptions that reviewers and future agents must preserve.
 
 ## Verification
 
-- List every command needed to verify this Spec.
-- Include backend, frontend, lint, typecheck, race, API-test, or build commands when the Spec touches those areas.
-- Do not invent commands the repository cannot run.
+- List the repository-supported commands needed to verify every affected area. During final reconciliation, make result claims match available PR evidence.
+- Include relevant lint, unit test, race test, API-test, typecheck, and build commands.
+- Do not invent commands or include commands unrelated to the Spec.
 
 ## QA Test Cases
 
-### Backend
-
-### Frontend
-
-### CLI
-
-### Other
-
-- Divide QA test cases into Backend, Frontend, CLI, and Other sections.
-- Include only sections that have items.
-- Use nested headings inside a QA subsection when scenarios are easier to verify by screen, flow stage, command group, or state transition.
-- List the manual or product-level scenarios QA should test.
-- Cover happy paths, validation failures, command or backend failures, cancellation or no-op paths, persistence behavior, and important boundary cases when relevant.
-- Keep QA scenarios distinct from automated Verification commands.
+- List manual or product-level scenarios, not implementation tasks or automated Verification commands.
+- Cover applicable happy paths, validation failures, backend or external-command failures, cancellation or no-op behavior, persistence, and boundary cases.
+- Prefix every QA test case with one or more subsystem tags. Use `OTH` when no more specific tag applies. For example:
+  - `- CLI - Open a Change that has a Ref UUID and verify the details view shows the expected label and value.`
+  - `- SP - Restore a saved session and verify the script uses the configured directories and resumes the selected session.`
 
 ## Review Focus
 
-- Call out risky or subtle areas reviewers should inspect first.
+- Identify the riskiest or most subtle areas reviewers should inspect first.
 - Highlight changed contracts, data flow, persistence, migrations, concurrency, security, generated artifacts, or workflow automation when relevant.
 
 ## Follow-Ups
 
-- List useful future work that is outside this Spec.
+- List useful future work that is outside the Spec.
 - Use `- None.` when there are no known follow-ups.

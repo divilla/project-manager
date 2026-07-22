@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,7 +10,11 @@ import (
 
 // Workspace stores paths for the temporary agent planning files.
 type Workspace struct {
-	Dir string
+	Dir       string
+	RootDir   string
+	RefUUID   string
+	Stage     string
+	Operation WriteOperation
 }
 
 // Ensure creates the workspace directory, replacing a regular file at that path.
@@ -37,16 +42,25 @@ func (w Workspace) Ensure() error {
 
 // IdeaPath returns the Markdown idea file path.
 func (w Workspace) IdeaPath() string {
-	return filepath.Join(w.Dir, IdeaFileName)
+	if w.RootDir == "" {
+		return filepath.Join(w.Dir, IdeaFileName)
+	}
+	return w.OutputPath()
 }
+
+// InputPath returns the baseline Idea artifact path.
+func (w Workspace) InputPath() string { return filepath.Join(w.Dir, InputFileName) }
+
+// OutputPath returns the editable and rewritten Idea artifact path.
+func (w Workspace) OutputPath() string { return filepath.Join(w.Dir, OutputFileName) }
 
 // GeneratedPath returns the generated Change spec path.
 func (w Workspace) GeneratedPath() string {
 	return filepath.Join(w.Dir, GeneratedFileName)
 }
 
-// OutputPath returns the Codex final text output path.
-func (w Workspace) OutputPath() string {
+// AgentOutputPath returns the Codex final text output path.
+func (w Workspace) AgentOutputPath() string {
 	return filepath.Join(w.Dir, CodexOutputName)
 }
 
@@ -54,6 +68,9 @@ func (w Workspace) OutputPath() string {
 func (w Workspace) LogPath() string {
 	return filepath.Join(w.Dir, CodexRunLogName)
 }
+
+// SessionPath returns the stage-local Codex session file path.
+func (w Workspace) SessionPath() string { return filepath.Join(w.Dir, SessionFileName) }
 
 // IdeaExists reports whether the idea file already exists.
 func (w Workspace) IdeaExists() (bool, error) {
@@ -73,6 +90,98 @@ func (w Workspace) ResetIdea() error {
 		return err
 	}
 	return os.WriteFile(w.IdeaPath(), []byte{}, 0o644)
+}
+
+// InitializeChange creates a new blank input/output stage and refuses file reuse.
+func (w Workspace) InitializeChange() error {
+	if strings.TrimSpace(w.RootDir) == "" || strings.TrimSpace(w.RefUUID) == "" {
+		return fmt.Errorf("change workspace identity is required")
+	}
+	if err := os.MkdirAll(w.Dir, 0o755); err != nil {
+		_ = w.RemoveChange()
+		return err
+	}
+	for _, path := range []string{w.InputPath(), w.OutputPath()} {
+		file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err != nil {
+			_ = w.RemoveChange()
+			return err
+		}
+		if err := file.Close(); err != nil {
+			_ = w.RemoveChange()
+			return err
+		}
+	}
+	return nil
+}
+
+// EqualIdeaFiles reports whether the current editor pass changed output.
+func (w Workspace) EqualIdeaFiles() (bool, error) {
+	input, err := os.ReadFile(w.InputPath())
+	if err != nil {
+		return false, err
+	}
+	output, err := os.ReadFile(w.OutputPath())
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(input, output), nil
+}
+
+// PromoteOutput makes the current output the next immutable input baseline.
+func (w Workspace) PromoteOutput() error {
+	output, err := os.ReadFile(w.OutputPath())
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(w.InputPath(), output, 0o644)
+}
+
+// PrepareArtifact refreshes input/output from backend artifact text without
+// reinitializing the Change workspace or touching its session files.
+func (w Workspace) PrepareArtifact(content string) error {
+	if strings.TrimSpace(w.RootDir) == "" || strings.TrimSpace(w.RefUUID) == "" {
+		return fmt.Errorf("change workspace identity is required")
+	}
+	if err := w.Ensure(); err != nil {
+		return err
+	}
+	if err := os.WriteFile(w.OutputPath(), []byte(content), 0o644); err != nil {
+		return err
+	}
+	return w.PromoteOutput()
+}
+
+// ReadSessionID reads the existing stage-local Codex session when present.
+func (w Workspace) ReadSessionID() (string, error) {
+	content, err := os.ReadFile(w.SessionPath())
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(content)), nil
+}
+
+// WriteSessionID preserves the Codex session for later artifact-write operations.
+func (w Workspace) WriteSessionID(sessionID string) error {
+	if strings.TrimSpace(w.RootDir) == "" {
+		return nil
+	}
+	if err := w.Ensure(); err != nil {
+		return err
+	}
+	return os.WriteFile(w.SessionPath(), []byte(strings.TrimSpace(sessionID)+"\n"), 0o644)
+}
+
+// RemoveChange removes only this generated UUID workspace.
+func (w Workspace) RemoveChange() error {
+	root := strings.TrimSpace(w.RootDir)
+	if root == "" {
+		return fmt.Errorf("change workspace root is required")
+	}
+	return os.RemoveAll(root)
 }
 
 // WriteIdea replaces the idea file contents.

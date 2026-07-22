@@ -26,8 +26,9 @@ if [[ -z "$branch_name" ]]; then
     fail "cannot read current branch"
 fi
 
-if [[ ! "$branch_name" =~ ^change/([0-9]+-[a-z0-9_-]+)$ ]]; then
-    fail "current branch does not match ^change/([0-9]+-[a-z0-9_-]+)$: $branch_name"
+branch_pattern='^change/([0-9]+-[0-9A-Za-z_-]+)$'
+if [[ ! "$branch_name" =~ $branch_pattern ]]; then
+    fail "current branch does not match $branch_pattern: $branch_name"
 fi
 
 change_name="${BASH_REMATCH[1]}"
