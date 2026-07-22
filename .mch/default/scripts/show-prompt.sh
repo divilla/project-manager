@@ -14,13 +14,11 @@ case "${stage}" in
   idea-review) prompt="prompts/idea-review.md" ;;
   spec|spec-write|change-spec-tmp) prompt="prompts/spec-write.md" ;;
   ready|spec-review) prompt="prompts/spec-review.md" ;;
-  docs) prompt="prompts/docs-update.md" ;;
   code) prompt="prompts/code-implement.md" ;;
   polish) prompt="prompts/code-polish.md" ;;
   pr|pr-write) prompt="prompts/pr-write.md" ;;
   review) prompt="prompts/code-review.md" ;;
   fix) prompt="prompts/code-fix.md" ;;
-  sync) prompt="prompts/code-docs-spec-update.md" ;;
   merge) prompt="prompts/merge.md" ;;
   stage) prompt="prompts/stage.md" ;;
   master) prompt="prompts/master.md" ;;

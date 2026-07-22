@@ -2,20 +2,24 @@
 
 Review the current branch against `origin/stage` as a 10x senior engineer.
 
-Change contract: `specs/<change-slug>.md`
+Change specification: `specs/<change-slug>.md`
 
 ## Review Steps
 
-1. Read and use the Change contract as the source of truth and implementation contract.
-2. Read and use the relevant branch documentation under `docs/` as the behavioral reference.
+1. Read the Change spec as the intended Change instructions.
+2. Inspect code and tests as the source of current behavior.
 3. Inspect the full diff against `origin/stage`.
-4. Verify behavior against the Change spec and current docs, not assumptions.
+4. Verify the diff and tests against every Spec instruction.
 5. Pay close attention to regressions from the latest fixes.
+
+Documentation is not a default review input. Inspect it only when the Change explicitly includes
+documentation work, the diff changes it, or the Spec cites a retained ADR or operational runbook.
 
 ## Review Rules
 
-- Treat the Change spec as the PR contract.
-- Treat current `docs/` changes as the behavioral reference.
+- Treat the Change spec as the desired future state and strict Change instructions.
+- Treat code as the source of current behavior; report omitted Spec instructions and unintended
+  behavior in the diff.
 - Report only actionable findings.
 - Prioritize correctness bugs, data loss risks, duplicate writes, broken state transitions, contract violations, missing required tests, and user-visible regressions.
 - Do not report style nits, preferences, unrelated cleanup, or scope expansions.

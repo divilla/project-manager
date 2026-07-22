@@ -13,7 +13,7 @@ Review only whether the idea communicates its product intent, scope boundaries, 
 Raise an item only when it exposes a concrete ambiguity or contradiction that:
 
 1. Allows two or more materially different interpretations of the intended product behavior or scope.
-2. Cannot be resolved from the idea, repository documentation, or an established project convention.
+2. Cannot be resolved from the idea, current code, or an established project convention.
 3. Cannot safely be deferred to Spec or implementation work.
 4. Would likely cause the wrong capability to be built, meaningful scope to be added or omitted, or substantial rework if assumed incorrectly.
 

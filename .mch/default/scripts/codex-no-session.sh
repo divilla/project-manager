@@ -22,26 +22,26 @@ if [[ -z "${MCH_TEMP_DIR:-}" ]]; then
   printf '%s\n' 'missing MCH_TEMP_DIR' >&2
   exit 1
 fi
+
 if [[ "${MCH_TEMP_DIR}" == /* || "${MCH_TEMP_DIR}" == *".."* ]]; then
   printf 'invalid MCH_TEMP_DIR: %s\n' "${MCH_TEMP_DIR}" >&2
   exit 1
 fi
+
 if [[ -z "${MCH_REF_UUID:-}" ]]; then
   printf '%s\n' 'missing MCH_REF_UUID' >&2
   exit 1
 fi
+
 if [[ ! "${MCH_REF_UUID}" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
   printf 'invalid MCH_REF_UUID: %s\n' "${MCH_REF_UUID}" >&2
   exit 1
 fi
+
 if [[ -z "${MCH_STAGE:-}" ]]; then
   printf '%s\n' 'missing MCH_STAGE' >&2
   exit 1
 fi
-case "${MCH_STAGE}" in
-  idea|spec|spec-review|docs|code|pr|code-review|code-docs|merge) ;;
-  *) printf 'invalid MCH_STAGE: %s\n' "${MCH_STAGE}" >&2; exit 1 ;;
-esac
 
 repo="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "${repo}" ]]; then

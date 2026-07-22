@@ -80,5 +80,36 @@ export default defineConfigWithVueTs(
     },
   },
 
+  {
+    files: ['src/shared/**/*.{js,ts,vue}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/features/**', '@/pages/**', '**/features/**', '**/pages/**'],
+              message: 'Shared code must not depend on feature or page code.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    files: ['src/features/**/*.{js,ts,vue}', 'src/pages/**/*.{js,ts,vue}'],
+    ignores: ['src/features/*/api/**'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'fetch',
+          message: 'Use a feature API module and shared HTTP infrastructure for network calls.',
+        },
+      ],
+    },
+  },
+
   prettierSkipFormatting,
 );

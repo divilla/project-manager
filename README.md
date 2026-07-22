@@ -1,26 +1,34 @@
 # project-manager
 
-Simple, agentic, project management solution
+Project Manager is a local-first software planning application for developers. It replaces
+estimate-driven planning with verified completeness: the product asks what complete means, records
+that as test cases, and tracks progress from evidence.
 
-## Project API Shape
+## Quick Start
 
-Project read and mutation endpoints return rows from `public.vw_project`:
+With PostgreSQL configured and the Go and frontend dependencies installed, start the backend and
+frontend from the repository root:
 
-```json
-{
-  "id": 1,
-  "name": "Example project",
-  "created": "2026-06-23T00:00:00Z",
-  "modified": "2026-06-23T00:00:00Z",
-  "task_count": 3
-}
+```sh
+make run
 ```
 
-The view owns project ordering and task counts. Clients should consume the returned order directly.
+The root [Makefile](Makefile) owns local setup and run entry points. Database targets are explicit,
+destructive operations; inspect the target and database URL before invoking them.
 
-## Local Testing Servers
+## Repository Layout
 
-After app-affecting development work, leave both local servers running so the UI can be tested immediately:
+- `backend/` — Go API service; executable checks are in [backend/Makefile](backend/Makefile).
+- `frontend/` — Vue and Quasar application; commands are in
+  [frontend/package.json](frontend/package.json).
+- `cli/` — Bubble Tea terminal application; executable checks are in
+  [cli/Makefile](cli/Makefile).
+- `db/` — PostgreSQL source and explicitly operated backup helpers.
+- `.mch/default/` — default Change Flow, prompts, configuration, and workflow commands.
+- `agent/` and `specs/` — historical and active Change artifacts.
+- `docs/decisions/` — durable architectural decisions.
+- `docs/operations/` — operational procedures that cannot safely live in executable commands.
+- `docs/research/` — non-authoritative research history.
 
-- Backend: run `go run ./cmd/server` from `backend/`; expected API URL is `http://localhost:8080`.
-- Frontend: run `pnpm dev` from `frontend/`; expected app URL is `http://localhost:8000`.
+Use the linked Makefiles and package scripts for setup, verification, and build commands; they are
+the executable command reference.

@@ -23,12 +23,10 @@ FLOW_PROMPT_TARGETS := $(addsuffix -prompt,$(FLOW_PROMPT_STEPS))
 .PHONY: $(FLOW_BEFORE_TARGETS) $(FLOW_RUN_TARGETS) $(FLOW_LEAVE_TARGETS) $(FLOW_PROMPT_TARGETS)
 
 idea-% spec-%: export MCH_STAGE := idea
-spec-review%: export MCH_STAGE := spec-review
-docs-%: export MCH_STAGE := docs
+spec-review spec-review-%: export MCH_STAGE := spec-review
 code-% polish-%: export MCH_STAGE := code
 pr-%: export MCH_STAGE := idea
 review-% fix-%: export MCH_STAGE := code-review
-sync-%: export MCH_STAGE := code-docs
 merge-% stage-% master-%: export MCH_STAGE := merge
 
 help: list
@@ -50,7 +48,6 @@ init:
 	@if [ -z "$$MCH_STAGE" ]; then printf '%s\n' 'missing MCH_STAGE' >&2; exit 1; fi
 	@case "$$MCH_TEMP_DIR" in /*|*..*) printf 'invalid MCH_TEMP_DIR: %s\n' "$$MCH_TEMP_DIR" >&2; exit 1;; esac
 	@printf '%s\n' "$$MCH_REF_UUID" | grep -Eq '^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$$' || { printf 'invalid MCH_REF_UUID: %s\n' "$$MCH_REF_UUID" >&2; exit 1; }
-	@case "$$MCH_STAGE" in idea|spec|spec-review|docs|code|pr|code-review|code-docs|merge) ;; *) printf 'invalid MCH_STAGE: %s\n' "$$MCH_STAGE" >&2; exit 1;; esac
 	@mkdir -p "$(TEMP_DIR)"
 	@mkdir -p "$(SPEC_TEMP_DIR)"
 	@mkdir -p "$(SPEC_REVIEW_TEMP_DIR)"

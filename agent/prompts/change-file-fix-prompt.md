@@ -3,15 +3,18 @@ Implement all the review findings like a 10x senior engineer.
 Change contract: `specs/<change-slug>.md`
 
 Before coding:
-1. Read and use Change contract as the source of truth and implementation contract.
-2. Read and use the relevant branch documentation under `docs/` as the behavioral reference.
-3. Read each review comment carefully.
+1. Read the Change spec as the intended scope and inspect code as the source of current behavior.
+2. Read each review comment carefully.
+3. Read a retained ADR or operational runbook only when the Spec or finding explicitly cites it.
 4. Map every review comment to the exact expected behavior and affected files.
+
+Documentation is outside the default Change Flow. Do not inspect, create, update, or reconcile
+documentation unless the user explicitly requests documentation work or the active Spec explicitly
+includes it.
 
 Rules:
 - Implement only the requested review fixes.
-- Do not broaden scope beyond the Change spec, docs, and review comments.
-- If the docs and Change spec conflict, stop and report the conflict before coding.
+- Do not broaden scope beyond the Change spec and review comments.
 - If any implementation detail is unclear, do not guess or silently choose an approach. Stop and ask one specific clarifying question.
 - Preserve unrelated local changes.
 - Do not refactor unrelated code.

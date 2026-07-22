@@ -5,6 +5,10 @@ description: Implement and commit local fixes for review findings on a Change br
 
 Implement only review-fix work for the active Change.
 
+Documentation is outside the default Change Flow. Do not inspect, create, update, or reconcile
+documentation unless the user explicitly requests documentation work or the active Spec explicitly
+includes it.
+
 ## Preconditions
 
 If the user explicitly says not to implement findings, or asks only to ignore, explain, discuss, review, document, or summarize findings, stop and answer without making changes.
@@ -33,7 +37,8 @@ Only fix actionable review-finding comments: comments with finding-style content
 
 1. Read `AGENTS.md` and obey it.
 2. Read `specs/<change-slug>.md`; treat it as the requested Change scope.
-3. Inspect the relevant code as the source of truth for current behavior, then read linked or relevant docs under `docs/` and identify anything that must follow the code.
+3. Inspect the relevant code and tests as the source of truth for current behavior. Read a retained
+   ADR or operational runbook only when the Spec or finding explicitly cites it.
 4. Inspect and remember starting `git status`, unstaged diff, and staged diff.
 5. Stop if pre-existing staged changes are not explicitly part of the supplied findings.
 6. Stop if existing unstaged changes overlap with files needed for the fix and cannot be safely preserved.
@@ -42,8 +47,7 @@ Only fix actionable review-finding comments: comments with finding-style content
 ## Fix Rules
 
 - Fix every supplied actionable finding, or mark it invalid with evidence, or block with a concrete reason.
-- Do not broaden scope beyond the Change spec, docs, and review findings.
-- If docs and the Change spec conflict, stop and report the conflict.
+- Do not broaden scope beyond the Change spec and review findings.
 - If a finding is unclear, ask one specific question for that finding; continue with independent clear findings only when safe.
 - Preserve unrelated local changes.
 - Do not refactor unrelated code.

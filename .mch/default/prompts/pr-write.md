@@ -44,16 +44,20 @@ Draft a reviewer-focused GitHub PR body for the current Change. Do not create, u
 
 ## Build Context
 
-Read the Change spec as the PR contract before drafting. Then inspect the actual branch contents:
+Read the Change spec as the strict instructions for the intended Change. Then inspect the actual
+branch contents:
 
 - `git status --short`
 - full tracked diff against the PR base branch
 - staged and unstaged diffs
 - untracked files that would be relevant to the PR
 
-Use the repository's workflow base branch when documented. In this Project Manager repository, default to `origin/stage` when available.
+Use the configured workflow base branch when available. In this Project Manager repository, default
+to `origin/stage` when available.
 
-Read only the docs and source files needed to understand changed public behavior, contracts, verification, and references. For documentation references, prefer files named in the Change spec and files touched by the diff.
+Documentation is outside the default Change Flow. Do not inspect it by default or add documentation
+work to the PR summary unless it is present in the diff. Read a retained ADR or operational runbook
+only when the Spec explicitly cites it or the diff changes it.
 
 ## Contract Check
 
@@ -61,13 +65,15 @@ Compare the Change spec with the branch diff before writing the PR draft.
 
 Stop instead of drafting if:
 
-- the Change spec requires behavior that is absent from the diff
 - the diff includes material behavior outside the Change scope
 - the PR title cannot be determined from the Change spec
 - verification claims in the Change spec conflict with available evidence
 - database or generated-file changes appear and repository instructions prohibit acting on them
 
 Report the exact conflict with file paths and the specific Change requirement or diff item involved.
+
+When a Spec instruction is absent from the diff, continue drafting and identify it explicitly as
+deferred. Never describe absent behavior as implemented.
 
 ## Draft Requirements
 
@@ -101,17 +107,21 @@ Use this structure unless the repository gives a stricter PR template:
 ```
 
 Omit `## Behavior` only when the branch has no externally observable behavior or contract change. Include additional sections only when they help reviewers, such as `## Data Model`, `## API`, `## Frontend`, `## CLI`, `## Docs`, or `## Risks`.
+Add `## Deferred Spec Instructions` whenever the code does not implement one or more Spec
+instructions.
 
 ## Writing Standards
 
-- Be specific and concise. Write for reviewers who need to understand what changed, why it satisfies the contract, and how it was verified.
+- Be specific and concise. Write for reviewers who need to understand what changed, why it changed,
+  how it was verified, and what was intentionally deferred.
 - Reflect the branch diff, not intentions. Mention backend, frontend, CLI, docs, database, tests, seed/demo data, or generated artifacts only if they are present in the diff.
 - Prioritize externally observable behavior, public contracts, API payloads, data model changes, migrations, seed/demo changes, and verification evidence.
 - Do not include implementation diary, generic praise, filler, broad claims, or unexplained internal details.
 - Do not claim verification passed unless the exact command was run in this branch and the result is known.
 - If verification was not run, say `Not run` and give the reason if known.
 - If verification failed, include the exact command and the relevant failure summary. Do not soften or reinterpret failures as passing.
-- Include a `References` section listing `specs/<change-slug>.md` and every relevant docs file used to understand or validate the branch.
+- Include a `References` section listing `specs/<change-slug>.md`. Add an ADR or runbook only when
+  it was explicitly part of the Change.
 
 ## Final Response
 

@@ -5,7 +5,6 @@ This file provides guidance to Agent when working with code in this repository. 
 
 - `$change-spec`
 - `$change-verify`
-- `$change-docs`
 - `$change-code`
 - `$change-review`
 - `$change-fix`
@@ -36,14 +35,13 @@ AGENTS.md file must never be altered unless there is an explicit prompt to overr
 
 ### Documentation
 
-- Documentation is stored in the `docs` folder
-- The PR is the de facto Change and the single source of truth for the Change
-- Before a PR is published, the complete branch diff is the prospective PR and provisional source of truth
-- Code in the PR defines current behavior and technical contracts
-- Documentation must follow the PR code and accurately describe its observable behavior and constraints
-- When documentation conflicts with code, update the documentation; do not change code solely to match stale documentation
-- Documentation must not be overly detailed and a single doc file has a maximum of 300 lines
-- Documentation rules are defined in `docs/docs-rules.md`
+- Code is the single source of truth for current behavior and technical contracts.
+- Retained documentation is limited to durable decisions, genuine operational runbooks, research,
+  and historical Change artifacts; it never overrides code.
+- Update documentation only when the user explicitly requests it or the active Change explicitly
+  includes that documentation edit.
+- When retained prose conflicts with code, follow code and correct the prose only within authorized
+  documentation scope.
 
 ### Changes
 
@@ -55,13 +53,15 @@ AGENTS.md file must never be altered unless there is an explicit prompt to overr
 - Change branches use `change/<change-name>`.
 - If implementation or PR work starts on a branch other than `change/<change-name>`, stop and alert the user.
 - Change lifecycle: backlog -> branch/rejected -> pull-request -> stage/rejected -> master/rejected.
-- The PR is the de facto Change and its full diff is the Change contract.
-- Before publication, treat the complete branch diff as the prospective PR.
-- Before implementation, the Change spec is a provisional implementation guide derived from the Idea, existing code, and any branch changes already applied.
-- Once the PR exists, it becomes authoritative and the Change spec becomes a structured representation of it.
-- Final Spec reconciliation must include all material PR behavior regardless of whether a developer, agent, or other process applied it before or after the original Spec was written.
-- The reconciled Change spec must follow accepted PR behavior and must never override the PR.
-- Keep implementation scoped to the active PR. Record useful work not present in the PR as Follow-Ups instead of describing it as part of the Change.
+- The Idea and the code present when work begins originate the Change: the Idea supplies direction,
+  and the initial code supplies current behavior and constraints.
+- The active Spec expresses the desired future state and gives strict, implementation-ready
+  instructions for what must change and how the Change must be conducted.
+- Implement every Spec instruction or explicitly resolve the discrepancy. Record intentionally
+  deferred instructions in the PR summary instead of presenting them as implemented.
+- The PR summarizes what the code changed, why it changed, verification evidence, and deferred Spec
+  instructions. It does not override code as the source of current behavior.
+- Merged Ideas, Specs, and PRs remain historical context and are not continuously reconciled.
 
 ## GitHub PR Reviews
 
@@ -72,11 +72,13 @@ When explicitly asked to review a PR, the agent must post the review comment wit
 When reviewing a PR, build fresh context from the repository instead of conversation memory:
 
 - Inspect the full PR diff against its base branch first.
-- Read the active Change spec as a structured representation of that PR.
+- Read the active Change spec as the intended Change instructions.
 - Identify changed public contracts, data model changes, migrations, tests, docs, and workflows.
 - Run or inspect the listed verification commands when feasible.
-- Verify that every material PR change is represented by the Spec and that every Spec Requirement is supported by the PR diff and tests.
-- Treat a Spec/PR mismatch as a Spec reconciliation issue unless the PR behavior itself is incorrect.
+- Verify that every Spec Requirement is supported by the code diff and tests or is explicitly
+  identified as deferred, and report unintended behavior outside the Spec.
+- Treat an unresolved Spec/code mismatch as an implementation or scope issue, not as permission to
+  rewrite the Spec after implementation.
 
 Prioritize findings only. Focus on correctness bugs, behavioral regressions, data loss or migration risk, security or privacy issues, broken API/UI contracts, missing tests for changed behavior, and brittle tests that can pass while behavior is broken.
 
@@ -108,38 +110,13 @@ Agents must never run read queries against a live or local database unless the u
 - Prefer the simpler transaction design when stronger concurrency control would add substantial implementation and maintenance complexity. Accept the documented concurrency trade-off until requirements justify that complexity.
 - Do not create foreign keys - this is hard limit
 
-## About Backend
+## Executable Commands
 
-Backend is a classic http API server operating on port 8080 by default.
+Use `Makefile`, `backend/Makefile`, `cli/Makefile`, and `frontend/package.json` as the command
+reference for setup, running, verification, and builds. Run every applicable tier required by the
+active Spec and the testing rules below.
 
-Example endpoint:
-```bash
-    curl localhost:8080/api/v1/health
-```
-
-## Backend Make Commands
-
-The project uses a Makefile for common development tasks:
-
-- `(cd backend && make check)` - Run linting, vetting, and race condition tests (default target)
-- `(cd backend && make init)` - Install required linting tools (golint, staticcheck)
-- `(cd backend && make lint)` - Run staticcheck and golint
-- `(cd backend && make vet)` - Run go vet
-- `(cd backend && make test)` - Run short tests
-- `(cd backend && make api-test)` - Run API integration tests
-- `(cd backend && make race)` - Run tests with race detector
-- `(cd backend && make benchmark)` - Run benchmarks
-- `pnpm --dir frontend test` - Run frontend unit tests
-- `pnpm --dir frontend typecheck` - Run frontend type checking
-- `pnpm --dir frontend build` - Build the frontend
-
-## Backend Code Architecture
-
-- `backend/`: Backend working directory
-- `backend/cmd`: All the main and starter files
-- `backend/internal/`: All the domain logic with Screaming Architecture
-- `backend/internal/project`: Code structure immediately communicates its business purpose
-- `backend/pkg`: Package and other wrappers
+## Backend Rules
 
 ### Core External Packages
 

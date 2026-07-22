@@ -2,9 +2,15 @@
 
 Use this structure exactly for every Spec file. Replace all placeholders and instructional text with concrete Spec content. Keep every section concise, specific, and testable.
 
-A Spec begins as a provisional implementation guide and becomes a structured representation of the final PR during reconciliation. The PR is the de facto Change and single source of truth once published; before publication, the complete branch diff is the prospective PR. Use `Spec` or `spec` for the artifact and `Change` for the PR-backed delivery unit.
+A Spec expresses the desired future state and gives strict, implementation-ready instructions for
+what must change and how the Change must be conducted. The Idea and initial code originate the
+Change: the Idea supplies direction, while code supplies current behavior and constraints. Code
+remains the single source of truth for current behavior throughout the Change lifecycle.
 
-For the initial Spec, combine the Idea with existing code and every relevant branch change already applied manually, by an agent, or by another process. After implementation, reconcile the Spec with every material change in the final PR. The final Spec must follow accepted PR behavior and must not override it. Do not add implementation-progress statuses or a change diary; Git and the PR preserve that history.
+Include every relevant branch change already applied manually, by an agent, or by another process.
+The PR summarizes what the final code changed, why it changed, verification evidence, and any Spec
+instructions intentionally deferred; it does not override code. Do not add implementation-progress
+statuses or a change diary; Git and the PR preserve that history.
 
 Do not add, remove, rename, or reorder top-level `##` sections unless the user explicitly changes the Spec workflow. Optional `###` and `####` headings may organize details within a required section.
 
@@ -47,13 +53,17 @@ Describe the observable end state or end states this Spec must define. Use multi
 
 ## Scope
 
-- List the behavior, documentation, architecture, and implementation areas included in the provisional Change or final PR.
+- List the behavior, architecture, implementation, and explicitly requested documentation areas
+  included in the Change.
+- Do not add documentation work as a routine Change stage. Include it only when the user or Idea
+  explicitly requests a README, ADR, or operational runbook update.
 - Keep every item directly tied to the Goal.
-- During final reconciliation, account for every material PR change and exclude adjacent work not present in the PR.
+- Account for relevant existing branch work and exclude adjacent work outside the requested Change.
 
 ## Requirements
 
-- State testable obligations the implementation must satisfy. During final reconciliation, every obligation must be supported by the PR.
+- State testable obligations the implementation must satisfy. Every delivered obligation must be
+  supported by code and tests or identified as intentionally deferred in the PR summary.
 - Include expected behavior, important boundaries, validation, and failure handling where relevant.
 - Prefix each subsystem-specific requirement with all applicable subsystem tags. Leave an item untagged only when it is genuinely cross-cutting.
 - Write behavioral requirements, not task summaries. For example:
@@ -69,14 +79,17 @@ Describe the observable end state or end states this Spec must define. Use multi
 
 ## Design Notes
 
-- Record implementation decisions already evidenced by code, plus constraints, data model assumptions, UX details, and workflow rules needed to guide remaining work. During final reconciliation, make these notes match the PR.
+- Record implementation decisions already evidenced by code, plus constraints, data model
+  assumptions, UX details, and workflow rules needed to guide the Change.
 - Use nested headings for a glossary, naming conventions, state or flow models, screen design, data shapes, compatibility, or other structured detail when useful.
-- Link to relevant documentation instead of repeating it, and ensure documentation follows accepted PR code.
+- Link to a durable decision or operational runbook only when the Change explicitly depends on it;
+  code remains authoritative for current behavior.
 - State assumptions that reviewers and future agents must preserve.
 
 ## Verification
 
-- List the repository-supported commands needed to verify every affected area. During final reconciliation, make result claims match available PR evidence.
+- List the repository-supported commands needed to verify every affected area. Make result claims
+  only from available verification evidence.
 - Include relevant lint, unit test, race test, API-test, typecheck, and build commands.
 - Do not invent commands or include commands unrelated to the Spec.
 

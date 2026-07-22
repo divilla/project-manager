@@ -1,6 +1,6 @@
 Do not use any skills for this request.
 
-Write a provisional, implementation-ready Change Spec that incorporates the Idea and all relevant changes already applied to the branch.
+Write an implementation-ready Change Spec from the Idea, initial code, and relevant branch work.
 
 ## Files
 
@@ -33,7 +33,12 @@ instead of writing the Spec.
 
 ### Sources and Authority
 
-Inspect existing code as the source of truth for current behavior. Inspect the complete branch state, including:
+The Idea supplies the requested direction, and the code that existed when the Change began supplies
+the starting behavior and constraints. The Spec must express the desired future state and give
+strict instructions for what must change and how the Change must be conducted.
+
+Inspect code as the source of truth for current behavior. Inspect the complete branch state,
+including:
 
 - the committed diff against the workflow base branch
 - staged and unstaged diffs
@@ -41,24 +46,29 @@ Inspect existing code as the source of truth for current behavior. Inspect the c
 - tests and verification evidence relevant to the Change
 - published PR metadata, when a PR exists
 
-Before a PR exists, the Idea defines the initial intent and the complete branch diff is the prospective PR. Include relevant behavior already applied manually, by an agent, or by another process. Do not assume implementation has not started.
+Include relevant behavior already applied manually, by an agent, or by another process. Do not
+assume implementation has not started. If a PR exists, use it as a summary and evidence source, but
+resolve descriptions of current behavior from code and tests.
 
-If a PR exists, treat it as authoritative and make the Spec represent its accepted behavior.
-
-Use targeted search to inspect relevant code and tests. Read only documentation that materially affects understanding, and do not let stale docs override code or existing branch behavior.
+Use targeted search to inspect relevant code and tests. Documentation is outside the default Change
+Flow: do not inspect it by default or add documentation work to the Spec unless the Idea or user
+explicitly requests that work. Read a retained ADR or operational runbook only when it is explicitly
+cited by the Idea or user; it never overrides code.
 
 ### Writing Contract
 
 - Use `/def-dir/prompts/spec-file-structure.md` exactly. Do not add, remove, rename, or reorder top-level sections.
 - Account for every meaningful Idea item. Incorporate each item as a Goal, Scope item, Requirement, Non-Goal, Design Note, QA Test Case, Review Focus item, or Follow-Up. Ask for clarification before writing when an item cannot be classified confidently.
-- Account for every relevant change already present in the branch, including work applied before the Spec was written.
+- Account for every relevant change already present in the branch, including work applied before
+  the Spec was written, without treating applied work as correct merely because it exists.
 - Describe intended final behavior in Requirements without adding implementation statuses, completion markers, or a change diary.
 - Use existing implementation to make Requirements and Design Notes concrete, but do not assume that existing code is correct merely because it exists.
 - Preserve fenced code blocks from the Idea when they remain part of the intended Change. Reformat them only as needed to meet the 100-character line limit without changing their meaning or behavior. Ask for clarification when that is not possible.
 - Keep every line in the generated Spec within 100 characters.
 - Do not invent product decisions, behavior, API contracts, database behavior, verification results, QA expectations, or new scope.
 - Do not claim verification passed unless evidence shows it ran successfully.
-- When the Idea conflicts with existing branch work, ask which behavior belongs in the prospective PR unless an accepted PR state already resolves the conflict.
+- When the Idea conflicts with existing branch work on the intended final state, ask which behavior
+  the Change must deliver.
 
 ### Clarification Gate
 
@@ -86,7 +96,7 @@ Number every question and keep each question line within 100 characters.
 The final Spec must satisfy:
 
 - `Goal`: one or more observable end states intended for the Change.
-- `Scope`: the intended Change plus relevant work already present in the prospective PR.
+- `Scope`: the intended Change plus relevant branch work already applied.
 - `Requirements`: testable final behavior, visible contracts, persistence expectations, and boundaries.
 - `Non-Goals`: intentionally excluded adjacent work, or `- None.`.
 - `Design Notes`: established implementation decisions, constraints, and assumptions.

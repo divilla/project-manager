@@ -13,21 +13,15 @@ Use the template in `.mch/default/prompts/spec-file-structure.md` exactly. Do no
 Process:
 1. Read `agent/ideas/<change-slug>.md`.
 2. Read `.mch/default/prompts/spec-file-structure.md`.
-3. Use targeted search to find relevant docs under `docs/`; do not broadly read unrelated docs.
-4. Read only docs that materially affect this Change.
+3. Inspect the initial code and tests that define current behavior and constraints.
+4. Read a retained ADR or operational runbook only when the Idea or user explicitly cites it.
 5. Write the completed Change spec to `specs/<change-slug>.md`.
 6. Add and commit only `specs/<change-slug>.md`; do not include unrelated staged or unstaged changes. Use this commit message: `Write spec for <change-slug> by agent`. After the commit succeeds, output exactly `Done.`
 
-Prioritize docs covering:
-- `mch`
-- CLI behavior
-- backend API endpoints
-- Change lifecycle
-- test case completeness
-- persistence contracts
-- verification
-
-Treat documentation as the source of truth. If the idea file conflicts with docs, follow the docs and record important assumptions in `Design Notes`.
+Documentation is outside the default Change Flow. Do not inspect it by default or add documentation
+work to the Spec unless the Idea or user explicitly requests it. Code is the source of truth for
+current behavior; the Idea supplies the requested direction, and the Spec defines the desired
+future state.
 
 Account for every bullet in the idea file. Each bullet must either be incorporated into the Change as a requirement, acceptance criterion, QA case, design note, non-goal, or follow-up, or it must trigger a clarifying question before writing.
 
@@ -43,7 +37,9 @@ Before writing the Change, check for ambiguity in:
 - verification
 - QA expectations
 
-If clarification is required, stop and output only concise clarifying questions. Do not write or commit the Change yet. Do not guess product decisions unless documentation directly supports the answer.
+If clarification is required, stop and output only concise clarifying questions. Do not write or
+commit the Change yet. Do not guess product decisions unless current code or an established project
+convention resolves the answer without changing the requested outcome.
 
 Keep the Change scoped to one coherent outcome. Convert vague notes into concise product requirements. Move related but non-essential ideas to `Non-Goals` or `Follow-Ups`. Do not expand scope.
 

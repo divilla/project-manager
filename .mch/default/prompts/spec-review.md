@@ -34,22 +34,26 @@ This is a read-only review. Do not edit, format, stage, commit, reset, restore, 
 post PR comments, or mutate tracked files, database files, generated artifacts, or application
 data.
 
+Documentation is outside the default Change Flow. Do not inspect documentation unless the Idea or
+Spec explicitly includes documentation work or cites a retained ADR or operational runbook.
+
 ## Sources and Authority
 
 Build fresh context from the current repository on every invocation. Do not rely on conversation
 memory, prior review output, or findings from an earlier pass.
 
-Inspect:
+The Idea and initial code originate the Change. The Spec expresses the desired future state and
+strictly instructs what must change and how the Change must be conducted. Inspect:
 
 - the complete current Idea
 - the complete current provisional Spec
 - existing code as the source of truth for current behavior
 - committed, staged, unstaged, and relevant untracked branch work
 - relevant tests and repository-supported verification commands
-- only documentation needed for context, without treating stale docs as authority over code
+- only explicitly scoped documentation or cited ADR/runbook constraints
 
-If a PR exists, treat its accepted behavior as authoritative. Otherwise, treat the complete branch
-diff as the prospective PR.
+If a PR exists, inspect it as a summary and evidence source. Code remains the source of current
+behavior, and the Spec remains the intended Change instructions.
 
 Do not require the branch to have already implemented provisional Requirements. Report an
 implementation mismatch only when existing work contradicts the Spec and is not clearly
@@ -70,13 +74,13 @@ Verify that the Spec:
 - lists realistic verification commands without unsupported success claims
 - provides QA scenarios for applicable happy paths, failures, no-op behavior, persistence, and
   boundaries
-- contains enough information to implement and review the prospective PR without chat history
+- contains enough information to implement and review the Change without chat history
 
 ## Convergence and Stopping Rules
 
 The review must converge when invoked repeatedly against corrected files:
 
-- Evaluate only the current Idea, Spec, branch state, and accepted PR state.
+- Evaluate only the current Idea, Spec, code, branch state, and available PR evidence.
 - Never repeat a finding that the current files have resolved.
 - Never reintroduce a resolved finding with different wording or split it into narrower variants.
 - Consolidate findings with the same root cause into one actionable finding.

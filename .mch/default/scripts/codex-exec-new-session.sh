@@ -42,10 +42,6 @@ if [[ -z "${MCH_STAGE:-}" ]]; then
   printf '%s\n' 'missing MCH_STAGE' >&2
   exit 1
 fi
-case "${MCH_STAGE}" in
-  idea|spec|spec-review|docs|code|pr|code-review|code-docs|merge) ;;
-  *) printf 'invalid MCH_STAGE: %s\n' "${MCH_STAGE}" >&2; exit 1 ;;
-esac
 
 repo="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "${repo}" ]]; then

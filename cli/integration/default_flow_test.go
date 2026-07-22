@@ -81,18 +81,29 @@ func TestDefaultFlowPromptAndStageIntegration(t *testing.T) {
 		})
 	}
 
-	for _, target := range []string{"spec-exec", "ready-exec"} {
+	for _, target := range []string{"spec-exec", "ready-exec", "docs-exec", "sync-exec"} {
 		cmd := exec.Command("make", "--no-print-directory", "-f", filepath.Join(flowDir, "Makefile"), target)
 		cmd.Dir = root
 		out, err := cmd.CombinedOutput()
 		require.Error(t, err, "%s unexpectedly remained available: %s", target, out)
 	}
 
-	for _, stage := range []string{"idea", "idea-write", "idea-review", "spec", "spec-write", "ready", "spec-review", "docs", "code", "polish", "pr", "pr-write", "review", "fix", "sync", "merge", "stage", "master", "change-idea-tmp", "change-spec-tmp"} {
+	for _, stage := range []string{"idea", "idea-write", "idea-review", "spec", "spec-write", "ready", "spec-review", "code", "polish", "pr", "pr-write", "review", "fix", "merge", "stage", "master", "change-idea-tmp", "change-spec-tmp"} {
 		cmd := exec.Command(filepath.Join(flowDir, "scripts", "show-prompt.sh"), flowDir+string(os.PathSeparator), stage)
 		out, err := cmd.CombinedOutput()
 		require.NoError(t, err, "%s: %s", stage, out)
 		require.NotEmpty(t, out)
+	}
+
+	for _, stage := range []string{"docs", "sync"} {
+		cmd := exec.Command(filepath.Join(flowDir, "scripts", "show-prompt.sh"), flowDir+string(os.PathSeparator), stage)
+		out, err := cmd.CombinedOutput()
+		require.Error(t, err, "%s unexpectedly resolved: %s", stage, out)
+		assert.Contains(t, string(out), "unknown stage")
+	}
+
+	for _, name := range []string{"docs-update.md", "code-docs-spec-update.md"} {
+		assert.NoFileExists(t, filepath.Join(flowDir, "prompts", name))
 	}
 }
 
@@ -138,6 +149,58 @@ func TestPromptsReadStartupGeneratedChangeTypes(t *testing.T) {
 	}
 }
 
+func TestWorkflowPromptsRequireExplicitDocumentationScope(t *testing.T) {
+	root := repositoryRoot(t)
+	promptDirs := []string{
+		filepath.Join(root, ".mch", "default", "prompts"),
+		filepath.Join(root, "agent", "prompts"),
+	}
+	staleContracts := []string{
+		"read every relevant doc",
+		"documentation as the source of truth",
+		"documentation under `docs/` as the behavioral reference",
+		"relevant branch documentation under `docs/`",
+		"treat current `docs/` changes as the behavioral reference",
+		"repository documentation",
+		"documented change merge workflow",
+		"documented stage-promotion workflow",
+		"documented master-promotion workflow",
+		"foundation for high-quality documentation",
+	}
+
+	for _, dir := range promptDirs {
+		paths, err := filepath.Glob(filepath.Join(dir, "*.md"))
+		require.NoError(t, err)
+		for _, path := range paths {
+			content := strings.ToLower(readFile(t, path))
+			for _, stale := range staleContracts {
+				assert.NotContains(t, content, stale, path)
+			}
+		}
+	}
+
+	explicitContracts := map[string]string{
+		filepath.Join(root, ".mch", "default", "prompts", "code-implement.md"):             "Documentation is outside the default Change Flow.",
+		filepath.Join(root, ".mch", "default", "prompts", "code-fix.md"):                   "Documentation is outside the default Change Flow.",
+		filepath.Join(root, ".mch", "default", "prompts", "code-review.md"):                "Documentation is not a default review input.",
+		filepath.Join(root, ".mch", "default", "prompts", "spec-write.md"):                 "Documentation is outside the default Change",
+		filepath.Join(root, ".mch", "default", "prompts", "spec-review.md"):                "Documentation is outside the default Change Flow.",
+		filepath.Join(root, ".mch", "default", "prompts", "pr-write.md"):                   "Documentation is outside the default Change Flow.",
+		filepath.Join(root, ".mch", "default", "prompts", "spec-file-structure.md"):        "Do not add documentation work as a routine Change stage.",
+		filepath.Join(root, "agent", "prompts", "change-file-init-prompt.md"):              "Documentation is outside the default Change Flow.",
+		filepath.Join(root, "agent", "prompts", "change-file-code-prompt.md"):              "Documentation is outside the default Change Flow.",
+		filepath.Join(root, "agent", "prompts", "change-file-fix-prompt.md"):               "Documentation is outside the default Change Flow.",
+		filepath.Join(root, "agent", "prompts", "change-file-review-prompt.md"):            "Documentation is not a default review input.",
+		filepath.Join(root, "agent", "prompts", "change-file-pr-prompt.md"):                "Documentation is outside the default Change Flow.",
+		filepath.Join(root, "agent", "prompts", "build-requirement-with-agent.md"):         "Do not inspect documentation unless the user",
+		filepath.Join(root, "agent", "prompts", "build-requirement-with-agent-example.md"): "Do not inspect documentation unless the user",
+	}
+
+	for path, contract := range explicitContracts {
+		assert.Contains(t, readFile(t, path), contract, path)
+	}
+}
+
 func TestDefaultFlowSessionScriptIntegration(t *testing.T) {
 	root := repositoryRoot(t)
 	scripts := filepath.Join(root, ".mch", "default", "scripts")
@@ -156,9 +219,39 @@ func TestDefaultFlowSessionScriptIntegration(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, out, "invalid MCH_REF_UUID")
 
-		out, err = runScript(fixture, filepath.Join(scripts, "codex-exec-new-session.sh"), []string{"MCH_STAGE=unknown"})
-		require.Error(t, err)
-		assert.Contains(t, out, "invalid MCH_STAGE")
+	})
+
+	t.Run("stage names are delegated to configured resources", func(t *testing.T) {
+		for _, name := range []string{
+			"codex-no-session.sh",
+			"codex-exec-new-session.sh",
+			"codex-exec-restore-session.sh",
+			"codex-exec-resume-session.sh",
+			"codex-resume-session.sh",
+		} {
+			t.Run(name, func(t *testing.T) {
+				out, err := runScript(newFlowFixture(t), filepath.Join(scripts, name), []string{"MCH_STAGE=custom-stage"})
+				require.Error(t, err)
+				assert.NotContains(t, out, "invalid MCH_STAGE")
+				assert.Contains(t, out, "/custom-stage/")
+			})
+		}
+	})
+
+	t.Run("every entry point requires a stage", func(t *testing.T) {
+		for _, name := range []string{
+			"codex-no-session.sh",
+			"codex-exec-new-session.sh",
+			"codex-exec-restore-session.sh",
+			"codex-exec-resume-session.sh",
+			"codex-resume-session.sh",
+		} {
+			t.Run(name, func(t *testing.T) {
+				out, err := runScript(newFlowFixture(t), filepath.Join(scripts, name), []string{"MCH_STAGE="})
+				require.Error(t, err)
+				assert.Contains(t, out, "missing MCH_STAGE")
+			})
+		}
 	})
 
 	t.Run("new and restored session artifacts", func(t *testing.T) {
@@ -190,6 +283,34 @@ func TestDefaultFlowSessionScriptIntegration(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, out, "unknown Codex session-id")
 	})
+}
+
+func TestDefaultMakefileAcceptsConfiguredStageNames(t *testing.T) {
+	root := repositoryRoot(t)
+	flowMakefile := filepath.Join(root, ".mch", "default", "Makefile")
+	repo := newGitRemoteFixture(t)
+
+	cmd := exec.Command("make", "--no-print-directory", "-f", flowMakefile, "init")
+	cmd.Dir = repo
+	cmd.Env = append(os.Environ(),
+		"MCH_TEMP_DIR=.mch/tmp",
+		"MCH_REF_UUID="+testRefUUID,
+		"MCH_STAGE=custom-stage",
+	)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	require.DirExists(t, filepath.Join(repo, ".mch", "tmp", testRefUUID, "custom-stage"))
+
+	cmd = exec.Command("make", "--no-print-directory", "-f", flowMakefile, "init")
+	cmd.Dir = repo
+	cmd.Env = append(os.Environ(),
+		"MCH_TEMP_DIR=.mch/tmp",
+		"MCH_REF_UUID="+testRefUUID,
+		"MCH_STAGE=",
+	)
+	out, err = cmd.CombinedOutput()
+	require.Error(t, err)
+	assert.Contains(t, string(out), "missing MCH_STAGE")
 }
 
 func TestDefaultFlowSessionScriptsRenderPromptPaths(t *testing.T) {
@@ -344,8 +465,6 @@ func TestChangeSlugGrammarIsSharedByWorkflowEntryPoints(t *testing.T) {
 		filepath.Join(root, ".mch", "default", "prompts", "code-implement.md"),
 		filepath.Join(root, ".mch", "default", "prompts", "pr-write.md"),
 		filepath.Join(root, ".mch", "default", "prompts", "code-review.md"),
-		filepath.Join(root, ".mch", "default", "prompts", "docs-update.md"),
-		filepath.Join(root, ".mch", "default", "prompts", "code-docs-spec-update.md"),
 		filepath.Join(root, ".mch", "default", "prompts", "code-fix.md"),
 		filepath.Join(root, "agent", "prompts", "change-file-init-prompt.md"),
 		filepath.Join(root, ".mch", "default", "scripts", "extract-slug.sh"),
@@ -354,7 +473,6 @@ func TestChangeSlugGrammarIsSharedByWorkflowEntryPoints(t *testing.T) {
 		filepath.Join(root, "scripts", "change-spec.pl"),
 		filepath.Join(root, "scripts", "change-code.pl"),
 		filepath.Join(root, "scripts", "change-fix.pl"),
-		filepath.Join(root, "scripts", "change-docs.pl"),
 		filepath.Join(root, "scripts", "change-pr.pl"),
 		filepath.Join(root, "scripts", "change-update.pl"),
 		filepath.Join(root, "scripts", "change-stage.pl"),

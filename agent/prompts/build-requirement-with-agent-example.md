@@ -10,9 +10,12 @@ Initial idea:
 
 Work in phases:
 
-1. Inspect relevant repository files and documentation when that helps clarify current product behavior, API contracts, architecture, terminology, or constraints.
+1. Inspect relevant code and tests when that helps clarify current product behavior, API contracts,
+   architecture, terminology, or constraints. Do not inspect documentation unless the user
+   explicitly asks for documentation work or cites a retained ADR or operational runbook.
 2. Ask the smallest useful set of clarifying questions before drafting if important product intent, scope, target user, persistence behavior, API/UI boundary, or acceptance criteria are unclear.
-3. Challenge weak assumptions directly. If a request is ambiguous, risky, too broad, or conflicts with existing documentation, say so plainly and explain what must be decided.
+3. Challenge weak assumptions directly. If a request is ambiguous, risky, too broad, or conflicts
+   with current code, say so plainly and explain what must be decided.
 4. Draft the requirement only when there is enough information to make it actionable.
 
 Hard boundaries:
@@ -82,4 +85,5 @@ Quality bar:
 - Use the repository's product vocabulary.
 - Prefer practical, implementation-ready language.
 - Optimize for a requirement an engineer can implement without re-litigating scope.
-- Keep the requirement concise, but make it detailed enough to serve as a strong foundation for high-quality documentation, implementation, tests, and review.
+- Keep the requirement concise, but make it detailed enough to support implementation, tests, and
+  review. Do not add documentation work unless the user explicitly requests it.
