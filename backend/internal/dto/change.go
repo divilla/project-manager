@@ -20,7 +20,7 @@ type (
 		ChangePhase    string     `json:"change_phase"`
 		ChangeTypes    []string   `json:"change_types"`
 		Title          string     `json:"title"`
-		Idea           string     `json:"idea"`
+		Def            string     `json:"def"`
 		Spec           string     `json:"spec"`
 		SpecHTML       string     `json:"spec_html"`
 		PR             string     `json:"pr"`
@@ -103,7 +103,7 @@ type (
 		ProjectID int        `json:"project_id"`
 		RefUUID   *uuid.UUID `json:"ref_uuid"`
 		Title     string     `json:"title"`
-		Idea      string     `json:"idea"`
+		Def       string     `json:"def"`
 	}
 
 	// ChangeUpdatePhaseRequest defines ChangeUpdatePhaseRequest values.
@@ -130,10 +130,10 @@ type (
 		Title string `json:"title"`
 	}
 
-	// ChangeUpdateIdeaRequest defines ChangeUpdateIdeaRequest values.
-	ChangeUpdateIdeaRequest struct {
+	// ChangeUpdateDefRequest defines ChangeUpdateDefRequest values.
+	ChangeUpdateDefRequest struct {
 		ID        int    `json:"id"`
-		Idea      string `json:"idea"`
+		Def       string `json:"def"`
 		AgentEdit *bool  `json:"agent_edit"`
 	}
 

@@ -1,5 +1,6 @@
 PKG := "aipm"
 PKG_LIST := $(shell go list ${PKG}/... | grep -v '/api-tests')
+DATABASE_URL ?= postgres://postgres:postgres@localhost:5432/changes
 API_TEST_DB_URL ?= postgres://postgres:postgres@localhost:5432/changes_test
 API_TEST_PORT ?= 19080
 API_TEST_BASE_URL ?= http://localhost:$(API_TEST_PORT)
@@ -10,6 +11,11 @@ check: lint vet race ## Check project
 init:
 	@go install golang.org/x/lint/golint@latest
 	@go install honnef.co/go/tools/cmd/staticcheck@latest
+
+import-db: ## Initialize and seed the database
+	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/init.sql
+	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed.sql
+	@psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -f ../db/seed-demo.sql
 
 lint: ## Lint the files
 	@goimports -w .
@@ -41,7 +47,7 @@ api-test: ## Rebuild changes_test and run HTTP integration tests
 				exit 1; \
 			fi; \
 			if curl -fsS $(API_TEST_BASE_URL)/api/v1/health >/dev/null 2>&1; then \
-				API_TEST_BASE_URL=$(API_TEST_BASE_URL) go test -count=1 ./api-tests/...; \
+				API_TEST_DB_URL=$(API_TEST_DB_URL) API_TEST_BASE_URL=$(API_TEST_BASE_URL) go test -count=1 ./api-tests/...; \
 				exit $$?; \
 			fi; \
 			sleep 0.1; \

@@ -252,7 +252,7 @@ func createChange(t *testing.T, client *shared.Client, projectID int, epicID *in
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      fmt.Sprintf("api-test-test-case-change-%d", time.Now().UnixNano()),
-		"idea":       "Test case idea",
+		"def":        "Test case def",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)

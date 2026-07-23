@@ -12,6 +12,7 @@ import {
   getChangePhases,
   getChangeTypes,
   listChanges,
+  updateChangeDefinition,
   updateChangePR,
   updateChangeSpec,
   updateChangeTitle,
@@ -40,7 +41,7 @@ vi.mock('@/features/changes/api/changeApi', () => ({
   getChangeTypes: vi.fn(),
   listChanges: vi.fn(),
   updateChangeEpic: vi.fn(),
-  updateChangeIdea: vi.fn(),
+  updateChangeDefinition: vi.fn(),
   updateChangeOpen: vi.fn(),
   updateChangePR: vi.fn(),
   updateChangePRUrl: vi.fn(),
@@ -59,7 +60,8 @@ const quasarStubs = {
   QBtn: {
     emits: ['click'],
     props: ['disable', 'label', 'loading'],
-    template: '<button :disabled="disable || loading" type="button" @click="$emit(\'click\', $event)">{{ label }}<slot /></button>',
+    template:
+      '<button :disabled="disable || loading" type="button" @click="$emit(\'click\', $event)">{{ label }}<slot /></button>',
   },
   QForm: { template: '<form @submit.prevent="$emit(\'submit\', $event)"><slot /></form>' },
   QIcon: { template: '<span />' },
@@ -90,12 +92,14 @@ const quasarStubs = {
   QSelect: {
     emits: ['update:modelValue'],
     props: ['disable', 'label', 'modelValue', 'multiple', 'options'],
-    template: '<select :aria-label="label" :disabled="disable" :multiple="multiple"><option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option></select>',
+    template:
+      '<select :aria-label="label" :disabled="disable" :multiple="multiple"><option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option></select>',
   },
   QToggle: {
     emits: ['update:modelValue'],
     props: ['disable', 'label', 'modelValue'],
-    template: '<input type="checkbox" :aria-label="label" :checked="modelValue" :disabled="disable" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
+    template:
+      '<input type="checkbox" :aria-label="label" :checked="modelValue" :disabled="disable" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
   },
 };
 
@@ -110,7 +114,7 @@ describe('ChangeEditPage', () => {
         change: changeFixture({
           id: 2,
           title: 'Current change',
-          idea: '# Current change\n\nIdea',
+          def: '# Current change\n\nDefinition',
           spec: '# Current spec\n\nBody',
           pr: '# Current PR\n\nBody',
           pr_url: 'https://example.test/pr/2',
@@ -128,6 +132,61 @@ describe('ChangeEditPage', () => {
       },
     });
   }
+
+  it('trims and saves a changed definition through the definition contract', async () => {
+    vi.mocked(updateChangeDefinition).mockResolvedValue(
+      changeFixture({
+        id: 2,
+        title: 'Current change',
+        def: '# Rewritten definition\n\nBody',
+        spec: '# Current spec\n\nBody',
+        pr: '# Current PR\n\nBody',
+        pr_url: 'https://example.test/pr/2',
+      }),
+    );
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper
+      .get('textarea[aria-label="Definition"]')
+      .setValue('  # Rewritten definition\n\nBody  ');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(updateChangeDefinition).toHaveBeenCalledWith(2, '# Rewritten definition\n\nBody');
+    expect(updateChangeSpec).not.toHaveBeenCalled();
+    expect(updateChangePR).not.toHaveBeenCalled();
+    expect(routerMock.push).toHaveBeenCalledWith('/changes/2');
+  });
+
+  it('does not save a blank definition', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('textarea[aria-label="Definition"]').setValue('   ');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(updateChangeDefinition).not.toHaveBeenCalled();
+    expect(updateChangeTitle).not.toHaveBeenCalled();
+    expect(updateChangeSpec).not.toHaveBeenCalled();
+    expect(updateChangePR).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
+  });
+
+  it('shows definition update failures and stays on the edit page', async () => {
+    vi.mocked(updateChangeDefinition).mockRejectedValue(new Error('Definition update failed.'));
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('textarea[aria-label="Definition"]').setValue('Rewritten definition');
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+
+    expect(updateChangeDefinition).toHaveBeenCalledWith(2, 'Rewritten definition');
+    expect(wrapper.text()).toContain('Definition update failed.');
+    expect(routerMock.push).not.toHaveBeenCalled();
+  });
 
   it('rejects empty changed artifact values before saving any field', async () => {
     const wrapper = mountPage();
@@ -151,7 +210,7 @@ describe('ChangeEditPage', () => {
         changeFixture({
           id: 2,
           title: 'Current change',
-          idea: '# Current change\n\nIdea',
+          def: '# Current change\n\nDefinition',
           spec: nextSpec,
           pr: '# Current PR\n\nBody',
           pr_url: 'https://example.test/pr/2',
@@ -173,7 +232,7 @@ describe('ChangeEditPage', () => {
       changeFixture({
         id: 2,
         title: 'Current change',
-        idea: '# Current change\n\nIdea',
+        def: '# Current change\n\nDefinition',
         spec: '# Current spec\n\nBody',
         pr: 'Plain text PR body',
         pr_url: 'https://example.test/pr/2',

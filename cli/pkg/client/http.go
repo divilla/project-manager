@@ -23,7 +23,7 @@ type Client interface {
 	CreateChange(input dto.ChangeCreateInput) (dto.Change, error)
 	ReferenceChange(id int) (dto.Change, error)
 	UpdateChangeTitle(id int, title string) (dto.Change, error)
-	UpdateChangeIdea(id int, idea string, agentEdit bool) (dto.Change, error)
+	UpdateChangeDef(id int, def string, agentEdit bool) (dto.Change, error)
 	UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error)
 	UpdateChangePR(id int, pr string, agentEdit bool) (dto.Change, error)
 	UpdateChangePRUrl(id int, prURL string) (dto.Change, error)
@@ -129,7 +129,7 @@ func (c HTTPClient) CreateChange(input dto.ChangeCreateInput) (dto.Change, error
 	payload := map[string]any{
 		"project_id": input.ProjectID,
 		"title":      input.Title,
-		"idea":       input.Idea,
+		"def":        input.Def,
 	}
 	if strings.TrimSpace(input.RefUUID) != "" {
 		payload["ref_uuid"] = input.RefUUID
@@ -153,14 +153,14 @@ func (c HTTPClient) UpdateChangeTitle(id int, title string) (dto.Change, error) 
 	return c.postChange("/api/v1/change/update-title", map[string]any{"id": id, "title": title})
 }
 
-// UpdateChangeIdea updates a change idea.
-func (c HTTPClient) UpdateChangeIdea(id int, idea string, agentEdit bool) (dto.Change, error) {
+// UpdateChangeDef updates a change definition.
+func (c HTTPClient) UpdateChangeDef(id int, def string, agentEdit bool) (dto.Change, error) {
 	if id <= 0 {
 		return dto.Change{}, fmt.Errorf("change ID must be a valid positive number")
 	}
-	return c.postChange("/api/v1/change/update-idea", map[string]any{
+	return c.postChange("/api/v1/change/update-def", map[string]any{
 		"id":         id,
-		"idea":       idea,
+		"def":        def,
 		"agent_edit": agentEdit,
 	})
 }
@@ -643,7 +643,7 @@ func changeFromMap(values map[string]any) dto.Change {
 		ChangePhase: firstString(values, "change_phase", "phase"),
 		ChangeTypes: firstStringSlice(values, "change_types", "types"),
 		Title:       firstString(values, "title", "name"),
-		Idea:        firstString(values, "idea"),
+		Def:         firstString(values, "def"),
 		Spec:        firstString(values, "spec"),
 		PR:          firstString(values, "pr"),
 		PRUrl:       firstString(values, "pr_url"),

@@ -73,7 +73,7 @@ func TestProjectDeleteRejectsProjectsWithChanges(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": created.ID,
 		"title":      fmt.Sprintf("api-test-project-delete-change-%d", time.Now().UnixNano()),
-		"idea":       "Project delete conflict idea",
+		"def":        "Project delete conflict def",
 	}, &createdChange)
 	require.Equal(t, http.StatusCreated, status)
 

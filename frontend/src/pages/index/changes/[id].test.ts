@@ -156,7 +156,7 @@ describe('ChangeDetailPage', () => {
           project_id: 1,
           epic_id: 1,
           epic_name: 'Backend Epic',
-          idea: '# Current change\n\nInitial idea',
+          def: '# Current change\n\nInitial definition',
           spec_html: '<p>Current spec</p>',
           pr_html: '<p>Pull request body</p>',
           pr_url: 'https://example.test/pr/2',
@@ -203,7 +203,7 @@ describe('ChangeDetailPage', () => {
     expect(wrapper.text()).toContain('Yes');
     expect(wrapper.text()).toContain('https://example.test/pr/2');
     expect(wrapper.find('a').attributes('href')).toBe('https://example.test/pr/2');
-    expect(wrapper.text()).toContain('Initial idea');
+    expect(wrapper.text()).toContain('Initial definition');
     expect(wrapper.html()).toContain('<p>Current spec</p>');
     expect(wrapper.html()).toContain('<p>Pull request body</p>');
     expect(wrapper.findAll('[data-icon="more_vert"]')).toHaveLength(1);

@@ -63,10 +63,10 @@
       <q-toggle v-model="open" label="Open" :disable="loading || saving" />
 
       <q-input
-        v-model="idea"
+        v-model="def"
         outlined
         type="textarea"
-        label="Idea"
+        label="Definition"
         class="change-artifact-input"
         input-style="min-height: 240px"
         :rules="requiredRules"
@@ -119,7 +119,7 @@ import {
   updateChangeEpic,
   updateChangeOpen,
   updateChangePhase,
-  updateChangeIdea,
+  updateChangeDefinition,
   updateChangeSpec,
   updateChangePR,
   updateChangePRUrl,
@@ -136,7 +136,7 @@ const { epics } = storeToRefs(changeCache);
 
 const loadedChange = ref<Change | null>(null);
 const title = ref('');
-const idea = ref('');
+const def = ref('');
 const spec = ref('');
 const pr = ref('');
 const prUrl = ref('');
@@ -184,7 +184,7 @@ async function loadEditContext() {
     phaseOptions.value = phases.map((phase) => ({ label: phase.slug, value: phase.slug }));
     loadedChange.value = detail.change;
     title.value = detail.change.title;
-    idea.value = detail.change.idea;
+    def.value = detail.change.def;
     spec.value = detail.change.spec || '';
     pr.value = detail.change.pr || '';
     prUrl.value = detail.change.pr_url || '';
@@ -206,8 +206,8 @@ async function saveChangeFromPage() {
   if (saving.value || !loadedChange.value) return;
 
   const changeTitle = title.value.trim();
-  const changeIdea = idea.value.trim();
-  if (!changeTitle || !changeIdea) return;
+  const changeDefinition = def.value.trim();
+  if (!changeTitle || !changeDefinition) return;
   const validationError = changedArtifactValidationError(loadedChange.value);
   if (validationError) {
     error.value = validationError;
@@ -222,8 +222,8 @@ async function saveChangeFromPage() {
     if (changeTitle !== change.title) {
       change = await updateChangeTitle(change.id, changeTitle);
     }
-    if (changeIdea !== change.idea) {
-      change = await updateChangeIdea(change.id, changeIdea);
+    if (changeDefinition !== change.def) {
+      change = await updateChangeDefinition(change.id, changeDefinition);
     }
     const nextSpec = spec.value.trim();
     if (nextSpec !== change.spec) {

@@ -236,7 +236,7 @@ idea-review:
 	@repo="$$(git rev-parse --show-toplevel)"; \
 	temp_dir="$$repo/.mch/tmp/$$MCH_TEMP_UUID"; \
 	mkdir -p "$$temp_dir"; \
-	prompt="$$(sed 's|/tmp-dir/|'"$$temp_dir"'/|g' "$$repo/.mch/default/prompts/idea-review.md")"; \
+	prompt="$$(sed 's|/tmp-dir/|'"$$temp_dir"'/|g' "$$repo/.mch/default/prompts/def-review.md")"; \
 	codex exec -C "$$repo" --json "$$prompt" > "$$temp_dir/events.jsonl" 2> "$$temp_dir/error.log"; \
 ```
 

@@ -12,7 +12,7 @@ type Change struct {
 	ChangePhase string
 	ChangeTypes []string
 	Title       string
-	Idea        string
+	Def         string
 	Spec        string
 	PR          string
 	PRUrl       string
@@ -39,5 +39,5 @@ type ChangeCreateInput struct {
 	ProjectID int
 	RefUUID   string
 	Title     string
-	Idea      string
+	Def       string
 }

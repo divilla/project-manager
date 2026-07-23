@@ -25,12 +25,12 @@ insert into public.config (
 'default',
 
     array[
-        'idea', 'spec', 'ready', 'docs', 'code', 'polish', 'pr',
+        'artifact', 'spec', 'ready', 'docs', 'code', 'polish', 'pr',
         'review', 'fix', 'sync', 'merge', 'stage', 'master'
     ],
 
     array[
-        'capture or refine the initial change idea',
+        'capture or refine the initial change definition',
         'create the implementation-ready spec',
         'mark the change as ready for execution',
         'update required documentation before implementation',
@@ -102,7 +102,7 @@ insert into public.config (
 
     array['feature', 'fix', 'refactor', 'upgrade', 'chore', 'docs', 'test', 'ci', 'security', 'migration', 'revert', 'spike'],
 
-    array['idea', 'spec', 'pr']
+    array['def', 'spec', 'pr']
 );
 
 insert into public.change_phase (slug, priority)

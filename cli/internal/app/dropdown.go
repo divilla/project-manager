@@ -165,23 +165,23 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 		m.dropdown = dropdownModel{}
 		switch selected.ID {
 		case "/resume":
-			content, err := m.agentFlow.Workspace.ReadIdea()
+			content, err := m.agentFlow.Workspace.ReadDef()
 			if err != nil {
 				m.err = err.Error()
 				m.status = "agent failed"
 				return m, nil
 			}
-			return m.openAgentIdeaEditor(false, content)
+			return m.openAgentDefEditor(false, content)
 		case "/clear":
-			return m.openAgentIdeaEditor(true, "")
+			return m.openAgentDefEditor(true, "")
 		case "/cancel":
-			return m.discardAgentIdea(ChangesListState, "cancel", true)
+			return m.discardAgentDef(ChangesListState, "cancel", true)
 		default:
 			m.err = "unknown command"
 			return m, nil
 		}
 	}
-	if m.dropdown.kind == dropdownPersistedIdea {
+	if m.dropdown.kind == dropdownPersistedDef {
 		selected := m.selectedOption()
 		m.dropdown = dropdownModel{}
 		switch selected.ID {
@@ -190,16 +190,16 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 				m = m.showPersistedChangeError(err)
 				return m, nil
 			}
-			content, err := m.agentFlow.Workspace.ReadIdea()
+			content, err := m.agentFlow.Workspace.ReadDef()
 			if err != nil {
 				m = m.showPersistedChangeError(err)
 				return m, nil
 			}
-			m.agentFlow.IdeaEntryContent = content
-			m.agentFlow.Stage = agent.StagePersistedIdeaEntry
-			m.state = UpdateIdeaState
-			m.status = "agent idea"
-			return m.openPersistentEditor(UpdateIdeaState, m.agentFlow.Workspace.IdeaPath())
+			m.agentFlow.DefEntryContent = content
+			m.agentFlow.Stage = agent.StagePersistedDefEntry
+			m.state = UpdateDefState
+			m.status = "agent def"
+			return m.openPersistentEditor(UpdateDefState, m.agentFlow.Workspace.DefPath())
 		case "/cancel":
 			m.agentFlow.Stage = agent.StageIdle
 			m.state = ChangeDetailsState
@@ -210,7 +210,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	if m.dropdown.kind == dropdownIdea {
+	if m.dropdown.kind == dropdownDef {
 		selected := m.selectedOption()
 		previous := m.dropdown.previous
 		m.dropdown = dropdownModel{}
@@ -221,26 +221,26 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 				m.status = "agent failed"
 				return m, nil
 			}
-			return m.openAgentIdeaEditor(false, m.agentFlow.IdeaEntryContent)
+			return m.openAgentDefEditor(false, m.agentFlow.DefEntryContent)
 		case "/edit":
-			if previous == UpdateIdeaState {
-				m.state = UpdateIdeaState
-				if err := m.agentFlow.Workspace.WriteIdea(m.agentFlow.IdeaEntryContent); err != nil {
+			if previous == UpdateDefState {
+				m.state = UpdateDefState
+				if err := m.agentFlow.Workspace.WriteDef(m.agentFlow.DefEntryContent); err != nil {
 					m.err = err.Error()
 					m.status = "agent failed"
 					return m, nil
 				}
-				return m.openPersistentEditor(UpdateIdeaState, m.agentFlow.Workspace.IdeaPath())
+				return m.openPersistentEditor(UpdateDefState, m.agentFlow.Workspace.DefPath())
 			}
-			content, err := m.agentFlow.Workspace.ReadIdea()
+			content, err := m.agentFlow.Workspace.ReadDef()
 			if err != nil {
 				m.err = err.Error()
 				m.status = "agent failed"
 				return m, nil
 			}
-			return m.openAgentIdeaEditor(false, content)
+			return m.openAgentDefEditor(false, content)
 		case "/cancel", "/no":
-			return m.discardAgentIdea(ChangesListState, "cancel", true)
+			return m.discardAgentDef(ChangesListState, "cancel", true)
 		case "/yes":
 			projectID, err := currentProjectNumericID(m.currentProject.ID)
 			if err != nil {
@@ -248,7 +248,7 @@ func (m Model) confirmDropdown() (tea.Model, tea.Cmd) {
 				m.status = "validation failed"
 				return m, nil
 			}
-			m.state = CreateIdeaState
+			m.state = CreateDefState
 			m.status = "creating change"
 			return m, agentChangeCreateForRewriteCommand(m.client, projectID, m.agentFlow.Workspace)
 		default:
@@ -332,9 +332,9 @@ func (m Model) dropdownView(width int) string {
 		promptLines = append(promptLines, line)
 	}
 	rendered := styles.Default.InputBand.Width(width).Render(strings.Join(promptLines, "\n"))
-	if m.dropdownShowsIdeaPreview() {
-		if idea := m.renderIdeaPreview(width); strings.TrimSpace(idea) != "" {
-			rendered = strings.TrimRight(idea, "\n") + "\n\n" + rendered
+	if m.dropdownShowsDefPreview() {
+		if def := m.renderDefPreview(width); strings.TrimSpace(def) != "" {
+			rendered = strings.TrimRight(def, "\n") + "\n\n" + rendered
 		}
 	}
 	if m.dropdown.kind == dropdownCommand {
@@ -343,25 +343,25 @@ func (m Model) dropdownView(width int) string {
 	return rendered
 }
 
-func (m Model) dropdownShowsIdeaPreview() bool {
-	return m.state == CreateIdeaState || m.state == UpdateIdeaState
+func (m Model) dropdownShowsDefPreview() bool {
+	return m.state == CreateDefState || m.state == UpdateDefState
 }
 
-func (m Model) renderIdeaPreview(_ int) string {
-	idea := strings.TrimSpace(m.ideaPreviewContent())
-	if idea == "" {
+func (m Model) renderDefPreview(_ int) string {
+	def := strings.TrimSpace(m.defPreviewContent())
+	if def == "" {
 		return ""
 	}
-	return strings.TrimRight(highlightMarkdownPreview(idea), "\n")
+	return strings.TrimRight(highlightMarkdownPreview(def), "\n")
 }
 
-func (m Model) ideaPreviewContent() string {
-	if m.dropdownShowsIdeaPreview() && strings.TrimSpace(m.agentFlow.Workspace.Dir) != "" {
-		if content, err := m.agentFlow.Workspace.ReadIdea(); err == nil {
+func (m Model) defPreviewContent() string {
+	if m.dropdownShowsDefPreview() && strings.TrimSpace(m.agentFlow.Workspace.Dir) != "" {
+		if content, err := m.agentFlow.Workspace.ReadDef(); err == nil {
 			return content
 		}
 	}
-	return m.agentFlow.IdeaEntryContent
+	return m.agentFlow.DefEntryContent
 }
 
 var (

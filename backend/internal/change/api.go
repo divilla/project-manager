@@ -37,7 +37,7 @@ func NewAPI(e *echo.Echo, s *Service) *API {
 	a.g.POST("/update-open", a.updateOpen)
 	a.g.POST("/update-change-types", a.updateChangeTypes)
 	a.g.POST("/update-title", a.updateTitle)
-	a.g.POST("/update-idea", a.updateIdea)
+	a.g.POST("/update-def", a.updateDef)
 	a.g.POST("/update-spec", a.updateSpec)
 	a.g.POST("/update-pr", a.updatePR)
 	a.g.POST("/update-pr-url", a.updatePRUrl)
@@ -178,12 +178,12 @@ func (a *API) resetClaim(c *echo.Context) error {
 	return c.JSON(http.StatusOK, &res)
 }
 
-func (a *API) updateIdea(c *echo.Context) error {
-	var req dto.ChangeUpdateIdeaRequest
+func (a *API) updateDef(c *echo.Context) error {
+	var req dto.ChangeUpdateDefRequest
 	if err := c.Bind(&req); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid change idea payload")
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid change definition payload")
 	}
-	res, err := a.s.UpdateIdea(c.Request().Context(), req)
+	res, err := a.s.UpdateDef(c.Request().Context(), req)
 	if err != nil {
 		return changeError(err)
 	}

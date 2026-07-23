@@ -15,7 +15,7 @@ report missing artifacts, prompts, or sessions clearly.
 
 The default Makefile also has overlapping Spec-writing and Spec-review target families. A broad
 `spec-*` stage assignment can capture the exact `spec-review` target and route review work through
-the Idea workspace unless the review mapping has explicit precedence.
+the shared artifact workspace unless the review mapping has explicit precedence.
 
 ## Decision
 
@@ -27,8 +27,8 @@ present, they use it to resolve the requested workspace and continue with their 
 prompt, and session validation.
 
 The exact `spec-review` target and every `spec-review-*` target export `MCH_STAGE=spec-review`.
-Other `spec-*` targets export `MCH_STAGE=idea`. The explicit review mapping takes precedence so
-review commands use `.mch/tmp/<ref-uuid>/spec-review` and never the Idea-stage workspace.
+Other `spec-*` targets export `MCH_STAGE=artifact`. The explicit review mapping takes precedence so
+review commands use `.mch/tmp/<ref-uuid>/spec-review` and never the shared artifact workspace.
 
 A non-empty stage is not rejected because it was absent from an older built-in list. If its required
 workspace or resources do not exist, the executable returns the existing path-specific resource

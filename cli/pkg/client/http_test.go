@@ -202,7 +202,7 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 				"change_types": []string{"feature", "test"},
 				"epic_id":      5,
 				"epic_name":    "Epic Five",
-				"idea":         "idea",
+				"def":          "def",
 				"spec":         "spec",
 				"pr":           "pr body",
 				"pr_url":       "https://example.test/pr/12",
@@ -214,13 +214,13 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 				"modified":     "2026-06-29T10:45:00Z",
 			}})
 		case "/api/v1/change/create":
-			writeJSON(t, w, map[string]any{"id": 12, "title": payload["title"], "idea": payload["idea"]})
+			writeJSON(t, w, map[string]any{"id": 12, "title": payload["title"], "def": payload["def"]})
 		case "/api/v1/change/assign-flow":
 			writeJSON(t, w, map[string]any{"id": payload["id"], "ref": 3, "slug": "3-new-change"})
 		case "/api/v1/change/update-title":
 			writeJSON(t, w, map[string]any{"id": payload["id"], "title": payload["title"]})
-		case "/api/v1/change/update-idea":
-			writeJSON(t, w, map[string]any{"id": payload["id"], "idea": payload["idea"], "agent_edit": payload["agent_edit"]})
+		case "/api/v1/change/update-def":
+			writeJSON(t, w, map[string]any{"id": payload["id"], "def": payload["def"], "agent_edit": payload["agent_edit"]})
 		case "/api/v1/change/update-spec":
 			writeJSON(t, w, map[string]any{"id": payload["id"], "spec": payload["spec"], "agent_edit": payload["agent_edit"]})
 		case "/api/v1/change/update-pr":
@@ -254,7 +254,7 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 					"title":        "Fetched Change",
 					"change_phase": "backlog",
 					"change_types": []any{"feature"},
-					"idea":         "fetched idea",
+					"def":          "fetched definition",
 					"spec":         "fetched spec",
 					"pr":           "fetched pr body",
 					"pr_url":       "https://example.test/pr/12",
@@ -288,7 +288,7 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		ChangePhase: "backlog",
 		ChangeTypes: []string{"feature", "test"},
 		Title:       "New Change",
-		Idea:        "idea",
+		Def:         "def",
 		Spec:        "spec",
 		PR:          "pr body",
 		PRUrl:       "https://example.test/pr/12",
@@ -304,10 +304,10 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		ProjectID: 7,
 		RefUUID:   "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
 		Title:     "New Change",
-		Idea:      "# New Change\n\nInitial idea",
+		Def:       "# New Change\n\nInitial definition",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, dto.Change{ID: "12", Title: "New Change", Idea: "# New Change\n\nInitial idea"}, created)
+	assert.Equal(t, dto.Change{ID: "12", Title: "New Change", Def: "# New Change\n\nInitial definition"}, created)
 
 	referenced, err := client.ReferenceChange(12)
 	require.NoError(t, err)
@@ -315,9 +315,9 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 
 	_, err = client.UpdateChangeTitle(12, "Renamed")
 	require.NoError(t, err)
-	_, err = client.UpdateChangeIdea(12, "Full idea", false)
+	_, err = client.UpdateChangeDef(12, "Full definition", false)
 	require.NoError(t, err)
-	_, err = client.UpdateChangeIdea(12, "Rewritten idea", true)
+	_, err = client.UpdateChangeDef(12, "Rewritten definition", true)
 	require.NoError(t, err)
 	fullSpec := "Full spec"
 	_, err = client.UpdateChangeSpec(12, fullSpec, false)
@@ -352,7 +352,7 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		ChangePhase: "backlog",
 		ChangeTypes: []string{"feature"},
 		Title:       "Fetched Change",
-		Idea:        "fetched idea",
+		Def:         "fetched definition",
 		Spec:        "fetched spec",
 		PR:          "fetched pr body",
 		PRUrl:       "https://example.test/pr/12",
@@ -371,8 +371,8 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		"/api/v1/change/create",
 		"/api/v1/change/assign-flow",
 		"/api/v1/change/update-title",
-		"/api/v1/change/update-idea",
-		"/api/v1/change/update-idea",
+		"/api/v1/change/update-def",
+		"/api/v1/change/update-def",
 		"/api/v1/change/update-spec",
 		"/api/v1/change/update-pr",
 		"/api/v1/change/update-pr-url",
@@ -392,12 +392,12 @@ func TestHTTPClientChangeListCreateUpdateAndGetPayloads(t *testing.T) {
 		"project_id": float64(7),
 		"ref_uuid":   "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
 		"title":      "New Change",
-		"idea":       "# New Change\n\nInitial idea",
+		"def":        "# New Change\n\nInitial definition",
 	}, payloads[1])
 	assert.Equal(t, map[string]any{"id": float64(12)}, payloads[2])
 	assert.Equal(t, map[string]any{"id": float64(12), "title": "Renamed"}, payloads[3])
-	assert.Equal(t, map[string]any{"id": float64(12), "idea": "Full idea", "agent_edit": false}, payloads[4])
-	assert.Equal(t, map[string]any{"id": float64(12), "idea": "Rewritten idea", "agent_edit": true}, payloads[5])
+	assert.Equal(t, map[string]any{"id": float64(12), "def": "Full definition", "agent_edit": false}, payloads[4])
+	assert.Equal(t, map[string]any{"id": float64(12), "def": "Rewritten definition", "agent_edit": true}, payloads[5])
 	assert.Equal(t, map[string]any{"id": float64(12), "spec": "Full spec", "agent_edit": false}, payloads[6])
 	assert.Equal(t, map[string]any{"id": float64(12), "pr": "Full PR body", "agent_edit": false}, payloads[7])
 	assert.Equal(t, map[string]any{"id": float64(12), "pr_url": "https://example.test/pr/99"}, payloads[8])

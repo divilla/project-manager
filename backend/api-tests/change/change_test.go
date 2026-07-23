@@ -3,14 +3,17 @@ package change_test
 import (
 	"aipm/api-tests/shared"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/gofrs/uuid/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +25,7 @@ func TestChangeCreateIdentityContract(t *testing.T) {
 
 	create := func(name string, ref any) (int, change) {
 		t.Helper()
-		payload := map[string]any{"project_id": projectID, "title": name, "idea": "# " + name}
+		payload := map[string]any{"project_id": projectID, "title": name, "def": "# " + name}
 		if ref != "omitted" {
 			payload["ref_uuid"] = ref
 		}
@@ -104,7 +107,7 @@ type change struct {
 	ChangePhase    string   `json:"change_phase"`
 	ChangeTypes    []string `json:"change_types"`
 	Title          string   `json:"title"`
-	Idea           string   `json:"idea"`
+	Def            string   `json:"def"`
 	Spec           string   `json:"spec"`
 	SpecHTML       string   `json:"spec_html"`
 	PR             string   `json:"pr"`
@@ -125,6 +128,13 @@ type change struct {
 	DoneTC         int16    `json:"done_tc"`
 	TotalTC        int16    `json:"total_tc"`
 	Completed      int16    `json:"completed"`
+}
+
+type changeHistory struct {
+	Version   int16
+	DocType   string
+	Body      string
+	AgentEdit bool
 }
 
 type detail struct {
@@ -169,8 +179,9 @@ type startRunResult struct {
 }
 
 var (
-	removedUpdateAgentEditPath     = "/api/v1/change/update-agent-" + "edit"
-	removedUpdateIdeaAgentEditPath = "/api/v1/change/update-idea-agent-" + "edit"
+	removedUpdateAgentEditPath    = "/api/v1/change/update-agent-" + "edit"
+	removedUpdateDefAgentEditPath = "/api/v1/change/update-def-agent-" + "edit"
+	removedUpdateIdeaPath         = "/api/v1/change/update-" + "idea"
 )
 
 func TestChangeCRUDAndOptions(t *testing.T) {
@@ -191,12 +202,12 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	require.NotEmpty(t, types)
 
 	title := fmt.Sprintf("api-test-change-%d", time.Now().UnixNano())
-	idea := "Created by change API integration test."
+	def := "Created by change API integration test."
 	var created change
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      title,
-		"idea":       idea,
+		"def":        def,
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, created.ID)
@@ -204,7 +215,7 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.Nil(t, created.Ref)
 	assert.Nil(t, created.Slug)
 	assert.Equal(t, title, created.Title)
-	assert.Equal(t, idea, created.Idea)
+	assert.Equal(t, def, created.Def)
 	assert.Equal(t, "backlog", created.ChangePhase)
 	assert.Empty(t, created.Spec)
 	assert.Empty(t, created.SpecHTML)
@@ -215,6 +226,15 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.True(t, created.Open)
 	assert.Empty(t, created.ChangeTypes)
 	assert.Nil(t, created.EpicID)
+
+	status = client.Post(t, removedUpdateIdeaPath, map[string]any{
+		"id": created.ID, "idea": "legacy definition", "agent_edit": false,
+	}, nil)
+	require.Equal(t, http.StatusNotFound, status)
+	status = client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id": projectID, "title": "legacy field", "idea": "legacy definition",
+	}, nil)
+	require.Equal(t, http.StatusBadRequest, status)
 
 	var listed []change
 	status = client.Post(t, "/api/v1/change/list", map[string]any{"project_id": projectID}, &listed)
@@ -232,7 +252,7 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/list", map[string]any{"project_id": projectID}, &listedFields)
 	require.Equal(t, http.StatusOK, status)
 	require.Len(t, listedFields, 1)
-	assert.NotContains(t, listedFields[0], "idea")
+	assert.NotContains(t, listedFields[0], "def")
 	assert.NotContains(t, listedFields[0], "spec")
 	assert.NotContains(t, listedFields[0], "spec_html")
 	assert.NotContains(t, listedFields[0], "pr")
@@ -257,7 +277,7 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.Equal(t, created.RefUUID, fetched.Change.RefUUID)
 	assert.Equal(t, created.Ref, fetched.Change.Ref)
 	assert.Equal(t, created.Slug, fetched.Change.Slug)
-	assert.Equal(t, idea, fetched.Change.Idea)
+	assert.Equal(t, def, fetched.Change.Def)
 	assert.Empty(t, fetched.Change.SpecHTML)
 
 	var referenced change
@@ -267,7 +287,7 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	require.NotNil(t, referenced.Slug)
 	require.NotEmpty(t, referenced.FlowStages)
 	require.NotEmpty(t, referenced.FlowStageModes)
-	assert.Equal(t, idea, referenced.Idea)
+	assert.Equal(t, def, referenced.Def)
 
 	firstRef := *referenced.Ref
 	firstSlug := *referenced.Slug
@@ -320,22 +340,22 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/reference", map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusNotFound, status)
 
-	status = client.Post(t, "/api/v1/change/update-idea", map[string]any{
+	status = client.Post(t, "/api/v1/change/update-def", map[string]any{
 		"id":         created.ID,
-		"idea":       "Focused idea update.",
+		"def":        "Focused definition update.",
 		"agent_edit": false,
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "Focused idea update.", updated.Idea)
+	assert.Equal(t, "Focused definition update.", updated.Def)
 	assert.False(t, updated.AgentEdit)
 
-	status = client.Post(t, "/api/v1/change/update-idea", map[string]any{
+	status = client.Post(t, "/api/v1/change/update-def", map[string]any{
 		"id":         created.ID,
-		"idea":       "Agent rewritten idea.",
+		"def":        "Agent rewritten definition.",
 		"agent_edit": true,
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "Agent rewritten idea.", updated.Idea)
+	assert.Equal(t, "Agent rewritten definition.", updated.Def)
 	assert.True(t, updated.AgentEdit)
 
 	status = client.Post(t, "/api/v1/change/update-spec", map[string]any{
@@ -462,6 +482,71 @@ func TestChangeCRUDAndOptions(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, status)
 }
 
+func TestChangeDefinitionUpdatesPreserveVersionAndHistory(t *testing.T) {
+	client := shared.NewClient(t)
+	projectID := createProject(t, client)
+	defer shared.CleanupProject(t, client, projectID)
+
+	var created change
+	status := client.Post(t, "/api/v1/change/create", map[string]any{
+		"project_id": projectID,
+		"title":      "Definition history",
+		"def":        "Initial definition.",
+	}, &created)
+	require.Equal(t, http.StatusCreated, status)
+	assert.Equal(t, int16(0), created.Version)
+
+	var userUpdated change
+	status = client.Post(t, "/api/v1/change/update-def", map[string]any{
+		"id":         created.ID,
+		"def":        "User definition update.",
+		"agent_edit": false,
+	}, &userUpdated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, int16(1), userUpdated.Version)
+	assert.Equal(t, "User definition update.", userUpdated.Def)
+	assert.False(t, userUpdated.AgentEdit)
+
+	var agentUpdated change
+	status = client.Post(t, "/api/v1/change/update-def", map[string]any{
+		"id":         created.ID,
+		"def":        "Agent definition update.",
+		"agent_edit": true,
+	}, &agentUpdated)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, int16(2), agentUpdated.Version)
+	assert.Equal(t, "Agent definition update.", agentUpdated.Def)
+	assert.True(t, agentUpdated.AgentEdit)
+
+	databaseURL := os.Getenv("API_TEST_DB_URL")
+	require.NotEmpty(t, databaseURL, "API_TEST_DB_URL must identify the disposable API-test database")
+
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, databaseURL)
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close(ctx))
+	}()
+
+	rows, err := conn.Query(
+		ctx,
+		`select version, doc_type, body, agent_edit
+		from public.change_history
+		where id = $1
+		order by version`,
+		created.ID,
+	)
+	require.NoError(t, err)
+
+	history, err := pgx.CollectRows(rows, pgx.RowToStructByPos[changeHistory])
+	require.NoError(t, err)
+	assert.Equal(t, []changeHistory{
+		{Version: 0, DocType: "def", Body: "Initial definition.", AgentEdit: false},
+		{Version: 1, DocType: "def", Body: "User definition update.", AgentEdit: false},
+		{Version: 2, DocType: "def", Body: "Agent definition update.", AgentEdit: true},
+	}, history)
+}
+
 func TestChangeAssignFlowConcurrentRequestsPreserveSingleRef(t *testing.T) {
 	client := shared.NewClient(t)
 
@@ -472,7 +557,7 @@ func TestChangeAssignFlowConcurrentRequestsPreserveSingleRef(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      "Concurrent reference",
-		"idea":       "# Concurrent reference\n\nAssign one reference.",
+		"def":        "# Concurrent reference\n\nAssign one reference.",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 
@@ -556,7 +641,7 @@ func TestChangeStartRunConcurrentRequestsPreserveSingleClaim(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      "Concurrent run claim",
-		"idea":       "Claim the run once.",
+		"def":        "Claim the run once.",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 
@@ -644,7 +729,7 @@ func TestChangeRunLifecycle(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      "Run lifecycle",
-		"idea":       "Run lifecycle idea.",
+		"def":        "Run lifecycle def.",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 
@@ -701,7 +786,7 @@ func TestChangeRunLifecycle(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/update-run", map[string]any{
 		"id":               created.ID,
 		"run_claim_id":     " " + *started.ClaimID + " ",
-		"run_flow_stage":   " idea ",
+		"run_flow_stage":   " artifact ",
 		"run_task_step":    " agent ",
 		"run_task_status":  " running ",
 		"run_error":        " latest error ",
@@ -713,7 +798,7 @@ func TestChangeRunLifecycle(t *testing.T) {
 
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "idea", fetched.Change.RunFlowStage)
+	assert.Equal(t, "artifact", fetched.Change.RunFlowStage)
 	assert.Equal(t, "agent", fetched.Change.RunTaskStep)
 	assert.Equal(t, "running", fetched.Change.RunTaskStatus)
 	assert.Equal(t, "latest error", fetched.Change.RunError)
@@ -741,7 +826,7 @@ func TestChangeRunLifecycle(t *testing.T) {
 
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "idea", fetched.Change.RunFlowStage)
+	assert.Equal(t, "artifact", fetched.Change.RunFlowStage)
 	assert.Equal(t, "agent", fetched.Change.RunTaskStep)
 	assert.Equal(t, "running", fetched.Change.RunTaskStatus)
 	assert.Equal(t, "latest error", fetched.Change.RunError)
@@ -827,7 +912,7 @@ func TestChangeListOrdersByModifiedDescending(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      fmt.Sprintf("api-test-older-change-%d", time.Now().UnixNano()),
-		"idea":       "Older idea",
+		"def":        "Older def",
 	}, &older)
 	require.Equal(t, http.StatusCreated, status)
 
@@ -837,7 +922,7 @@ func TestChangeListOrdersByModifiedDescending(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      fmt.Sprintf("api-test-newer-change-%d", time.Now().UnixNano()),
-		"idea":       "Newer idea",
+		"def":        "Newer def",
 	}, &newer)
 	require.Equal(t, http.StatusCreated, status)
 
@@ -874,7 +959,7 @@ func TestChangeGetReturnsTestCasesOrderedByID(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      fmt.Sprintf("api-test-testcase-order-change-%d", time.Now().UnixNano()),
-		"idea":       "Test case ordering idea",
+		"def":        "Test case ordering def",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 
@@ -903,7 +988,7 @@ func TestChangeBooleanUpdatesRequireExplicitFields(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      fmt.Sprintf("api-test-boolean-change-%d", time.Now().UnixNano()),
-		"idea":       "Boolean update idea",
+		"def":        "Boolean update definition",
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 	assert.False(t, created.AgentEdit)
@@ -921,7 +1006,7 @@ func TestChangeBooleanUpdatesRequireExplicitFields(t *testing.T) {
 
 	status = client.Post(t, removedUpdateAgentEditPath, map[string]any{"id": created.ID}, nil)
 	require.Equal(t, http.StatusNotFound, status)
-	status = client.Post(t, removedUpdateIdeaAgentEditPath, map[string]any{"id": created.ID, "idea": " ", "agent_edit": true}, nil)
+	status = client.Post(t, removedUpdateDefAgentEditPath, map[string]any{"id": created.ID, "def": " ", "agent_edit": true}, nil)
 	require.Equal(t, http.StatusNotFound, status)
 
 	artifactRequests := []struct {
@@ -929,7 +1014,7 @@ func TestChangeBooleanUpdatesRequireExplicitFields(t *testing.T) {
 		field string
 		body  string
 	}{
-		{path: "/api/v1/change/update-idea", field: "idea", body: "Idea without provenance"},
+		{path: "/api/v1/change/update-def", field: "def", body: "Definition without provenance"},
 		{path: "/api/v1/change/update-spec", field: "spec", body: "Spec without provenance"},
 		{path: "/api/v1/change/update-pr", field: "pr", body: "PR without provenance"},
 	}
@@ -952,15 +1037,15 @@ func TestChangeBooleanUpdatesRequireExplicitFields(t *testing.T) {
 	}
 	status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 	require.Equal(t, http.StatusOK, status)
-	assert.Equal(t, "Boolean update idea", fetched.Change.Idea)
+	assert.Equal(t, "Boolean update definition", fetched.Change.Def)
 	assert.Empty(t, fetched.Change.Spec)
 	assert.Empty(t, fetched.Change.PR)
 	assert.False(t, fetched.Change.AgentEdit)
 
 	var updated change
-	status = client.Post(t, "/api/v1/change/update-idea", map[string]any{
+	status = client.Post(t, "/api/v1/change/update-def", map[string]any{
 		"id":         created.ID,
-		"idea":       "Agent-edited idea.",
+		"def":        "Agent-edited def.",
 		"agent_edit": true,
 	}, &updated)
 	require.Equal(t, http.StatusOK, status)
@@ -977,12 +1062,12 @@ func TestChangeArtifactUpdatesRejectNullAndEmptyWithoutMutation(t *testing.T) {
 	projectID := createProject(t, client)
 	defer shared.CleanupProject(t, client, projectID)
 
-	const originalIdea = "Artifact validation idea"
+	const originalDef = "Artifact validation def"
 	var created change
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      fmt.Sprintf("api-test-artifact-validation-%d", time.Now().UnixNano()),
-		"idea":       originalIdea,
+		"def":        originalDef,
 	}, &created)
 	require.Equal(t, http.StatusCreated, status)
 
@@ -992,8 +1077,8 @@ func TestChangeArtifactUpdatesRejectNullAndEmptyWithoutMutation(t *testing.T) {
 		field string
 		value any
 	}{
-		{name: "null idea", path: "/api/v1/change/update-idea", field: "idea", value: nil},
-		{name: "empty idea", path: "/api/v1/change/update-idea", field: "idea", value: ""},
+		{name: "null def", path: "/api/v1/change/update-def", field: "def", value: nil},
+		{name: "empty def", path: "/api/v1/change/update-def", field: "def", value: ""},
 		{name: "null spec", path: "/api/v1/change/update-spec", field: "spec", value: nil},
 		{name: "empty spec", path: "/api/v1/change/update-spec", field: "spec", value: ""},
 		{name: "null pr", path: "/api/v1/change/update-pr", field: "pr", value: nil},
@@ -1018,7 +1103,7 @@ func TestChangeArtifactUpdatesRejectNullAndEmptyWithoutMutation(t *testing.T) {
 			var fetched detail
 			status = client.Post(t, "/api/v1/change/get", map[string]any{"id": created.ID}, &fetched)
 			require.Equal(t, http.StatusOK, status)
-			assert.Equal(t, originalIdea, fetched.Change.Idea)
+			assert.Equal(t, originalDef, fetched.Change.Def)
 			assert.Empty(t, fetched.Change.Spec)
 			assert.Empty(t, fetched.Change.PR)
 			assert.Empty(t, fetched.Change.PRUrl)
@@ -1033,7 +1118,7 @@ func TestChangeCreateRejectsInvalidInput(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": 999999999,
 		"title":      "orphan change",
-		"idea":       "Orphan idea",
+		"def":        "Orphan def",
 	}, nil)
 	assert.Equal(t, http.StatusBadRequest, status)
 
@@ -1043,14 +1128,14 @@ func TestChangeCreateRejectsInvalidInput(t *testing.T) {
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      "   ",
-		"idea":       "Blank title idea",
+		"def":        "Blank title def",
 	}, nil)
 	assert.Equal(t, http.StatusBadRequest, status)
 
 	status = client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
-		"title":      "blank idea change",
-		"idea":       "   ",
+		"title":      "blank def change",
+		"def":        "   ",
 	}, nil)
 	assert.Equal(t, http.StatusBadRequest, status)
 }
@@ -1097,7 +1182,7 @@ func TestChangeRejectsInvalidInputAndMissingRows(t *testing.T) {
 	status = client.Post(t, removedUpdateAgentEditPath, map[string]any{"id": 999999999, "agent_edit": true}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
-	status = client.Post(t, removedUpdateIdeaAgentEditPath, map[string]any{"id": 999999999, "idea": "missing", "agent_edit": true}, nil)
+	status = client.Post(t, removedUpdateDefAgentEditPath, map[string]any{"id": 999999999, "def": "missing", "agent_edit": true}, nil)
 	assert.Equal(t, http.StatusNotFound, status)
 
 	status = client.Post(t, "/api/v1/change/delete", map[string]any{}, nil)

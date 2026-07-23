@@ -24,10 +24,10 @@ func TestAppConfigLoadsRepositoryMCHConfigFlowAndHelp(t *testing.T) {
 	assert.Equal(t, filepath.Join(root, ".mch", "default"), cfg.FlowDir)
 	assert.Equal(t, "default", cfg.Flow.Slug)
 	require.Len(t, cfg.Flow.Steps, 3)
-	assert.Equal(t, "idea-write", cfg.Flow.Steps[0].Slug)
+	assert.Equal(t, "def-write", cfg.Flow.Steps[0].Slug)
 	assert.Equal(t, "edit", cfg.Flow.Steps[0].Mode)
-	assert.Equal(t, "idea-review", cfg.Flow.Steps[1].Slug)
-	assert.Equal(t, "make idea-review-exec", cfg.Flow.Steps[1].Exec)
+	assert.Equal(t, "def-review", cfg.Flow.Steps[1].Slug)
+	assert.Equal(t, "make def-review-exec", cfg.Flow.Steps[1].Exec)
 	assert.Equal(t, []string{"skip", "prompt", "exec"}, flowOptionSlugs(cfg.FlowHelp.StageModes))
 	assert.Equal(t, []string{"queued", "running", "paused", "stopped", "waiting", "completed", "failed"}, flowOptionSlugs(cfg.FlowHelp.TaskStatuses))
 	assert.Equal(t, []string{"none", "entry", "prompt", "agent", "exit", "done"}, flowOptionSlugs(cfg.FlowHelp.TaskSteps))
@@ -186,8 +186,8 @@ func testAppConfig(overrides appConfig) appConfig {
 			Description:    "Default test Flow.",
 			Help:           "help.yaml",
 			Makefile:       "Makefile",
-			Steps:          []flowStep{{Slug: "idea", Help: "capture idea", Mode: "prompt", Prompt: "prompts/change-idea.md", Entry: "make idea-entry", Exec: "make idea-exec", Exit: "make idea-exit"}},
-			UtilityPrompts: map[string]string{"change-idea-tmp": "prompts/change-idea-tmp.md"},
+			Steps:          []flowStep{{Slug: "def", Help: "capture def", Mode: "prompt", Prompt: "prompts/change-def.md", Entry: "make def-entry", Exec: "make def-exec", Exit: "make def-exit"}},
+			UtilityPrompts: map[string]string{"change-def-tmp": "prompts/change-def-tmp.md"},
 		},
 		FlowHelp: flowHelpConfig{
 			Version:      1,
@@ -237,21 +237,21 @@ description: Test Flow.
 help: help.yaml
 makefile: Makefile
 steps:
-  - slug: idea-write
-    help: write idea
+  - slug: def-write
+    help: write def
     mode: edit
-  - slug: idea-review
-    help: review idea
+  - slug: def-review
+    help: review def
     mode: exec
-    prompt: prompts/idea-review.md
-    entry: make idea-review-entry
-    exec: make idea-review-exec
-    exit: make idea-review-exit
-  - slug: idea-refine
-    help: refine idea
+    prompt: prompts/def-review.md
+    entry: make def-review-entry
+    exec: make def-review-exec
+    exit: make def-review-exit
+  - slug: def-refine
+    help: refine def
     mode: prompt
 utility_prompts:
-  change-idea-tmp: prompts/change-idea-tmp.md
+  change-def-tmp: prompts/change-def-tmp.md
 `
 }
 

@@ -25,7 +25,7 @@ func (m Model) View() string {
 		lines = append(lines, "")
 		lines = append(lines, projects.TableView(m.projectList, width))
 	}
-	if m.state == ChangesListState || m.state == RewriteIdeaState {
+	if m.state == ChangesListState || m.state == RewriteDefState {
 		if agentRunning {
 			lines = append(lines, "", m.agentRunningView(width))
 		} else if m.state == ChangesListState && !m.hasDropdown() {
@@ -88,7 +88,7 @@ func (m Model) headerLine(width int) string {
 }
 
 func (m Model) headerRight() string {
-	if (m.state == ChangesListState || m.state == RewriteIdeaState) && m.agentFlow.Stage == agent.StageAIRunning {
+	if (m.state == ChangesListState || m.state == RewriteDefState) && m.agentFlow.Stage == agent.StageAIRunning {
 		return styles.Default.Foreground.Render("AgentRunningScreen")
 	}
 	title := screenTitle(m.state)
@@ -105,27 +105,34 @@ func (m Model) agentRunningView(width int) string {
 	viewport.Style = agentViewportStyle()
 	viewport.SetContent(agentOutputView(m.agentFlow.CommandOutput))
 
-	message := "Agent running: rewriting idea"
-	switch m.agentFlow.Workspace.Operation {
-	case agent.SpecWriteOperation:
-		message = "Agent running: writing spec"
-	case agent.PRWriteOperation:
-		message = "Agent running: writing PR"
-	default:
-		if m.agentFlow.SessionID != "" {
-			message = "Agent running: updating idea"
+	operation := m.agentFlow.Workspace.Operation
+	if operation == "" {
+		operation = agent.DefWriteOperation
+	}
+	sessionID := strings.TrimSpace(m.agentFlow.SessionID)
+	status := "started"
+	if m.agentSessionResumed {
+		status = "resumed"
+	}
+	spinnerView := m.agentSpinner.View()
+	message := fmt.Sprintf("%s - waiting for session - %02d:%02d - %s",
+		operation, m.agentElapsed/60, m.agentElapsed%60, spinnerView)
+	if sessionID != "" {
+		prefix := fmt.Sprintf("%s - %s - %s - %02d:%02d - ",
+			operation,
+			sessionID,
+			status,
+			m.agentElapsed/60,
+			m.agentElapsed%60,
+		)
+		availableDotWidth := width - lipgloss.Width(prefix) - lipgloss.Width(spinnerView)
+		dotCount := 0
+		if availableDotWidth > 0 {
+			dotCount = m.agentMessageCount % availableDotWidth
 		}
+		message = prefix + strings.Repeat(".", dotCount) + spinnerView
 	}
-	unit := "seconds"
-	if m.agentElapsed == 1 {
-		unit = "second"
-	}
-	progress := fmt.Sprintf(
-		"%s %s %s",
-		m.agentSpinner.View(),
-		styles.Default.AccentCyan.Bold(true).Render(message+"..."),
-		styles.Default.Muted.Render(fmt.Sprintf("%d %s", m.agentElapsed, unit)),
-	)
+	progress := styles.Default.AccentCyan.Bold(true).Render(message)
 	progress = lipgloss.NewStyle().
 		Background(lipgloss.Color("0")).
 		Width(width).
@@ -134,7 +141,7 @@ func (m Model) agentRunningView(width int) string {
 }
 
 func (m Model) agentRunningScreen() bool {
-	return (m.state == ChangesListState || m.state == RewriteIdeaState) && m.agentFlow.Stage == agent.StageAIRunning
+	return (m.state == ChangesListState || m.state == RewriteDefState) && m.agentFlow.Stage == agent.StageAIRunning
 }
 
 func (m *Model) refreshAgentViewport(followOutput bool) {
@@ -226,7 +233,7 @@ func (m Model) helpText() string {
 		return "<up/down> scroll  |  <pgup/pgdown> page  |  <home/end> jump"
 	}
 	switch m.state {
-	case RewriteIdeaState:
+	case RewriteDefState:
 		return "</> command  |  <esc> cancel"
 	case ChangesListState:
 		return "<ctrl+n> new change  |  <return> view  |  </> command"
@@ -362,9 +369,9 @@ func screenTitle(state State) string {
 	titles := map[State]string{
 		MainState:                  agent.MainTitle(),
 		ChangesListState:           changes.ListTitle(),
-		CreateIdeaState:            "CreateIdeaScreen - Title: New Change",
-		UpdateIdeaState:            "UpdateIdeaScreen - Title: Edit Idea",
-		RewriteIdeaState:           "RewriteIdeaScreen - Title: Rewrite Idea",
+		CreateDefState:             "CreateDefScreen - Title: New Change",
+		UpdateDefState:             "UpdateDefScreen - Title: Edit Definition",
+		RewriteDefState:            "RewriteDefScreen - Title: Rewrite Definition",
 		ChangeDetailsState:         changes.DetailTitle(),
 		TestCaseDetailsState:       testcases.DetailTitle(),
 		ChangeCreateState:          "ChangeCreateScreen - Title: New Change",

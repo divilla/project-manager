@@ -9,7 +9,7 @@ type API interface {
 	CreateChange(input dto.ChangeCreateInput) (dto.Change, error)
 	ReferenceChange(id int) (dto.Change, error)
 	UpdateChangeTitle(id int, title string) (dto.Change, error)
-	UpdateChangeIdea(id int, idea string, agentEdit bool) (dto.Change, error)
+	UpdateChangeDef(id int, def string, agentEdit bool) (dto.Change, error)
 	UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error)
 	UpdateChangePR(id int, pr string, agentEdit bool) (dto.Change, error)
 	UpdateChangePRUrl(id int, prURL string) (dto.Change, error)

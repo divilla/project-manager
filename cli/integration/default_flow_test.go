@@ -20,6 +20,7 @@ type flowConfig struct {
 	Steps []struct {
 		Slug   string `yaml:"slug"`
 		Stage  string `yaml:"stage"`
+		Help   string `yaml:"help"`
 		Mode   string `yaml:"mode"`
 		Prompt string `yaml:"prompt"`
 	} `yaml:"steps"`
@@ -40,35 +41,52 @@ func TestDefaultFlowPromptAndStageIntegration(t *testing.T) {
 	var flow flowConfig
 	require.NoError(t, yaml.Unmarshal(body, &flow))
 	expectedSteps := map[string]struct {
-		stage string
-		mode  string
+		stage  string
+		help   string
+		mode   string
+		prompt string
 	}{
-		"idea-write":       {stage: "idea", mode: "exec"},
-		"idea-review":      {stage: "idea", mode: "exec"},
-		"idea-chat":        {stage: "idea", mode: "chat"},
-		"spec-write":       {stage: "idea", mode: "exec"},
-		"pr-write":         {stage: "idea", mode: "exec"},
-		"spec-review":      {stage: "spec-review", mode: "exec"},
-		"spec-review-chat": {stage: "spec-review", mode: "chat"},
+		"def-create":          {stage: "artifact", help: "Create the initial Change definition.", mode: "editor"},
+		"def-edit":            {stage: "artifact", help: "Edit the Change definition.", mode: "editor"},
+		"spec-edit":           {stage: "artifact", help: "Edit the Change specification.", mode: "editor"},
+		"pr-edit":             {stage: "artifact", help: "Edit the pull request description.", mode: "editor"},
+		"chat":                {stage: "<inherit-from-previous-step>", help: "Discuss and refine the current Change artifact.", mode: "chat"},
+		"def-write":           {stage: "artifact", help: "Draft or revise the Change definition.", mode: "exec", prompt: "prompts/def-write.md"},
+		"def-review":          {stage: "artifact", help: "Review the Change definition for clarity, completeness, and scope.", mode: "exec", prompt: "prompts/def-review.md"},
+		"branch-init":         {stage: "artifact", help: "Initialize and check out the Change branch.", mode: "script"},
+		"init-code-chat":      {stage: "artifact", help: "Discuss the initial implementation context before specification work.", mode: "chat"},
+		"spec-write":          {stage: "artifact", help: "Draft or revise the Change specification.", mode: "exec", prompt: "prompts/spec-write.md"},
+		"spec-review":         {stage: "spec-review", help: "Review the Change specification for implementation readiness.", mode: "exec", prompt: "prompts/spec-review.md"},
+		"spec-review-chat":    {stage: "spec-review", help: "Resolve specification review findings.", mode: "chat"},
+		"code-implement":      {stage: "code", help: "Implement the approved Change specification.", mode: "exec", prompt: "prompts/code-implement.md"},
+		"code-chat":           {stage: "code", help: "Discuss implementation progress, decisions, and blockers.", mode: "chat"},
+		"pr-write":            {stage: "artifact", help: "Draft the pull request description from the specification and branch diff.", mode: "exec", prompt: "prompts/pr-write.md"},
+		"pr-publish":          {stage: "artifact", help: "Publish the pull request.", mode: "script"},
+		"code-review":         {stage: "code-review", help: "Review the implementation against the Change specification.", mode: "exec", prompt: "prompts/code-review.md"},
+		"code-review-publish": {stage: "code-review", help: "Publish the implementation review findings.", mode: "script"},
+		"code-review-chat":    {stage: "code-review", help: "Resolve implementation review findings.", mode: "chat"},
+		"pr-update":           {stage: "artifact", help: "Update the pull request description to reflect the final implementation.", mode: "exec", prompt: "prompts/pr-update.md"},
 	}
 	require.Len(t, flow.Steps, len(expectedSteps))
 	for _, step := range flow.Steps {
 		expected, ok := expectedSteps[step.Slug]
 		require.True(t, ok, "unexpected Flow step %q", step.Slug)
 		assert.Equal(t, expected.stage, step.Stage)
+		assert.Equal(t, expected.help, step.Help)
 		assert.Equal(t, expected.mode, step.Mode)
+		assert.Equal(t, expected.prompt, step.Prompt)
 		delete(expectedSteps, step.Slug)
-		if strings.HasPrefix(step.Prompt, "prompts/") {
+		if strings.HasPrefix(step.Prompt, "prompts/") && step.Slug != "pr-update" {
 			require.FileExists(t, filepath.Join(flowDir, step.Prompt))
 		}
 	}
 	assert.Empty(t, expectedSteps)
 
 	mappings := map[string]string{
-		"idea-write":  "idea",
-		"idea-review": "idea",
-		"spec-write":  "idea",
-		"pr-write":    "idea",
+		"def-write":   "artifact",
+		"def-review":  "artifact",
+		"spec-write":  "artifact",
+		"pr-write":    "artifact",
 		"spec-review": "spec-review",
 	}
 	for step, stage := range mappings {
@@ -88,18 +106,13 @@ func TestDefaultFlowPromptAndStageIntegration(t *testing.T) {
 		require.Error(t, err, "%s unexpectedly remained available: %s", target, out)
 	}
 
-	for _, stage := range []string{"idea", "idea-write", "idea-review", "spec", "spec-write", "ready", "spec-review", "code", "polish", "pr", "pr-write", "review", "fix", "merge", "stage", "master", "change-idea-tmp", "change-spec-tmp"} {
-		cmd := exec.Command(filepath.Join(flowDir, "scripts", "show-prompt.sh"), flowDir+string(os.PathSeparator), stage)
+	assert.NoFileExists(t, filepath.Join(flowDir, "scripts", "show-prompt.sh"))
+	for _, stage := range []string{"def-write", "def-review", "spec-write", "pr-write", "spec-review"} {
+		cmd := exec.Command("make", "--no-print-directory", "-f", filepath.Join(flowDir, "Makefile"), stage+"-prompt")
+		cmd.Dir = root
 		out, err := cmd.CombinedOutput()
-		require.NoError(t, err, "%s: %s", stage, out)
-		require.NotEmpty(t, out)
-	}
-
-	for _, stage := range []string{"docs", "sync"} {
-		cmd := exec.Command(filepath.Join(flowDir, "scripts", "show-prompt.sh"), flowDir+string(os.PathSeparator), stage)
-		out, err := cmd.CombinedOutput()
-		require.Error(t, err, "%s unexpectedly resolved: %s", stage, out)
-		assert.Contains(t, string(out), "unknown stage")
+		require.Error(t, err, "%s prompt target unexpectedly remained available: %s", stage, out)
+		assert.Contains(t, string(out), "No rule to make target")
 	}
 
 	for _, name := range []string{"docs-update.md", "code-docs-spec-update.md"} {
@@ -199,6 +212,14 @@ func TestWorkflowPromptsRequireExplicitDocumentationScope(t *testing.T) {
 	for path, contract := range explicitContracts {
 		assert.Contains(t, readFile(t, path), contract, path)
 	}
+}
+
+func TestChangeFileInitPromptPreservesOrdinaryIdeaWording(t *testing.T) {
+	root := repositoryRoot(t)
+	prompt := readFile(t, filepath.Join(root, "agent", "prompts", "change-file-init-prompt.md"))
+
+	assert.Contains(t, prompt, "related but non-essential ideas")
+	assert.NotContains(t, prompt, "related but non-essential definitions")
 }
 
 func TestDefaultFlowSessionScriptIntegration(t *testing.T) {
@@ -469,7 +490,7 @@ func TestChangeSlugGrammarIsSharedByWorkflowEntryPoints(t *testing.T) {
 		filepath.Join(root, "agent", "prompts", "change-file-init-prompt.md"),
 		filepath.Join(root, ".mch", "default", "scripts", "extract-slug.sh"),
 		filepath.Join(root, "scripts", "extract.sh"),
-		filepath.Join(root, "scripts", "change-idea.pl"),
+		filepath.Join(root, "scripts", "change-def.pl"),
 		filepath.Join(root, "scripts", "change-spec.pl"),
 		filepath.Join(root, "scripts", "change-code.pl"),
 		filepath.Join(root, "scripts", "change-fix.pl"),
@@ -487,6 +508,121 @@ func TestChangeSlugGrammarIsSharedByWorkflowEntryPoints(t *testing.T) {
 	} {
 		assert.Contains(t, readFile(t, path), validationPattern, path)
 	}
+}
+
+func TestChangeDefScriptCommitsAndPushesDefinition(t *testing.T) {
+	root := repositoryRoot(t)
+	script := filepath.Join(root, "scripts", "change-def.pl")
+	repo := newGitRemoteFixture(t)
+	gitRun(t, repo, "checkout", "-b", "change/123-definition")
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "agent", "defs"), 0o755))
+	definition := filepath.Join(repo, "agent", "defs", "123-definition.md")
+	require.NoError(t, os.WriteFile(definition, []byte("# Definition\n"), 0o644))
+	gitRun(t, repo, "add", "agent/defs/123-definition.md")
+	gitRun(t, repo, "commit", "-m", "initial definition")
+	gitRun(t, repo, "push", "-u", "origin", "change/123-definition")
+	require.NoError(t, os.WriteFile(definition, []byte("# Definition\n\nUpdated.\n"), 0o644))
+
+	out, err := commandInRepo(repo, script)
+	require.NoError(t, err, out)
+	assert.Equal(t, "Definition for 123-definition by user", gitOutput(t, repo, "log", "-1", "--format=%s"))
+	assert.Equal(t, gitOutput(t, repo, "rev-parse", "HEAD"), gitOutput(t, repo, "rev-parse", "origin/change/123-definition"))
+
+	gitRun(t, repo, "checkout", "stage")
+	before := gitOutput(t, repo, "rev-parse", "HEAD")
+	out, err = commandInRepo(repo, script)
+	require.Error(t, err)
+	assert.Contains(t, out, "current branch is not a change/<change-slug> branch")
+	assert.Equal(t, before, gitOutput(t, repo, "rev-parse", "HEAD"))
+}
+
+func TestChangeNewScriptInitializesLocalBranchWithoutPublishing(t *testing.T) {
+	root := repositoryRoot(t)
+	script := filepath.Join(root, "scripts", "change-new.pl")
+	repo := newGitRemoteFixture(t)
+	for _, dir := range []string{"agent/defs", "agent/prs", "specs"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(repo, dir), 0o755))
+	}
+
+	out, err := commandInRepo(repo, script, "124-initialized")
+	require.NoError(t, err, out)
+	assert.Equal(t, "change/124-initialized", gitOutput(t, repo, "branch", "--show-current"))
+	upstream := exec.Command("git", "-C", repo, "rev-parse", "--abbrev-ref", "@{upstream}")
+	require.Error(t, upstream.Run())
+	remoteRef := exec.Command(
+		"git", "-C", repo, "ls-remote", "--exit-code", "origin",
+		"refs/heads/change/124-initialized",
+	)
+	require.Error(t, remoteRef.Run())
+	require.FileExists(t, filepath.Join(repo, "agent", "defs", "124-initialized.md"))
+	require.FileExists(t, filepath.Join(repo, "specs", "124-initialized.md"))
+	require.FileExists(t, filepath.Join(repo, "agent", "prs", "124-initialized.md"))
+}
+
+func TestChangeNewScriptReusesExistingBranchesWithoutPublishing(t *testing.T) {
+	root := repositoryRoot(t)
+	script := filepath.Join(root, "scripts", "change-new.pl")
+
+	t.Run("untracked branch and commits remain local", func(t *testing.T) {
+		repo := newGitRemoteFixture(t)
+		for _, dir := range []string{"agent/defs", "agent/prs", "specs"} {
+			require.NoError(t, os.MkdirAll(filepath.Join(repo, dir), 0o755))
+		}
+
+		gitRun(t, repo, "checkout", "-b", "change/125-existing-local")
+		require.NoError(t, os.WriteFile(filepath.Join(repo, "local.txt"), []byte("local\n"), 0o644))
+		gitRun(t, repo, "add", "local.txt")
+		gitRun(t, repo, "commit", "-m", "unpublished local work")
+		localHead := gitOutput(t, repo, "rev-parse", "HEAD")
+		remoteBefore := gitOutput(t, repo, "ls-remote", "origin")
+		gitRun(t, repo, "checkout", "stage")
+
+		out, err := commandInRepo(repo, script, "125-existing-local")
+		require.NoError(t, err, out)
+		assert.Equal(t, "change/125-existing-local", gitOutput(t, repo, "branch", "--show-current"))
+		assert.Equal(t, localHead, gitOutput(t, repo, "rev-parse", "HEAD"))
+		upstream := exec.Command("git", "-C", repo, "rev-parse", "--abbrev-ref", "@{upstream}")
+		require.Error(t, upstream.Run())
+		remoteRef := exec.Command(
+			"git", "-C", repo, "ls-remote", "--exit-code", "origin",
+			"refs/heads/change/125-existing-local",
+		)
+		require.Error(t, remoteRef.Run())
+		assert.Equal(t, remoteBefore, gitOutput(t, repo, "ls-remote", "origin"))
+		require.FileExists(t, filepath.Join(repo, "agent", "defs", "125-existing-local.md"))
+		require.FileExists(t, filepath.Join(repo, "specs", "125-existing-local.md"))
+		require.FileExists(t, filepath.Join(repo, "agent", "prs", "125-existing-local.md"))
+	})
+
+	t.Run("tracked branch keeps its upstream without publishing new commits", func(t *testing.T) {
+		repo := newGitRemoteFixture(t)
+		for _, dir := range []string{"agent/defs", "agent/prs", "specs"} {
+			require.NoError(t, os.MkdirAll(filepath.Join(repo, dir), 0o755))
+		}
+
+		gitRun(t, repo, "checkout", "-b", "change/126-existing-tracked")
+		require.NoError(t, os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("published\n"), 0o644))
+		gitRun(t, repo, "add", "tracked.txt")
+		gitRun(t, repo, "commit", "-m", "published work")
+		gitRun(t, repo, "push", "-u", "origin", "change/126-existing-tracked")
+		remoteBefore := gitOutput(t, repo, "rev-parse", "origin/change/126-existing-tracked")
+		require.NoError(t, os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("local update\n"), 0o644))
+		gitRun(t, repo, "add", "tracked.txt")
+		gitRun(t, repo, "commit", "-m", "unpublished tracked work")
+		localHead := gitOutput(t, repo, "rev-parse", "HEAD")
+		gitRun(t, repo, "checkout", "stage")
+
+		out, err := commandInRepo(repo, script, "126-existing-tracked")
+		require.NoError(t, err, out)
+		assert.Equal(t, "change/126-existing-tracked", gitOutput(t, repo, "branch", "--show-current"))
+		assert.Equal(t, localHead, gitOutput(t, repo, "rev-parse", "HEAD"))
+		assert.Equal(t, "origin/change/126-existing-tracked", gitOutput(t, repo, "rev-parse", "--abbrev-ref", "@{upstream}"))
+		assert.Equal(t, remoteBefore, gitOutput(t, repo, "rev-parse", "origin/change/126-existing-tracked"))
+		assert.NotEqual(t, localHead, remoteBefore)
+		require.FileExists(t, filepath.Join(repo, "agent", "defs", "126-existing-tracked.md"))
+		require.FileExists(t, filepath.Join(repo, "specs", "126-existing-tracked.md"))
+		require.FileExists(t, filepath.Join(repo, "agent", "prs", "126-existing-tracked.md"))
+	})
 }
 
 func TestMasterPromotionRefusesUnsafeState(t *testing.T) {
@@ -567,10 +703,10 @@ func newFlowFixture(t *testing.T) flowFixture {
 	t.Helper()
 	repo := t.TempDir()
 	require.NoError(t, exec.Command("git", "init", repo).Run())
-	stageDir := filepath.Join(repo, ".mch", "tmp", testRefUUID, "idea")
+	stageDir := filepath.Join(repo, ".mch", "tmp", testRefUUID, "artifact")
 	require.NoError(t, os.MkdirAll(stageDir, 0o755))
 	for _, name := range []string{"input.md", "output.md"} {
-		require.NoError(t, os.WriteFile(filepath.Join(stageDir, name), []byte("# Idea\n"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(stageDir, name), []byte("# Definition\n"), 0o644))
 	}
 	prompt := filepath.Join(repo, "prompt.md")
 	require.NoError(t, os.WriteFile(prompt, []byte("Read /stg-tmp-dir/input.md using /def-dir/prompts/spec-file-structure.md"), 0o644))
@@ -642,7 +778,7 @@ func runScript(f flowFixture, script string, overrides []string) (string, error)
 		"MCH_DEFAULT_DIR=.mch/default",
 		"MCH_TEMP_DIR=.mch/tmp",
 		"MCH_REF_UUID=" + testRefUUID,
-		"MCH_STAGE=idea",
+		"MCH_STAGE=artifact",
 	}
 	for _, override := range overrides {
 		key := strings.SplitN(override, "=", 2)[0] + "="

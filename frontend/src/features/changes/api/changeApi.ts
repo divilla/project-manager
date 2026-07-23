@@ -41,8 +41,8 @@ export function updateChangeTitle(id: number, title: string): Promise<Change> {
   return post<Change>('/api/v1/change/update-title', { id, title });
 }
 
-export function updateChangeIdea(id: number, idea: string, agentEdit = false): Promise<Change> {
-  return post<Change>('/api/v1/change/update-idea', { id, idea, agent_edit: agentEdit });
+export function updateChangeDefinition(id: number, def: string, agentEdit = false): Promise<Change> {
+  return post<Change>('/api/v1/change/update-def', { id, def, agent_edit: agentEdit });
 }
 
 export function updateChangeSpec(id: number, spec: string, agentEdit = false): Promise<Change> {

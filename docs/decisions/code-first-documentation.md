@@ -16,9 +16,9 @@ code alone.
 
 ## Decision
 
-Code is the single source of truth for current behavior and technical contracts. An Idea and the
-initial code originate a Change, the active Spec gives strict instructions for the desired future
-state, and the PR summarizes the accepted code changes and any deferred Spec instructions.
+Code is the single source of truth for current behavior and technical contracts. A definition and
+the initial code originate a Change, the active Spec gives strict instructions for the desired
+future state, and the PR summarizes the accepted code changes and any deferred Spec instructions.
 
 Retained documentation is limited to concise entry-point material, durable architectural decisions,
 genuine operational runbooks, research, and historical Change artifacts. It never overrides code.

@@ -8,4 +8,4 @@ fi
 export MCH_DEFAULT_DIR=".mch/default"
 export MCH_TEMP_DIR=".mch/tmp"
 export MCH_REF_UUID="11111111-1111-1111-1111-111111111111"
-export MCH_STAGE="idea"
+export MCH_STAGE="artifact"

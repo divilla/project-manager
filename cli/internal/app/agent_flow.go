@@ -36,22 +36,22 @@ func (m Model) beginAgentNewChange() (tea.Model, tea.Cmd) {
 		m.status = "agent failed"
 		return m, nil
 	}
-	return m.openAgentIdeaEditor(false, "")
+	return m.openAgentDefEditor(false, "")
 }
 
-func (m Model) openAgentIdeaEditor(replace bool, initialContent string) (tea.Model, tea.Cmd) {
+func (m Model) openAgentDefEditor(replace bool, initialContent string) (tea.Model, tea.Cmd) {
 	if replace && m.agentFlow.Workspace.RootDir == "" {
-		if err := m.agentFlow.Workspace.ResetIdea(); err != nil {
+		if err := m.agentFlow.Workspace.ResetDef(); err != nil {
 			m.err = err.Error()
 			m.status = "agent failed"
 			return m, nil
 		}
 	}
-	m.agentFlow.IdeaEntryContent = initialContent
-	m.agentFlow.Stage = agent.StageIdeaEntry
-	m.state = CreateIdeaState
-	m.status = "agent idea"
-	return m.openPersistentEditor(CreateIdeaState, m.agentFlow.Workspace.IdeaPath())
+	m.agentFlow.DefEntryContent = initialContent
+	m.agentFlow.Stage = agent.StageDefEntry
+	m.state = CreateDefState
+	m.status = "agent def"
+	return m.openPersistentEditor(CreateDefState, m.agentFlow.Workspace.DefPath())
 }
 
 func (m Model) handleAgentEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
@@ -61,24 +61,24 @@ func (m Model) handleAgentEditorFinished(msg editorFinishedMsg) (tea.Model, tea.
 		return m, tea.ClearScreen
 	}
 	switch m.agentFlow.Stage {
-	case agent.StageIdeaEntry:
+	case agent.StageDefEntry:
 		if m.agentFlow.Workspace.RootDir == "" {
 			return m.handleLegacyAgentEditorFinished(msg.content)
 		}
-		equal, err := m.agentFlow.Workspace.EqualIdeaFiles()
+		equal, err := m.agentFlow.Workspace.EqualDefFiles()
 		if err != nil {
 			m.err = err.Error()
 			m.status = "agent failed"
 			return m, tea.ClearScreen
 		}
 		if equal {
-			updated, _ := m.discardAgentIdea(ChangesListState, "cancel", true)
+			updated, _ := m.discardAgentDef(ChangesListState, "cancel", true)
 			return updated, tea.ClearScreen
 		}
-		m.agentFlow.IdeaEntryContent = msg.content
-		m.status = "agent idea"
+		m.agentFlow.DefEntryContent = msg.content
+		m.status = "agent def"
 		m.agentFlow.Stage = agent.StageCreateConfirmation
-		m.openDropdown(CreateIdeaState, dropdownIdea, CreateIdeaState, CreateIdeaState, "Create Change?", []dto.Option{
+		m.openDropdown(CreateDefState, dropdownDef, CreateDefState, CreateDefState, "Create Change?", []dto.Option{
 			{ID: "/yes", Label: "/yes"},
 			{ID: "/no", Label: "/no"},
 		}, false)
@@ -89,14 +89,14 @@ func (m Model) handleAgentEditorFinished(msg editorFinishedMsg) (tea.Model, tea.
 }
 
 func (m Model) handleLegacyAgentEditorFinished(content string) (tea.Model, tea.Cmd) {
-	if err := m.agentFlow.Workspace.WriteIdea(content); err != nil {
+	if err := m.agentFlow.Workspace.WriteDef(content); err != nil {
 		m.err = err.Error()
 		m.status = "agent failed"
 		return m, tea.ClearScreen
 	}
-	m.agentFlow.IdeaEntryContent = content
+	m.agentFlow.DefEntryContent = content
 	m.agentFlow.Stage = agent.StageCreateConfirmation
-	m.openDropdown(CreateIdeaState, dropdownIdea, CreateIdeaState, CreateIdeaState, "Create Change?", []dto.Option{
+	m.openDropdown(CreateDefState, dropdownDef, CreateDefState, CreateDefState, "Create Change?", []dto.Option{
 		{ID: "/yes", Label: "/yes"},
 		{ID: "/no", Label: "/no"},
 	}, false)
@@ -106,7 +106,7 @@ func (m Model) handleLegacyAgentEditorFinished(content string) (tea.Model, tea.C
 func (m Model) showNewChangeError(err error) Model {
 	m.err = err.Error()
 	m.status = "agent failed"
-	m.openDropdown(CreateIdeaState, dropdownIdea, CreateIdeaState, CreateIdeaState, err.Error(), []dto.Option{
+	m.openDropdown(CreateDefState, dropdownDef, CreateDefState, CreateDefState, err.Error(), []dto.Option{
 		{ID: "/fix", Label: "/fix"},
 		{ID: "/cancel", Label: "/cancel"},
 	}, false)
@@ -118,7 +118,7 @@ func (m Model) showPersistedChangeError(err error) Model {
 	m.status = "save failed"
 	m.state = ChangeDetailsState
 	m.agentFlow.Stage = agent.StageIdle
-	m.openDropdown(ChangeDetailsState, dropdownPersistedIdea, ChangeDetailsState, ChangeDetailsState, err.Error(), []dto.Option{
+	m.openDropdown(ChangeDetailsState, dropdownPersistedDef, ChangeDetailsState, ChangeDetailsState, err.Error(), []dto.Option{
 		{ID: "/fix", Label: "/fix"},
 		{ID: "/cancel", Label: "/cancel"},
 	}, false)
@@ -188,7 +188,7 @@ func (m Model) handleArtifactEditorFinished(msg editorFinishedMsg) (tea.Model, t
 		m.status = "editor failed"
 		return m, tea.ClearScreen
 	}
-	equal, err := m.agentFlow.Workspace.EqualIdeaFiles()
+	equal, err := m.agentFlow.Workspace.EqualDefFiles()
 	if err != nil {
 		m.err = err.Error()
 		m.status = "agent failed"
@@ -218,8 +218,8 @@ func (m Model) handleArtifactEditorFinished(msg editorFinishedMsg) (tea.Model, t
 
 func artifactWriteSelection(field detailEditField, change dto.Change) (agent.WriteOperation, string, error) {
 	switch field {
-	case detailEditIdea:
-		return agent.IdeaWriteOperation, change.Idea, nil
+	case detailEditDef:
+		return agent.DefWriteOperation, change.Def, nil
 	case detailEditSpec:
 		return agent.SpecWriteOperation, change.Spec, nil
 	case detailEditPullRequest:
@@ -231,8 +231,8 @@ func artifactWriteSelection(field detailEditField, change dto.Change) (agent.Wri
 
 func validateArtifactWrite(field detailEditField, content string) error {
 	switch field {
-	case detailEditIdea:
-		_, err := changes.ParseIdeaStructure(content)
+	case detailEditDef:
+		_, err := changes.ParseDefStructure(content)
 		return err
 	case detailEditSpec:
 		if strings.TrimSpace(content) == "" {
@@ -248,14 +248,14 @@ func validateArtifactWrite(field detailEditField, content string) error {
 	return nil
 }
 
-func (m Model) handleUpdateIdeaEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleUpdateDefEditorFinished(msg editorFinishedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.err = msg.err.Error()
 		m.status = "editor failed"
 		return m, tea.ClearScreen
 	}
-	if m.agentFlow.Stage == agent.StagePersistedIdeaEntry {
-		equal, err := m.agentFlow.Workspace.EqualIdeaFiles()
+	if m.agentFlow.Stage == agent.StagePersistedDefEntry {
+		equal, err := m.agentFlow.Workspace.EqualDefFiles()
 		if err != nil {
 			m = m.showPersistedChangeError(err)
 			return m, tea.ClearScreen
@@ -267,19 +267,19 @@ func (m Model) handleUpdateIdeaEditorFinished(msg editorFinishedMsg) (tea.Model,
 			return m, tea.ClearScreen
 		}
 	}
-	if err := m.agentFlow.Workspace.WriteIdea(msg.content); err != nil {
+	if err := m.agentFlow.Workspace.WriteDef(msg.content); err != nil {
 		m.err = err.Error()
 		m.status = "agent failed"
 		return m, tea.ClearScreen
 	}
-	m.agentFlow.IdeaEntryContent = msg.content
-	if _, err := changes.ParseIdeaStructure(msg.content); err != nil {
-		if m.agentFlow.Stage == agent.StagePersistedIdeaEntry {
+	m.agentFlow.DefEntryContent = msg.content
+	if _, err := changes.ParseDefStructure(msg.content); err != nil {
+		if m.agentFlow.Stage == agent.StagePersistedDefEntry {
 			m = m.showPersistedChangeError(err)
 			return m, tea.ClearScreen
 		}
 		m.err = "error parsing title"
-		m.openDropdown(UpdateIdeaState, dropdownIdea, UpdateIdeaState, UpdateIdeaState, "error parsing title:", []dto.Option{
+		m.openDropdown(UpdateDefState, dropdownDef, UpdateDefState, UpdateDefState, "error parsing title:", []dto.Option{
 			{ID: "/edit", Label: "/edit"},
 			{ID: "/cancel", Label: "/cancel"},
 		}, false)
@@ -291,18 +291,18 @@ func (m Model) handleUpdateIdeaEditorFinished(msg editorFinishedMsg) (tea.Model,
 		m.status = "validation failed"
 		return m, tea.ClearScreen
 	}
-	m.state = UpdateIdeaState
-	m.status = "saving idea"
-	return m, tea.Sequence(tea.ClearScreen, changeIdeaUpdateForRewriteCommand(m.client, id, msg.content))
+	m.state = UpdateDefState
+	m.status = "saving def"
+	return m, tea.Sequence(tea.ClearScreen, changeDefUpdateForRewriteCommand(m.client, id, msg.content))
 }
 
-func (m Model) discardAgentIdea(target State, status string, clear bool) (tea.Model, tea.Cmd) {
+func (m Model) discardAgentDef(target State, status string, clear bool) (tea.Model, tea.Cmd) {
 	if clear {
 		var err error
 		if m.agentFlow.Workspace.RootDir != "" {
 			err = m.agentFlow.Workspace.RemoveChange()
 		} else {
-			err = m.agentFlow.Workspace.RemoveIdea()
+			err = m.agentFlow.Workspace.RemoveDef()
 		}
 		if err != nil {
 			m.err = err.Error()
@@ -317,10 +317,13 @@ func (m Model) discardAgentIdea(target State, status string, clear bool) (tea.Mo
 }
 
 func (m Model) startAgentRewrite(sessionID string) (tea.Model, tea.Cmd) {
-	m.state = RewriteIdeaState
+	m.state = RewriteDefState
 	m.agentFlow.Stage = agent.StageAIRunning
+	m.agentFlow.SessionID = strings.TrimSpace(sessionID)
 	m.agentFlow.CommandOutput = ""
 	m.agentElapsed = 0
+	m.agentMessageCount = 0
+	m.agentSessionResumed = m.agentFlow.SessionID != ""
 	m = m.setPromptValue("")
 	m.refreshAgentViewport(true)
 	m.status = string(agent.StageAIRunning)
@@ -369,7 +372,7 @@ func (m Model) handleAgentRewriteFinished(msg agentRewriteFinishedMsg) (tea.Mode
 
 //lint:ignore U1000 preserved for the future Write Spec with Agent flow.
 func (m Model) openAgentSpecInit() (tea.Model, tea.Cmd) {
-	m.state = RewriteIdeaState
+	m.state = RewriteDefState
 	m.agentFlow.Stage = agent.StageAIRunning
 	m.agentFlow.CommandOutput = ""
 	m.agentElapsed = 0
@@ -402,6 +405,10 @@ func (m Model) handleAgentInitFinished(msg agentInitFinishedMsg) (tea.Model, tea
 
 func (m Model) handleAgentCommandOutput(msg agentCommandOutputMsg) (tea.Model, tea.Cmd) {
 	if msg.output != "" {
+		m.agentMessageCount++
+		if m.agentFlow.SessionID == "" {
+			m.agentFlow.SessionID = agent.ExtractSessionID(msg.output)
+		}
 		followOutput := m.agentViewport.AtBottom()
 		output := agent.FormatCommandOutput(msg.output)
 		if strings.TrimSpace(output) != "" {
@@ -480,7 +487,7 @@ func agentSpecCreateCommand(client appClient, projectID int, workspace agent.Wor
 		created, err := client.CreateChange(dto.ChangeCreateInput{
 			ProjectID: projectID,
 			Title:     parsed.Title,
-			Idea:      parsed.Spec,
+			Def:       parsed.Spec,
 		})
 		if err != nil {
 			return agentSpecCreatedMsg{err: err}
@@ -545,11 +552,11 @@ func agentElapsedTick() tea.Cmd {
 
 func agentChangeCreateForRewriteCommand(client appClient, projectID int, workspace agent.Workspace) tea.Cmd {
 	return func() tea.Msg {
-		idea, err := workspace.ReadIdea()
+		def, err := workspace.ReadDef()
 		if err != nil {
 			return changeCreatedForRewriteMsg{err: err}
 		}
-		parsed, err := changes.ParseIdeaStructure(idea)
+		parsed, err := changes.ParseDefStructure(def)
 		if err != nil {
 			return changeCreatedForRewriteMsg{err: err}
 		}
@@ -557,7 +564,7 @@ func agentChangeCreateForRewriteCommand(client appClient, projectID int, workspa
 			ProjectID: projectID,
 			RefUUID:   workspace.RefUUID,
 			Title:     parsed.Title,
-			Idea:      parsed.Idea,
+			Def:       parsed.Def,
 		})
 		if err != nil {
 			return changeCreatedForRewriteMsg{err: err}
@@ -584,23 +591,23 @@ func changeTypesUpdateForRewriteCommand(client appClient, change dto.Change, cha
 	}
 }
 
-func changeIdeaUpdateForRewriteCommand(client appClient, id int, idea string) tea.Cmd {
+func changeDefUpdateForRewriteCommand(client appClient, id int, def string) tea.Cmd {
 	return func() tea.Msg {
-		change, err := client.UpdateChangeIdea(id, idea, false)
+		change, err := client.UpdateChangeDef(id, def, false)
 		if err != nil {
-			return changeIdeaUpdatedForRewriteMsg{err: err}
+			return changeDefUpdatedForRewriteMsg{err: err}
 		}
-		changeTypes, present := changes.ParseArtifactTypes(idea)
+		changeTypes, present := changes.ParseArtifactTypes(def)
 		if err := updateArtifactTypes(client, id, changeTypes, present); err != nil {
-			return changeIdeaUpdatedForRewriteMsg{change: change, err: err}
+			return changeDefUpdatedForRewriteMsg{change: change, err: err}
 		}
 		if present {
 			change, err = client.GetChange(id)
 			if err != nil {
-				return changeIdeaUpdatedForRewriteMsg{change: change, err: err}
+				return changeDefUpdatedForRewriteMsg{change: change, err: err}
 			}
 		}
-		return changeIdeaUpdatedForRewriteMsg{change: change}
+		return changeDefUpdatedForRewriteMsg{change: change}
 	}
 }
 
@@ -616,7 +623,7 @@ func changeArtifactUpdateForWriteCommand(client appClient, id int, field detailE
 
 func changeArtifactAgentEditSaveCommand(client appClient, id int, field detailEditField, workspace agent.Workspace) tea.Cmd {
 	return func() tea.Msg {
-		content, err := workspace.ReadIdea()
+		content, err := workspace.ReadDef()
 		if err != nil {
 			return changeArtifactAgentEditSavedMsg{err: err}
 		}
@@ -631,7 +638,7 @@ func changeArtifactAgentEditSaveCommand(client appClient, id int, field detailEd
 			return changeArtifactAgentEditSavedMsg{change: change, err: err}
 		}
 		if workspace.RootDir == "" {
-			if err := workspace.RemoveIdea(); err != nil {
+			if err := workspace.RemoveDef(); err != nil {
 				return changeArtifactAgentEditSavedMsg{change: change, err: err}
 			}
 		}
@@ -641,8 +648,8 @@ func changeArtifactAgentEditSaveCommand(client appClient, id int, field detailEd
 
 func artifactFieldForOperation(operation agent.WriteOperation) (detailEditField, error) {
 	switch operation {
-	case "", agent.IdeaWriteOperation:
-		return detailEditIdea, nil
+	case "", agent.DefWriteOperation:
+		return detailEditDef, nil
 	case agent.SpecWriteOperation:
 		return detailEditSpec, nil
 	case agent.PRWriteOperation:

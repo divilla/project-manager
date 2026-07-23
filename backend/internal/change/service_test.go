@@ -16,14 +16,14 @@ func TestServiceResolvesChangeCreateIdentity(t *testing.T) {
 	repo := &fakeChangeRepository{}
 	service := NewService(repo, NewRenderer(fakeMarkdownParser{}, fakeMarkdownSanitizer{}))
 
-	generated, err := service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, Title: "Generated", Idea: "Idea"})
+	generated, err := service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, Title: "Generated", Def: "Def"})
 	require.NoError(t, err)
 	require.NotNil(t, repo.createReq.RefUUID)
 	assert.Equal(t, byte(7), repo.createReq.RefUUID.Version())
 	assert.Equal(t, repo.createReq.RefUUID.String(), generated.RefUUID)
 
 	supplied := uuid.Must(uuid.FromString("0198a86f-9b8a-7d89-ae5b-6f25b528b04c"))
-	preserved, err := service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, RefUUID: &supplied, Title: "Supplied", Idea: "Idea"})
+	preserved, err := service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, RefUUID: &supplied, Title: "Supplied", Def: "Def"})
 	require.NoError(t, err)
 	require.NotNil(t, repo.createReq.RefUUID)
 	assert.Equal(t, supplied, *repo.createReq.RefUUID)
@@ -44,7 +44,7 @@ func TestServiceRejectsInvalidChangeInput(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdatePhase(context.Background(), dto.ChangeUpdatePhaseRequest{ID: 2, ChangePhase: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
-	_, err = service.UpdateIdea(context.Background(), dto.ChangeUpdateIdeaRequest{ID: 2, Idea: "idea"})
+	_, err = service.UpdateDef(context.Background(), dto.ChangeUpdateDefRequest{ID: 2, Def: "def"})
 	require.ErrorIs(t, err, ErrInvalidInput)
 	_, err = service.UpdateSpec(context.Background(), dto.ChangeUpdateSpecRequest{ID: 2, Spec: "   "})
 	require.ErrorIs(t, err, ErrInvalidInput)
@@ -91,10 +91,10 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 2, repo.id)
 
-	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, Title: " Change Title ", Idea: " Idea "})
+	_, err = service.CreateChange(context.Background(), dto.ChangeCreateRequest{ProjectID: 1, Title: " Change Title ", Def: " Def "})
 	require.NoError(t, err)
 	assert.Equal(t, "Change Title", repo.createReq.Title)
-	assert.Equal(t, "Idea", repo.createReq.Idea)
+	assert.Equal(t, "Def", repo.createReq.Def)
 
 	_, err = service.UpdateChangeTypes(context.Background(), dto.ChangeUpdateChangeTypesRequest{ID: 2, ChangeTypes: []string{" fix ", "missing", "fix "}})
 	require.NoError(t, err)
@@ -105,9 +105,9 @@ func TestServiceNormalizesChangeRequests(t *testing.T) {
 	_, err = service.UpdateTitle(context.Background(), dto.ChangeUpdateTitleRequest{ID: 2, Title: " Focused Title "})
 	require.NoError(t, err)
 	assert.Equal(t, "Focused Title", repo.updateTitleReq.Title)
-	_, err = service.UpdateIdea(context.Background(), dto.ChangeUpdateIdeaRequest{ID: 2, Idea: " Focused Idea ", AgentEdit: &agentEdit})
+	_, err = service.UpdateDef(context.Background(), dto.ChangeUpdateDefRequest{ID: 2, Def: " Focused Def ", AgentEdit: &agentEdit})
 	require.NoError(t, err)
-	assert.Equal(t, "Focused Idea", repo.updateIdeaReq.Idea)
+	assert.Equal(t, "Focused Def", repo.updateDefReq.Def)
 	spec := " Focused Spec "
 	_, err = service.UpdateSpec(context.Background(), dto.ChangeUpdateSpecRequest{ID: 2, Spec: spec, AgentEdit: &agentEdit})
 	require.NoError(t, err)
@@ -238,7 +238,7 @@ type fakeChangeRepository struct {
 	createReq      dto.ChangeCreateRequest
 	updateTypesReq dto.ChangeUpdateChangeTypesRequest
 	updateTitleReq dto.ChangeUpdateTitleRequest
-	updateIdeaReq  dto.ChangeUpdateIdeaRequest
+	updateDefReq   dto.ChangeUpdateDefRequest
 	updateSpecReq  dto.ChangeUpdateSpecRequest
 	updatePRReq    dto.ChangeUpdatePRRequest
 	updatePRUrlReq dto.ChangeUpdatePRUrlRequest
@@ -286,7 +286,7 @@ func (r *fakeChangeRepository) Create(_ context.Context, req dto.ChangeCreateReq
 		return dto.Change{}, r.err
 	}
 	r.createReq = req
-	change := dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, Idea: req.Idea}
+	change := dto.Change{ID: 2, ProjectID: req.ProjectID, Title: req.Title, Def: req.Def}
 	if req.RefUUID != nil {
 		change.RefUUID = req.RefUUID.String()
 	}
@@ -309,12 +309,12 @@ func (r *fakeChangeRepository) UpdateTitle(_ context.Context, req dto.ChangeUpda
 	return dto.Change{ID: req.ID, Title: req.Title}, nil
 }
 
-func (r *fakeChangeRepository) UpdateIdea(_ context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error) {
+func (r *fakeChangeRepository) UpdateDef(_ context.Context, req dto.ChangeUpdateDefRequest) (dto.Change, error) {
 	if r.err != nil {
 		return dto.Change{}, r.err
 	}
-	r.updateIdeaReq = req
-	return dto.Change{ID: req.ID, Idea: req.Idea}, nil
+	r.updateDefReq = req
+	return dto.Change{ID: req.ID, Def: req.Def}, nil
 }
 
 func (r *fakeChangeRepository) UpdateSpec(_ context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error) {

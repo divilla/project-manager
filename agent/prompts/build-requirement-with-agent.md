@@ -1,8 +1,8 @@
-You are helping turn a rough software idea into a clear, testable requirement specification.
+You are helping turn a rough software definition into a clear, testable requirement specification.
 
-The user will provide an initial idea below. Treat it as raw intent, not as a complete requirement.
+The user will provide an initial definition below. Treat it as raw intent, not as a complete requirement.
 
-Initial idea:
+Initial definition:
 [Describe the feature/change in 2-5 sentences.]
 
 Work in phases:

@@ -16,7 +16,7 @@ func (m Model) saveChangeCreate() (tea.Model, tea.Cmd) {
 	return m.saveChangeCreateValue(m.input.Value())
 }
 
-func (m Model) saveChangeCreateValue(idea string) (tea.Model, tea.Cmd) {
+func (m Model) saveChangeCreateValue(def string) (tea.Model, tea.Cmd) {
 	projectID, err := currentProjectNumericID(m.currentProject.ID)
 	if err != nil {
 		m.err = err.Error()
@@ -24,7 +24,7 @@ func (m Model) saveChangeCreateValue(idea string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.status = "saving"
-	return m, changeCreateCommand(m.client, projectID, idea)
+	return m, changeCreateCommand(m.client, projectID, def)
 }
 
 func (m Model) saveChangeUpdate() (tea.Model, tea.Cmd) {
@@ -74,16 +74,16 @@ func (m Model) saveTestCaseUpdateValue(scenario string) (tea.Model, tea.Cmd) {
 	return m, testCaseUpdateCommand(m.client, testCaseID, scenario)
 }
 
-func changeCreateCommand(client appClient, projectID int, idea string) tea.Cmd {
+func changeCreateCommand(client appClient, projectID int, def string) tea.Cmd {
 	return func() tea.Msg {
-		parsed, err := changes.ParseIdeaStructure(idea)
+		parsed, err := changes.ParseDefStructure(def)
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
 		}
 		created, err := client.CreateChange(dto.ChangeCreateInput{
 			ProjectID: projectID,
 			Title:     parsed.Title,
-			Idea:      parsed.Idea,
+			Def:       parsed.Def,
 		})
 		if err != nil {
 			return changeSavedMsg{source: ChangeCreateState, err: err}
@@ -295,8 +295,8 @@ func changeDetailTextUpdateCommand(client appClient, source State, change dto.Ch
 				return changeSavedMsg{source: source, err: err}
 			}
 			artifactTypes, artifactTypesPresent = changes.ParseArtifactTypes(value)
-		case detailEditIdea:
-			if _, err := client.UpdateChangeIdea(id, value, false); err != nil {
+		case detailEditDef:
+			if _, err := client.UpdateChangeDef(id, value, false); err != nil {
 				return changeSavedMsg{source: source, err: err}
 			}
 			artifactTypes, artifactTypesPresent = changes.ParseArtifactTypes(value)
@@ -333,8 +333,8 @@ func updateArtifactAndReload(client appClient, id int, field detailEditField, va
 	var updated dto.Change
 	var err error
 	switch field {
-	case detailEditIdea:
-		updated, err = client.UpdateChangeIdea(id, value, agentEdit)
+	case detailEditDef:
+		updated, err = client.UpdateChangeDef(id, value, agentEdit)
 	case detailEditSpec:
 		updated, err = client.UpdateChangeSpec(id, value, agentEdit)
 	case detailEditPullRequest:

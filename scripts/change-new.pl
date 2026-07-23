@@ -30,8 +30,14 @@ if ($checkout_status != 0) {
     print $checkout_output;
 }
 
+my $def_path = "agent/defs/$change_name.md";
+run_checked("touch", $def_path);
+
 my $change_path = "specs/$change_name.md";
 run_checked("touch", $change_path);
+
+my $pr_path = "agent/prs/$change_name.md";
+run_checked("touch", $pr_path);
 
 sub run_capture {
     my (@command) = @_;

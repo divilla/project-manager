@@ -56,7 +56,7 @@ type fakeClient struct {
 	changeCreateCalls        int
 	changeReferenceCalls     int
 	changeTitleUpdateCalls   int
-	changeIdeaUpdateCalls    int
+	changeDefUpdateCalls     int
 	changeSpecUpdateCalls    int
 	changePRUpdateCalls      int
 	changePRUrlUpdateCalls   int
@@ -84,7 +84,7 @@ type fakeClient struct {
 	changeCreateInputs       []dto.ChangeCreateInput
 	changeReferenceIDs       []int
 	changeTitleUpdates       []string
-	changeIdeaUpdates        []string
+	changeDefUpdates         []string
 	changeSpecUpdates        []string
 	changePRUpdates          []string
 	changeArtifactAgentEdits []bool
@@ -253,15 +253,15 @@ func (f *fakeClient) UpdateChangeTitle(id int, title string) (dto.Change, error)
 	return dto.Change{ID: fmt.Sprint(id), Title: title}, nil
 }
 
-func (f *fakeClient) UpdateChangeIdea(id int, idea string, agentEdit bool) (dto.Change, error) {
-	f.requestOrder = append(f.requestOrder, "change/update-idea")
-	f.changeIdeaUpdateCalls++
-	f.changeIdeaUpdates = append(f.changeIdeaUpdates, idea)
+func (f *fakeClient) UpdateChangeDef(id int, def string, agentEdit bool) (dto.Change, error) {
+	f.requestOrder = append(f.requestOrder, "change/update-def")
+	f.changeDefUpdateCalls++
+	f.changeDefUpdates = append(f.changeDefUpdates, def)
 	f.changeArtifactAgentEdits = append(f.changeArtifactAgentEdits, agentEdit)
 	if f.changeUpdateErr != nil {
 		return dto.Change{}, f.changeUpdateErr
 	}
-	return dto.Change{ID: fmt.Sprint(id), Idea: idea, AgentEdit: agentEdit}, nil
+	return dto.Change{ID: fmt.Sprint(id), Def: def, AgentEdit: agentEdit}, nil
 }
 
 func (f *fakeClient) UpdateChangeSpec(id int, spec string, agentEdit bool) (dto.Change, error) {
@@ -1672,7 +1672,7 @@ func TestNewChangeRequiresCurrentProject(t *testing.T) {
 	assert.Zero(t, client.changeCreateCalls)
 }
 
-func TestNewChangeCreatesWorkspaceAndOpensIdeaEditor(t *testing.T) {
+func TestNewChangeCreatesWorkspaceAndOpensDefEditor(t *testing.T) {
 	workspaceDir := t.TempDir()
 	refUUID := uuid.Must(uuid.FromString("0198a86f-9b8a-7d89-ae5b-6f25b528b04c"))
 	m := NewModelWithClient(&fakeClient{})
@@ -1684,9 +1684,9 @@ func TestNewChangeCreatesWorkspaceAndOpensIdeaEditor(t *testing.T) {
 	got, cmd := sendCommand(m, "/new-change")
 
 	require.NotNil(t, cmd)
-	assert.Equal(t, CreateIdeaState, got.state)
-	assert.Equal(t, agent.StageIdeaEntry, got.agentFlow.Stage)
-	stageDir := filepath.Join(workspaceDir, refUUID.String(), agent.IdeaStage)
+	assert.Equal(t, CreateDefState, got.state)
+	assert.Equal(t, agent.StageDefEntry, got.agentFlow.Stage)
+	stageDir := filepath.Join(workspaceDir, refUUID.String(), agent.ArtifactStage)
 	assert.Equal(t, stageDir, got.agentFlow.Workspace.Dir)
 	content, err := os.ReadFile(filepath.Join(stageDir, agent.OutputFileName))
 	require.NoError(t, err)
@@ -1705,8 +1705,8 @@ func TestNewChangeUsesRepositoryRelativeTempDirAndIgnoresConfiguredTempDir(t *te
 	got, cmd := sendCommand(m, "/new-change")
 
 	require.NotNil(t, cmd)
-	assert.Equal(t, CreateIdeaState, got.state)
-	expected := filepath.Join(repositoryRoot, agent.TempDir, refUUID.String(), agent.IdeaStage)
+	assert.Equal(t, CreateDefState, got.state)
+	expected := filepath.Join(repositoryRoot, agent.TempDir, refUUID.String(), agent.ArtifactStage)
 	assert.Equal(t, expected, got.agentFlow.Workspace.Dir)
 	require.FileExists(t, filepath.Join(expected, agent.OutputFileName))
 }
@@ -1733,9 +1733,9 @@ func TestNewChangeReplacesRegularWorkspaceFile(t *testing.T) {
 func TestNewChangeDoesNotReuseExistingWorkspace(t *testing.T) {
 	workspaceDir := t.TempDir()
 	oldRef := "0198a86f-9b8a-7d89-ae5b-6f25b528b04b"
-	oldOutput := filepath.Join(workspaceDir, oldRef, agent.IdeaStage, agent.OutputFileName)
+	oldOutput := filepath.Join(workspaceDir, oldRef, agent.ArtifactStage, agent.OutputFileName)
 	require.NoError(t, os.MkdirAll(filepath.Dir(oldOutput), 0o755))
-	require.NoError(t, os.WriteFile(oldOutput, []byte("# Existing idea"), 0o644))
+	require.NoError(t, os.WriteFile(oldOutput, []byte("# Existing def"), 0o644))
 	newRef := uuid.Must(uuid.FromString("0198a86f-9b8a-7d89-ae5b-6f25b528b04c"))
 	m := NewModelWithClient(&fakeClient{})
 	m.state = ChangesListState
@@ -1746,17 +1746,17 @@ func TestNewChangeDoesNotReuseExistingWorkspace(t *testing.T) {
 	got, cmd := sendCommand(m, "/new-change")
 
 	require.NotNil(t, cmd)
-	assert.Equal(t, CreateIdeaState, got.state)
-	require.FileExists(t, filepath.Join(workspaceDir, newRef.String(), agent.IdeaStage, agent.InputFileName))
+	assert.Equal(t, CreateDefState, got.state)
+	require.FileExists(t, filepath.Join(workspaceDir, newRef.String(), agent.ArtifactStage, agent.InputFileName))
 	content, err := os.ReadFile(oldOutput)
 	require.NoError(t, err)
-	assert.Equal(t, "# Existing idea", string(content))
+	assert.Equal(t, "# Existing def", string(content))
 }
 
 func TestNewChangeUUIDWorkspaceCreateAndRewriteContract(t *testing.T) {
 	client := &fakeClient{
 		types:         []dto.Option{{ID: "feature", Label: "feature"}},
-		createdChange: dto.Change{ID: "12", Title: "New Change", Idea: "# New Change\n\nTypes: feature\n\nIdea"},
+		createdChange: dto.Change{ID: "12", Title: "New Change", Def: "# New Change\n\nTypes: feature\n\nDef"},
 	}
 	root := t.TempDir()
 	refUUID := uuid.Must(uuid.FromString("0198a86f-9b8a-7d89-ae5b-6f25b528b04c"))
@@ -1769,9 +1769,9 @@ func TestNewChangeUUIDWorkspaceCreateAndRewriteContract(t *testing.T) {
 	started, editorCmd := sendCommand(m, "/new-change")
 	require.NotNil(t, editorCmd)
 	workspace := started.agentFlow.Workspace
-	idea := "# New Change\n\nTypes: feature\n\nIdea"
-	require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(idea), 0o644))
-	confirmed := applyMsg(started, editorFinishedMsg{source: CreateIdeaState, content: idea})
+	def := "# New Change\n\nTypes: feature\n\nDef"
+	require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(def), 0o644))
+	confirmed := applyMsg(started, editorFinishedMsg{source: CreateDefState, content: def})
 	assert.Equal(t, "Create Change?", confirmed.dropdown.label)
 	assert.Zero(t, client.changeCreateCalls)
 
@@ -1780,7 +1780,7 @@ func TestNewChangeUUIDWorkspaceCreateAndRewriteContract(t *testing.T) {
 	createdModel, typesCmd := updated.(Model).Update(createCmd())
 	created := createdModel.(Model)
 	require.Len(t, client.changeCreateInputs, 1)
-	assert.Equal(t, dto.ChangeCreateInput{ProjectID: 7, RefUUID: refUUID.String(), Title: "New Change", Idea: idea}, client.changeCreateInputs[0])
+	assert.Equal(t, dto.ChangeCreateInput{ProjectID: 7, RefUUID: refUUID.String(), Title: "New Change", Def: def}, client.changeCreateInputs[0])
 	assert.Equal(t, ChangeDetailsState, created.state)
 	assert.Equal(t, "12", created.changeList.Detail.ID)
 	assert.Empty(t, client.changeTypesUpdates)
@@ -1789,20 +1789,20 @@ func TestNewChangeUUIDWorkspaceCreateAndRewriteContract(t *testing.T) {
 	created = applyMsg(created, typesCmd())
 	assert.Equal(t, [][]string{{"feature"}}, client.changeTypesUpdates)
 	assert.Empty(t, client.changeGetIDs)
-	assert.Equal(t, RewriteIdeaState, created.state)
+	assert.Equal(t, RewriteDefState, created.state)
 	input, err := os.ReadFile(workspace.InputPath())
 	require.NoError(t, err)
-	assert.Equal(t, idea, string(input))
+	assert.Equal(t, def, string(input))
 	require.DirExists(t, workspace.RootDir)
 }
 
 func TestNewChangePostCreateFailureRecoversAsExistingChange(t *testing.T) {
-	const idea = "# New Change\n\nTypes: feature\n\nIdea"
+	const def = "# New Change\n\nTypes: feature\n\nDef"
 	newFailedModel := func(t *testing.T) (Model, *fakeClient, agent.Workspace) {
 		t.Helper()
 		client := &fakeClient{
-			createdChange:   dto.Change{ID: "12", RefUUID: "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", Title: "New Change", Idea: idea},
-			gotChange:       dto.Change{ID: "12", RefUUID: "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", Title: "New Change", Idea: idea, ChangeTypes: []string{"feature"}},
+			createdChange:   dto.Change{ID: "12", RefUUID: "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", Title: "New Change", Def: def},
+			gotChange:       dto.Change{ID: "12", RefUUID: "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", Title: "New Change", Def: def, ChangeTypes: []string{"feature"}},
 			changeUpdateErr: errors.New("type update failed"),
 		}
 		m := NewModelWithClient(client)
@@ -1814,8 +1814,8 @@ func TestNewChangePostCreateFailureRecoversAsExistingChange(t *testing.T) {
 
 		started, _ := sendCommand(m, "/new-change")
 		workspace := started.agentFlow.Workspace
-		require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(idea), 0o644))
-		confirmed := applyMsg(started, editorFinishedMsg{source: CreateIdeaState, content: idea})
+		require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(def), 0o644))
+		confirmed := applyMsg(started, editorFinishedMsg{source: CreateDefState, content: def})
 		creating, createCmd := confirmed.confirmDropdown()
 		require.NotNil(t, createCmd)
 		createdModel, typesCmd := creating.(Model).Update(createCmd())
@@ -1825,7 +1825,7 @@ func TestNewChangePostCreateFailureRecoversAsExistingChange(t *testing.T) {
 
 		assert.Equal(t, ChangeDetailsState, failed.state)
 		assert.Equal(t, "12", failed.changeList.Detail.ID)
-		assert.Equal(t, dropdownPersistedIdea, failed.dropdown.kind)
+		assert.Equal(t, dropdownPersistedDef, failed.dropdown.kind)
 		assert.Equal(t, 1, client.changeCreateCalls)
 		return failed, client, workspace
 	}
@@ -1843,21 +1843,21 @@ func TestNewChangePostCreateFailureRecoversAsExistingChange(t *testing.T) {
 		require.DirExists(t, workspace.RootDir)
 	})
 
-	t.Run("fix with unchanged idea stays on details", func(t *testing.T) {
+	t.Run("fix with unchanged definition stays on details", func(t *testing.T) {
 		m, client, workspace := newFailedModel(t)
 		fixing, editorCmd := m.confirmDropdown()
 		fixed := fixing.(Model)
 
 		require.NotNil(t, editorCmd)
-		assert.Equal(t, UpdateIdeaState, fixed.state)
-		got := applyMsg(fixed, editorFinishedMsg{source: UpdateIdeaState, content: idea})
+		assert.Equal(t, UpdateDefState, fixed.state)
+		got := applyMsg(fixed, editorFinishedMsg{source: UpdateDefState, content: def})
 		assert.Equal(t, ChangeDetailsState, got.state)
 		assert.Equal(t, 1, client.changeCreateCalls)
-		assert.Zero(t, client.changeIdeaUpdateCalls)
+		assert.Zero(t, client.changeDefUpdateCalls)
 		require.DirExists(t, workspace.RootDir)
 	})
 
-	t.Run("fix with invalid idea keeps persisted recovery", func(t *testing.T) {
+	t.Run("fix with invalid def keeps persisted recovery", func(t *testing.T) {
 		m, client, workspace := newFailedModel(t)
 		fixing, editorCmd := m.confirmDropdown()
 		fixed := fixing.(Model)
@@ -1865,14 +1865,14 @@ func TestNewChangePostCreateFailureRecoversAsExistingChange(t *testing.T) {
 
 		invalid := "missing title"
 		require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(invalid), 0o644))
-		failed := applyMsg(fixed, editorFinishedMsg{source: UpdateIdeaState, content: invalid})
+		failed := applyMsg(fixed, editorFinishedMsg{source: UpdateDefState, content: invalid})
 
 		assert.Equal(t, ChangeDetailsState, failed.state)
 		assert.Equal(t, "12", failed.changeList.Detail.ID)
-		assert.Equal(t, dropdownPersistedIdea, failed.dropdown.kind)
+		assert.Equal(t, dropdownPersistedDef, failed.dropdown.kind)
 		assert.Equal(t, []dto.Option{{ID: "/fix", Label: "/fix"}, {ID: "/cancel", Label: "/cancel"}}, failed.dropdown.options)
 		assert.Equal(t, 1, client.changeCreateCalls)
-		assert.Zero(t, client.changeIdeaUpdateCalls)
+		assert.Zero(t, client.changeDefUpdateCalls)
 		require.DirExists(t, workspace.RootDir)
 
 		failed.dropdown.highlighted = 1
@@ -1884,89 +1884,89 @@ func TestNewChangePostCreateFailureRecoversAsExistingChange(t *testing.T) {
 		require.DirExists(t, workspace.RootDir)
 	})
 
-	t.Run("fix with changed idea updates existing change", func(t *testing.T) {
+	t.Run("fix with changed definition updates existing change", func(t *testing.T) {
 		m, client, workspace := newFailedModel(t)
 		client.changeUpdateErr = nil
 		fixing, editorCmd := m.confirmDropdown()
 		fixed := fixing.(Model)
 		require.NotNil(t, editorCmd)
 
-		changed := "# New Change\n\nTypes: feature\n\nCorrected idea"
+		changed := "# New Change\n\nTypes: feature\n\nCorrected def"
 		require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(changed), 0o644))
-		updated, saveCmd := fixed.Update(editorFinishedMsg{source: UpdateIdeaState, content: changed})
+		updated, saveCmd := fixed.Update(editorFinishedMsg{source: UpdateDefState, content: changed})
 		require.NotNil(t, saveCmd)
-		saved := applyMsg(updated.(Model), changeIdeaUpdateForRewriteCommand(client, 12, changed)())
+		saved := applyMsg(updated.(Model), changeDefUpdateForRewriteCommand(client, 12, changed)())
 
 		assert.Equal(t, 1, client.changeCreateCalls)
-		assert.Equal(t, []string{changed}, client.changeIdeaUpdates)
-		assert.Equal(t, RewriteIdeaState, saved.state)
+		assert.Equal(t, []string{changed}, client.changeDefUpdates)
+		assert.Equal(t, RewriteDefState, saved.state)
 	})
 }
 
 func TestNewChangeValidatesArtifactOnlyAfterYes(t *testing.T) {
 	tests := []struct {
 		name    string
-		idea    string
+		def     string
 		wantErr string
 	}{
 		{
 			name:    "missing title",
-			idea:    "missing title",
-			wantErr: "idea title is required",
+			def:     "missing title",
+			wantErr: "definition title is required",
 		},
 		{
 			name:    "missing body",
-			idea:    "# New Change\n\n",
-			wantErr: "idea body is required",
+			def:     "# New Change\n\n",
+			wantErr: "definition body is required",
 		},
 		{
 			name:    "types without body",
-			idea:    "# New Change\n\nTypes:",
-			wantErr: "idea body is required",
+			def:     "# New Change\n\nTypes:",
+			wantErr: "definition body is required",
 		},
 		{
 			name: "leading blank before title",
-			idea: "\n# New Change\n\nIdea",
+			def:  "\n# New Change\n\nDef",
 		},
 		{
 			name: "supported type",
-			idea: "# New Change\n\nTypes: feature\n\nIdea",
+			def:  "# New Change\n\nTypes: feature\n\nDef",
 		},
 		{
 			name: "blank types",
-			idea: "# New Change\n\nTypes:\n\nIdea",
+			def:  "# New Change\n\nTypes:\n\nDef",
 		},
 		{
 			name: "epic is ordinary body text",
-			idea: "# New Change\n\nTypes: feature\n\nEpic: Epic Five\n\nIdea",
+			def:  "# New Change\n\nTypes: feature\n\nEpic: Epic Five\n\nDef",
 		},
 		{
 			name: "missing types",
-			idea: "# New Change\n\nIdea",
+			def:  "# New Change\n\nDef",
 		},
 		{
 			name: "types moved below body",
-			idea: "# New Change\n\nIdea\n\nTypes: feature",
+			def:  "# New Change\n\nDef\n\nTypes: feature",
 		},
 		{
 			name: "no blank after title",
-			idea: "# New Change\nTypes: feature\n\nIdea",
+			def:  "# New Change\nTypes: feature\n\nDef",
 		},
 		{
 			name: "extra blank after title",
-			idea: "# New Change\n\n\nTypes: feature\n\nIdea",
+			def:  "# New Change\n\n\nTypes: feature\n\nDef",
 		},
 		{
 			name: "no blank after types",
-			idea: "# New Change\n\nTypes: feature\nIdea",
+			def:  "# New Change\n\nTypes: feature\nDef",
 		},
 		{
 			name: "extra blank after types",
-			idea: "# New Change\n\nTypes: feature\n\n\nIdea",
+			def:  "# New Change\n\nTypes: feature\n\n\nDef",
 		},
 		{
 			name: "unsupported type",
-			idea: "# New Change\n\nTypes: unsupported\n\nIdea",
+			def:  "# New Change\n\nTypes: unsupported\n\nDef",
 		},
 	}
 
@@ -1986,8 +1986,8 @@ func TestNewChangeValidatesArtifactOnlyAfterYes(t *testing.T) {
 
 			started, editorCmd := sendCommand(m, "/new-change")
 			require.NotNil(t, editorCmd)
-			require.NoError(t, os.WriteFile(started.agentFlow.Workspace.OutputPath(), []byte(tt.idea), 0o644))
-			got := applyMsg(started, editorFinishedMsg{source: CreateIdeaState, content: tt.idea})
+			require.NoError(t, os.WriteFile(started.agentFlow.Workspace.OutputPath(), []byte(tt.def), 0o644))
+			got := applyMsg(started, editorFinishedMsg{source: CreateDefState, content: tt.def})
 
 			assert.Zero(t, client.epicCalls)
 			assert.Zero(t, client.changeCreateCalls)
@@ -2020,9 +2020,9 @@ func TestNewChangeYesValidatesFinalRereadBeforeCreate(t *testing.T) {
 	m.newChangeUUID = func() (uuid.UUID, error) { return refUUID, nil }
 
 	started, _ := sendCommand(m, "/new-change")
-	idea := "# New Change\n\nValid body"
-	require.NoError(t, os.WriteFile(started.agentFlow.Workspace.OutputPath(), []byte(idea), 0o644))
-	confirmed := applyMsg(started, editorFinishedMsg{source: CreateIdeaState, content: idea})
+	def := "# New Change\n\nValid body"
+	require.NoError(t, os.WriteFile(started.agentFlow.Workspace.OutputPath(), []byte(def), 0o644))
+	confirmed := applyMsg(started, editorFinishedMsg{source: CreateDefState, content: def})
 	assert.Equal(t, "Create Change?", confirmed.dropdown.label)
 
 	require.NoError(t, os.WriteFile(started.agentFlow.Workspace.OutputPath(), []byte("# New Change\n\nTypes:"), 0o644))
@@ -2030,7 +2030,7 @@ func TestNewChangeYesValidatesFinalRereadBeforeCreate(t *testing.T) {
 	require.NotNil(t, createCmd)
 	failed := applyMsg(creating.(Model), createCmd())
 
-	assert.Equal(t, "idea body is required", failed.err)
+	assert.Equal(t, "definition body is required", failed.err)
 	assert.Equal(t, []dto.Option{{ID: "/fix", Label: "/fix"}, {ID: "/cancel", Label: "/cancel"}}, failed.dropdown.options)
 	assert.Zero(t, client.changeCreateCalls)
 }
@@ -2051,7 +2051,7 @@ func TestNewChangeCancellationAndFixContract(t *testing.T) {
 	t.Run("unchanged output", func(t *testing.T) {
 		m, _ := sendCommand(newModel(t, 1), "/new-change")
 		root := m.agentFlow.Workspace.RootDir
-		got := applyMsg(m, editorFinishedMsg{source: CreateIdeaState})
+		got := applyMsg(m, editorFinishedMsg{source: CreateDefState})
 		assert.Equal(t, ChangesListState, got.state)
 		assert.NoDirExists(t, root)
 	})
@@ -2059,9 +2059,9 @@ func TestNewChangeCancellationAndFixContract(t *testing.T) {
 	t.Run("no", func(t *testing.T) {
 		m, _ := sendCommand(newModel(t, 2), "/new-change")
 		workspace := m.agentFlow.Workspace
-		idea := "# New Change\n\nTypes: feature\n\nIdea"
-		require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(idea), 0o644))
-		m = applyMsg(m, editorFinishedMsg{source: CreateIdeaState, content: idea})
+		def := "# New Change\n\nTypes: feature\n\nDef"
+		require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(def), 0o644))
+		m = applyMsg(m, editorFinishedMsg{source: CreateDefState, content: def})
 		m.dropdown.highlighted = 1
 		updated, cmd := m.confirmDropdown()
 		require.Nil(t, cmd)
@@ -2073,7 +2073,7 @@ func TestNewChangeCancellationAndFixContract(t *testing.T) {
 		m, _ := sendCommand(newModel(t, 3), "/new-change")
 		workspace := m.agentFlow.Workspace
 		require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte("missing title"), 0o644))
-		m = applyMsg(m, editorFinishedMsg{source: CreateIdeaState, content: "missing title"})
+		m = applyMsg(m, editorFinishedMsg{source: CreateDefState, content: "missing title"})
 		creating, createCmd := m.confirmDropdown()
 		require.NotNil(t, createCmd)
 		m = applyMsg(creating.(Model), createCmd())
@@ -2084,7 +2084,7 @@ func TestNewChangeCancellationAndFixContract(t *testing.T) {
 		baseline, err := os.ReadFile(workspace.InputPath())
 		require.NoError(t, err)
 		assert.Equal(t, "missing title", string(baseline))
-		cancelled := applyMsg(fixed, editorFinishedMsg{source: CreateIdeaState, content: "missing title"})
+		cancelled := applyMsg(fixed, editorFinishedMsg{source: CreateDefState, content: "missing title"})
 		assert.Equal(t, ChangesListState, cancelled.state)
 		assert.NoDirExists(t, workspace.RootDir)
 	})
@@ -2099,9 +2099,9 @@ func TestNewChangeFailuresPreserveOrCleanWorkspaceAsSpecified(t *testing.T) {
 	m.newChangeUUID = func() (uuid.UUID, error) { return refUUID, nil }
 	m, _ = sendCommand(m, "/new-change")
 	workspace := m.agentFlow.Workspace
-	idea := "# New Change\n\nTypes: feature\n\nIdea"
-	require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(idea), 0o644))
-	m = applyMsg(m, editorFinishedMsg{source: CreateIdeaState, content: idea})
+	def := "# New Change\n\nTypes: feature\n\nDef"
+	require.NoError(t, os.WriteFile(workspace.OutputPath(), []byte(def), 0o644))
+	m = applyMsg(m, editorFinishedMsg{source: CreateDefState, content: def})
 	updated, createCmd := m.confirmDropdown()
 	m = applyMsg(updated.(Model), createCmd())
 	assert.Equal(t, []dto.Option{{ID: "/fix", Label: "/fix"}, {ID: "/cancel", Label: "/cancel"}}, m.dropdown.options)
@@ -2119,7 +2119,7 @@ func TestNewChangeFailuresPreserveOrCleanWorkspaceAsSpecified(t *testing.T) {
 	assert.NoDirExists(t, filepath.Join(m.agentWorkspace, uuid.Nil.String()))
 }
 
-func TestIdeaPreviewMarkdownColorsFinalView(t *testing.T) {
+func TestDefPreviewMarkdownColorsFinalView(t *testing.T) {
 	previousProfile := lipgloss.ColorProfile()
 	t.Cleanup(func() {
 		lipgloss.SetColorProfile(previousProfile)
@@ -2127,12 +2127,12 @@ func TestIdeaPreviewMarkdownColorsFinalView(t *testing.T) {
 	lipgloss.SetColorProfile(termenv.ANSI256)
 	workspaceDir := t.TempDir()
 	workspace := agent.Workspace{Dir: workspaceDir}
-	require.NoError(t, workspace.WriteIdea("# Colored idea\n\nPlain text with `code` and [link](https://example.test).\n\n- item"))
+	require.NoError(t, workspace.WriteDef("# Colored definition\n\nPlain text with `code` and [link](https://example.test).\n\n- item"))
 
 	m := NewModelWithClient(&fakeClient{})
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.agentFlow = agent.NewModelWithWorkspace(workspaceDir)
-	m.openDropdown(CreateIdeaState, dropdownAgent, CreateIdeaState, CreateIdeaState, "Resume idea?", []dto.Option{
+	m.openDropdown(CreateDefState, dropdownAgent, CreateDefState, CreateDefState, "Resume definition?", []dto.Option{
 		{ID: "/resume", Label: "/resume"},
 		{ID: "/clear", Label: "/clear"},
 		{ID: "/cancel", Label: "/cancel"},
@@ -2140,54 +2140,54 @@ func TestIdeaPreviewMarkdownColorsFinalView(t *testing.T) {
 
 	view := m.View()
 
-	assertIdeaBeforePrompt(t, view, "# Colored idea", "Resume idea?")
-	assert.Contains(t, view, markdownPreviewStyles.heading.Render("# Colored idea"))
+	assertDefBeforePrompt(t, view, "# Colored definition", "Resume definition?")
+	assert.Contains(t, view, markdownPreviewStyles.heading.Render("# Colored definition"))
 	assert.Contains(t, view, markdownPreviewStyles.text.Render("Plain text with "))
 	assert.Contains(t, view, markdownPreviewStyles.code.Render("`code`"))
 	assert.Contains(t, view, markdownPreviewStyles.link.Render("[link](https://example.test)"))
 	assert.Contains(t, view, markdownPreviewStyles.listMarker.Render("- "))
 }
 
-func TestAgentIdeaEmptyValidatesAfterYesWithoutCodexOrCreate(t *testing.T) {
+func TestAgentDefEmptyValidatesAfterYesWithoutCodexOrCreate(t *testing.T) {
 	client := &fakeClient{}
 	runner := &fakeAgentRunner{}
 	m := NewModelWithClient(client)
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.agentWorkspace = t.TempDir()
 	m.agentRunner = runner
 	m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
-	m.agentFlow.Stage = agent.StageIdeaEntry
+	m.agentFlow.Stage = agent.StageDefEntry
 
-	got := applyMsg(m, editorFinishedMsg{source: CreateIdeaState, content: " \n"})
+	got := applyMsg(m, editorFinishedMsg{source: CreateDefState, content: " \n"})
 
-	assert.Equal(t, CreateIdeaState, got.state)
-	assert.Equal(t, dropdownIdea, got.dropdown.kind)
+	assert.Equal(t, CreateDefState, got.state)
+	assert.Equal(t, dropdownDef, got.dropdown.kind)
 	assert.Equal(t, "Create Change?", got.dropdown.label)
 	creating, createCmd := got.confirmDropdown()
 	require.NotNil(t, createCmd)
 	failed := applyMsg(creating.(Model), createCmd())
-	assert.Equal(t, "idea title is required", failed.err)
+	assert.Equal(t, "definition title is required", failed.err)
 	assert.Equal(t, []dto.Option{{ID: "/fix", Label: "/fix"}, {ID: "/cancel", Label: "/cancel"}}, failed.dropdown.options)
 	assert.Empty(t, runner.rewriteSessions)
 	assert.Zero(t, client.changeCreateCalls)
 }
 
-func TestAgentResumeUnchangedValidIdeaPromptsCreateConfirmation(t *testing.T) {
+func TestAgentResumeUnchangedValidDefPromptsCreateConfirmation(t *testing.T) {
 	client := &fakeClient{}
 	runner := &fakeAgentRunner{}
 	m := NewModelWithClient(client)
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.agentWorkspace = t.TempDir()
 	m.agentRunner = runner
 	m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
-	m.agentFlow.Stage = agent.StageIdeaEntry
-	m.agentFlow.IdeaEntryContent = "# Existing Idea\n\nexisting idea"
+	m.agentFlow.Stage = agent.StageDefEntry
+	m.agentFlow.DefEntryContent = "# Existing Definition\n\nexisting definition"
 
-	got := applyMsg(m, editorFinishedMsg{source: CreateIdeaState, content: "# Existing Idea\n\nexisting idea"})
+	got := applyMsg(m, editorFinishedMsg{source: CreateDefState, content: "# Existing Definition\n\nexisting definition"})
 
-	assert.Equal(t, CreateIdeaState, got.state)
+	assert.Equal(t, CreateDefState, got.state)
 	assert.Equal(t, agent.StageCreateConfirmation, got.agentFlow.Stage)
 	assert.Equal(t, "Create Change?", got.dropdown.label)
 	assert.Empty(t, runner.rewriteSessions)
@@ -2197,21 +2197,21 @@ func TestAgentResumeUnchangedValidIdeaPromptsCreateConfirmation(t *testing.T) {
 func TestAgentResumeChangedPromptsCreateConfirmation(t *testing.T) {
 	runner := &fakeAgentRunner{}
 	m := NewModelWithClient(&fakeClient{})
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.agentWorkspace = t.TempDir()
 	m.agentRunner = runner
 	m.agentFlow = agent.NewModelWithWorkspace(m.agentWorkspace)
-	m.agentFlow.Stage = agent.StageIdeaEntry
-	m.agentFlow.IdeaEntryContent = "existing idea"
+	m.agentFlow.Stage = agent.StageDefEntry
+	m.agentFlow.DefEntryContent = "existing definition"
 
-	got, cmd := m.Update(editorFinishedMsg{source: CreateIdeaState, content: "# Changed Idea\n\nchanged idea"})
+	got, cmd := m.Update(editorFinishedMsg{source: CreateDefState, content: "# Changed Definition\n\nchanged definition"})
 	model := got.(Model)
 
 	require.NotNil(t, cmd)
-	assert.Equal(t, CreateIdeaState, model.state)
+	assert.Equal(t, CreateDefState, model.state)
 	assert.Equal(t, agent.StageCreateConfirmation, model.agentFlow.Stage)
-	assert.Equal(t, dropdownIdea, model.dropdown.kind)
+	assert.Equal(t, dropdownDef, model.dropdown.kind)
 	assert.Equal(t, "Create Change?", model.dropdown.label)
 	assert.Empty(t, runner.rewriteSessions)
 }
@@ -2223,16 +2223,17 @@ func TestAgentRunningViewRendersInsteadOfChangeList(t *testing.T) {
 	m.changeList = m.changeList.WithRows([]dto.Change{{ID: "12", Title: "Hidden While Running"}})
 	m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
 	m.agentFlow.Stage = agent.StageAIRunning
-	m.agentFlow.CommandOutput = agent.FormatCommandOutput("{\"session_id\":\"session-1\"}") + "\nfinal output:\nNope"
+	m.agentFlow.SessionID = "session-1"
+	m.agentFlow.CommandOutput = agent.FormatCommandOutput("{\"type\":\"thread.started\",\"thread_id\":\"session-1\"}") + "\nfinal output:\nNope"
 	m.agentElapsed = 3
+	m.agentMessageCount = 2
 
 	view := stripANSI(m.View())
 
 	assert.Contains(t, view, "AgentRunningScreen")
-	assert.Contains(t, view, "Agent running: rewriting idea")
-	assert.Contains(t, view, "3 seconds")
+	assert.Contains(t, view, "def-write - session-1 - started - 00:03 - ..·")
 	assert.Contains(t, view, "Codex output:")
-	assert.Contains(t, view, "\"session_id\": \"session-1\"")
+	assert.Contains(t, view, "thread started: session-1")
 	assert.Contains(t, view, "final output:")
 	assert.Contains(t, view, "Nope")
 	assert.NotContains(t, view, "Hidden While Running")
@@ -2246,15 +2247,17 @@ func TestAgentRunningViewUsesBlackColoredViewportWithProgressAndPromptBelow(t *t
 	lipgloss.SetColorProfile(termenv.ANSI256)
 
 	m := NewModelWithClient(&fakeClient{})
-	m.state = RewriteIdeaState
+	m.state = RewriteDefState
 	m.width = 100
 	m.height = 19
 	m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
 	m.agentFlow.Stage = agent.StageAIRunning
+	m.agentFlow.SessionID = "resumed-session"
+	m.agentSessionResumed = true
 	m.agentFlow.CommandOutput = strings.Join([]string{
 		"thread started: session-1",
 		"turn started",
-		"assistant: reviewing the idea",
+		"assistant: reviewing the def",
 		"running command: git status --short",
 		"command completed (completed): exit 0",
 		"turn completed",
@@ -2262,6 +2265,7 @@ func TestAgentRunningViewUsesBlackColoredViewportWithProgressAndPromptBelow(t *t
 		"Done.",
 	}, "\n")
 	m.agentElapsed = 7
+	m.agentMessageCount = 8
 	m.refreshAgentViewport(true)
 
 	view := m.View()
@@ -2270,10 +2274,10 @@ func TestAgentRunningViewUsesBlackColoredViewportWithProgressAndPromptBelow(t *t
 	assert.Contains(t, view, "\x1b[40m")
 	assert.NotContains(t, view, "\x1b[48;5;240m")
 	assert.Contains(t, view, styles.Default.AccentPurple.Bold(true).Render("Codex output:"))
-	assert.Contains(t, view, styles.Default.AccentCyan.Bold(true).Render("Agent running: rewriting idea..."))
+	assert.Contains(t, view, styles.Default.AccentCyan.Bold(true).Render("def-write - resumed-session - resumed - 00:07 - ........·"))
 	assert.Contains(t, plain, defaultInputPlaceholder)
-	assert.Less(t, strings.Index(plain, "Done."), strings.Index(plain, "Agent running: rewriting idea"))
-	assert.Less(t, strings.Index(plain, "Agent running: rewriting idea"), strings.Index(plain, defaultInputPlaceholder))
+	assert.Less(t, strings.Index(plain, "Done."), strings.Index(plain, "def-write - resumed-session - resumed"))
+	assert.Less(t, strings.Index(plain, "def-write - resumed-session - resumed"), strings.Index(plain, defaultInputPlaceholder))
 
 	slashed, cmd := sendRune(m, '/')
 	require.Nil(t, cmd)
@@ -2283,9 +2287,38 @@ func TestAgentRunningViewUsesBlackColoredViewportWithProgressAndPromptBelow(t *t
 	assert.Contains(t, stripANSI(slashed.View()), "Commands: no options")
 }
 
+func TestAgentRunningViewCyclesMessageProgressAtAvailableWidth(t *testing.T) {
+	const (
+		width     = 100
+		sessionID = "33333333-3333-3333-3333-333333333333"
+	)
+	m := NewModelWithClient(&fakeClient{})
+	m.state = RewriteDefState
+	m.width = width
+	m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
+	m.agentFlow.Stage = agent.StageAIRunning
+	m.agentFlow.SessionID = sessionID
+
+	prefix := "def-write - " + sessionID + " - started - 00:00 - "
+	availableDotWidth := width - lipgloss.Width(prefix) - lipgloss.Width(m.agentSpinner.View())
+	require.Positive(t, availableDotWidth)
+
+	m.agentMessageCount = availableDotWidth
+	lines := strings.Split(stripANSI(m.agentRunningView(width)), "\n")
+	progress := lines[len(lines)-1]
+	assert.Equal(t, prefix+"·", strings.TrimRight(progress, " "))
+	assert.Equal(t, width, lipgloss.Width(progress))
+
+	m.agentMessageCount++
+	lines = strings.Split(stripANSI(m.agentRunningView(width)), "\n")
+	progress = lines[len(lines)-1]
+	assert.Equal(t, prefix+".·", strings.TrimRight(progress, " "))
+	assert.Equal(t, width, lipgloss.Width(progress))
+}
+
 func TestAgentRunningViewportScrollsAndDoesNotStealPositionOnOutput(t *testing.T) {
 	m := NewModelWithClient(&fakeClient{})
-	m.state = RewriteIdeaState
+	m.state = RewriteDefState
 	m.width = 80
 	m.height = 13
 	m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
@@ -2310,72 +2343,77 @@ func TestAgentRunningViewportScrollsAndDoesNotStealPositionOnOutput(t *testing.T
 
 	atTop := applyMsg(m, agentCommandOutputMsg{output: "output line 21"})
 	assert.Zero(t, atTop.agentViewport.YOffset)
+	assert.Equal(t, 1, atTop.agentMessageCount)
 	assert.Contains(t, stripANSI(atTop.View()), "output line 01")
 
 	atTop.agentViewport.GotoBottom()
-	atBottom := applyMsg(atTop, agentCommandOutputMsg{output: "output line 22"})
+	atBottom := applyMsg(atTop, agentCommandOutputMsg{
+		output: `{"type":"thread.started","thread_id":"live-session"}`,
+	})
 	assert.True(t, atBottom.agentViewport.AtBottom())
-	assert.Contains(t, stripANSI(atBottom.View()), "output line 22")
+	assert.Equal(t, 2, atBottom.agentMessageCount)
+	assert.Equal(t, "live-session", atBottom.agentFlow.SessionID)
+	assert.Contains(t, stripANSI(atBottom.View()), "thread started: live-session")
 }
 
-func TestAgentCreateIdeaValidatesAfterYesBeforeCreate(t *testing.T) {
+func TestAgentCreateDefValidatesAfterYesBeforeCreate(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.ResetIdea())
+	require.NoError(t, workspace.ResetDef())
 	client := &fakeClient{}
 	m := NewModelWithClient(client)
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.agentWorkspace = workspace.Dir
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
-	m.agentFlow.Stage = agent.StageIdeaEntry
+	m.agentFlow.Stage = agent.StageDefEntry
 
-	got := applyMsg(m, editorFinishedMsg{source: CreateIdeaState, content: "missing title"})
+	got := applyMsg(m, editorFinishedMsg{source: CreateDefState, content: "missing title"})
 
-	assert.Equal(t, CreateIdeaState, got.state)
-	assert.Equal(t, dropdownIdea, got.dropdown.kind)
+	assert.Equal(t, CreateDefState, got.state)
+	assert.Equal(t, dropdownDef, got.dropdown.kind)
 	assert.Equal(t, "Create Change?", got.dropdown.label)
 	assert.Empty(t, got.err)
 	creating, createCmd := got.confirmDropdown()
 	require.NotNil(t, createCmd)
 	failed := applyMsg(creating.(Model), createCmd())
-	assert.Equal(t, "idea title is required", failed.err)
+	assert.Equal(t, "definition title is required", failed.err)
 	assert.Equal(t, []dto.Option{{ID: "/fix", Label: "/fix"}, {ID: "/cancel", Label: "/cancel"}}, failed.dropdown.options)
-	assertIdeaBeforePrompt(t, failed.View(), "missing title", "idea title is required")
+	assertDefBeforePrompt(t, failed.View(), "missing title", "definition title is required")
 	assert.Zero(t, client.changeCreateCalls)
 }
 
-func TestAgentCreateIdeaValidPromptsCreateConfirmation(t *testing.T) {
+func TestAgentCreateDefValidPromptsCreateConfirmation(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.ResetIdea())
+	require.NoError(t, workspace.ResetDef())
 	client := &fakeClient{}
 	m := NewModelWithClient(client)
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.agentWorkspace = workspace.Dir
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
-	m.agentFlow.Stage = agent.StageIdeaEntry
+	m.agentFlow.Stage = agent.StageDefEntry
 
-	got := applyMsg(m, editorFinishedMsg{source: CreateIdeaState, content: "# New Change\n\nInitial idea"})
+	got := applyMsg(m, editorFinishedMsg{source: CreateDefState, content: "# New Change\n\nInitial definition"})
 
-	assert.Equal(t, CreateIdeaState, got.state)
+	assert.Equal(t, CreateDefState, got.state)
 	assert.Equal(t, agent.StageCreateConfirmation, got.agentFlow.Stage)
-	assert.Equal(t, dropdownIdea, got.dropdown.kind)
+	assert.Equal(t, dropdownDef, got.dropdown.kind)
 	assert.Equal(t, "Create Change?", got.dropdown.label)
 	assert.Equal(t, []dto.Option{{ID: "/yes", Label: "/yes"}, {ID: "/no", Label: "/no"}}, got.dropdown.options)
-	assertIdeaBeforePrompt(t, got.View(), "New Change", "Create Change?")
+	assertDefBeforePrompt(t, got.View(), "New Change", "Create Change?")
 	assert.Zero(t, client.changeCreateCalls)
 }
 
-func TestAgentCreateIdeaNoDiscardsIdeaAndReturnsToList(t *testing.T) {
+func TestAgentCreateDefNoDiscardsDefAndReturnsToList(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.WriteIdea("# New Change\n\nInitial idea"))
+	require.NoError(t, workspace.WriteDef("# New Change\n\nInitial definition"))
 	client := &fakeClient{}
 	m := NewModelWithClient(client)
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.agentWorkspace = workspace.Dir
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
 	m.agentFlow.Stage = agent.StageCreateConfirmation
-	m.openDropdown(CreateIdeaState, dropdownIdea, CreateIdeaState, CreateIdeaState, "Create Change?", []dto.Option{
+	m.openDropdown(CreateDefState, dropdownDef, CreateDefState, CreateDefState, "Create Change?", []dto.Option{
 		{ID: "/yes", Label: "/yes"},
 		{ID: "/no", Label: "/no"},
 	}, false)
@@ -2387,47 +2425,47 @@ func TestAgentCreateIdeaNoDiscardsIdeaAndReturnsToList(t *testing.T) {
 	require.Nil(t, cmd)
 	assert.Equal(t, ChangesListState, got.state)
 	assert.False(t, got.agentFlow.Active())
-	exists, err := workspace.IdeaExists()
+	exists, err := workspace.DefExists()
 	require.NoError(t, err)
 	assert.False(t, exists)
 	assert.Zero(t, client.changeCreateCalls)
 }
 
-func TestAgentCreateIdeaCancelCommandDiscardsIdeaAndReturnsToList(t *testing.T) {
+func TestAgentCreateDefCancelCommandDiscardsDefAndReturnsToList(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.WriteIdea("# New Change\n\nInitial idea"))
+	require.NoError(t, workspace.WriteDef("# New Change\n\nInitial definition"))
 	client := &fakeClient{}
 	m := NewModelWithClient(client)
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.agentWorkspace = workspace.Dir
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
 	m.agentFlow.Stage = agent.StageCreateConfirmation
 
-	updated, cmd := m.executeCommandFrom(CreateIdeaState, "/cancel")
+	updated, cmd := m.executeCommandFrom(CreateDefState, "/cancel")
 	got := updated.(Model)
 
 	require.Nil(t, cmd)
 	assert.Equal(t, ChangesListState, got.state)
 	assert.False(t, got.agentFlow.Active())
-	exists, err := workspace.IdeaExists()
+	exists, err := workspace.DefExists()
 	require.NoError(t, err)
 	assert.False(t, exists)
 	assert.Zero(t, client.changeCreateCalls)
 }
 
-func TestAgentCreateIdeaYesCreatesThenRunsRewrite(t *testing.T) {
+func TestAgentCreateDefYesCreatesThenRunsRewrite(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.WriteIdea("# New Change\n\nInitial idea"))
-	client := &fakeClient{createdChange: dto.Change{ID: "12", Title: "New Change", Idea: "# New Change\n\nInitial idea"}}
+	require.NoError(t, workspace.WriteDef("# New Change\n\nInitial definition"))
+	client := &fakeClient{createdChange: dto.Change{ID: "12", Title: "New Change", Def: "# New Change\n\nInitial definition"}}
 	runner := &fakeAgentRunner{rewriteResult: agent.RewriteResult{SessionID: "session-1", Output: "Done."}}
 	m := NewModelWithClient(client)
-	m.state = CreateIdeaState
+	m.state = CreateDefState
 	m.currentProject = dto.Option{ID: "7", Label: "Project Seven"}
 	m.agentWorkspace = workspace.Dir
 	m.agentRunner = runner
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
 	m.agentFlow.Stage = agent.StageCreateConfirmation
-	m.openDropdown(CreateIdeaState, dropdownIdea, CreateIdeaState, CreateIdeaState, "Create Change?", []dto.Option{
+	m.openDropdown(CreateDefState, dropdownDef, CreateDefState, CreateDefState, "Create Change?", []dto.Option{
 		{ID: "/yes", Label: "/yes"},
 		{ID: "/no", Label: "/no"},
 	}, false)
@@ -2440,8 +2478,8 @@ func TestAgentCreateIdeaYesCreatesThenRunsRewrite(t *testing.T) {
 	require.Len(t, client.changeCreateInputs, 1)
 	assert.Equal(t, 7, client.changeCreateInputs[0].ProjectID)
 	assert.Equal(t, "New Change", client.changeCreateInputs[0].Title)
-	assert.Equal(t, "# New Change\n\nInitial idea", client.changeCreateInputs[0].Idea)
-	assert.Equal(t, RewriteIdeaState, model.state)
+	assert.Equal(t, "# New Change\n\nInitial definition", client.changeCreateInputs[0].Def)
+	assert.Equal(t, RewriteDefState, model.state)
 	assert.Equal(t, agent.StageAIRunning, model.agentFlow.Stage)
 	assert.Equal(t, client.createdChange, model.changeList.Detail)
 }
@@ -2464,13 +2502,13 @@ func TestAgentRewriteInvalidOutputShowsGenericError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := NewModelWithClient(&fakeClient{})
-			m.state = RewriteIdeaState
+			m.state = RewriteDefState
 			m.agentFlow = agent.NewModelWithWorkspace(t.TempDir())
 			m.agentFlow.Stage = agent.StageAIRunning
 
 			got := applyMsg(m, agentRewriteFinishedMsg{result: tt.result})
 
-			assert.Equal(t, RewriteIdeaState, got.state)
+			assert.Equal(t, RewriteDefState, got.state)
 			assert.Equal(t, agent.GenericError, got.err)
 			assert.NotEmpty(t, got.agentFlow.CommandOutput)
 			view := stripANSI(got.View())
@@ -2483,65 +2521,65 @@ func TestAgentRewriteInvalidOutputShowsGenericError(t *testing.T) {
 	}
 }
 
-func TestUpdateIdeaSavesBeforeRewrite(t *testing.T) {
+func TestUpdateDefSavesBeforeRewrite(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	idea := "# Existing\n\nTypes: feature\n\nEdited"
-	client := &fakeClient{gotChange: dto.Change{ID: "12", Idea: idea, ChangeTypes: []string{"feature"}}}
+	def := "# Existing\n\nTypes: feature\n\nEdited"
+	client := &fakeClient{gotChange: dto.Change{ID: "12", Def: def, ChangeTypes: []string{"feature"}}}
 	m := NewModelWithClient(client)
-	m.state = UpdateIdeaState
+	m.state = UpdateDefState
 	m.agentWorkspace = workspace.Dir
-	m.changeList.Detail = dto.Change{ID: "12", Title: "Existing", Idea: "# Existing\n\nOld"}
+	m.changeList.Detail = dto.Change{ID: "12", Title: "Existing", Def: "# Existing\n\nOld"}
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
-	m.agentFlow.Stage = agent.StageIdeaEntry
+	m.agentFlow.Stage = agent.StageDefEntry
 
-	updated, cmd := m.Update(editorFinishedMsg{source: UpdateIdeaState, content: idea})
+	updated, cmd := m.Update(editorFinishedMsg{source: UpdateDefState, content: def})
 	model := updated.(Model)
 	require.NotNil(t, cmd)
-	model = applyMsg(model, changeIdeaUpdateForRewriteCommand(client, 12, idea)())
+	model = applyMsg(model, changeDefUpdateForRewriteCommand(client, 12, def)())
 
-	assert.Equal(t, []string{idea}, client.changeIdeaUpdates)
+	assert.Equal(t, []string{def}, client.changeDefUpdates)
 	assert.Equal(t, [][]string{{"feature"}}, client.changeTypesUpdates)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	assert.Equal(t, RewriteIdeaState, model.state)
+	assert.Equal(t, RewriteDefState, model.state)
 	assert.Equal(t, agent.StageAIRunning, model.agentFlow.Stage)
 }
 
-func TestUpdateIdeaPromptsParseErrorBeforeSave(t *testing.T) {
+func TestUpdateDefPromptsParseErrorBeforeSave(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
 	client := &fakeClient{}
 	m := NewModelWithClient(client)
-	m.state = UpdateIdeaState
+	m.state = UpdateDefState
 	m.agentWorkspace = workspace.Dir
-	m.changeList.Detail = dto.Change{ID: "12", Title: "Existing", Idea: "# Existing\n\nOld"}
+	m.changeList.Detail = dto.Change{ID: "12", Title: "Existing", Def: "# Existing\n\nOld"}
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
-	m.agentFlow.Stage = agent.StageIdeaEntry
+	m.agentFlow.Stage = agent.StageDefEntry
 
-	got := applyMsg(m, editorFinishedMsg{source: UpdateIdeaState, content: "missing title"})
+	got := applyMsg(m, editorFinishedMsg{source: UpdateDefState, content: "missing title"})
 
-	assert.Equal(t, UpdateIdeaState, got.state)
-	assert.Equal(t, dropdownIdea, got.dropdown.kind)
+	assert.Equal(t, UpdateDefState, got.state)
+	assert.Equal(t, dropdownDef, got.dropdown.kind)
 	assert.Equal(t, "error parsing title:", got.dropdown.label)
 	assert.Equal(t, []dto.Option{{ID: "/edit", Label: "/edit"}, {ID: "/cancel", Label: "/cancel"}}, got.dropdown.options)
 	assert.Equal(t, "error parsing title", got.err)
-	assert.Empty(t, client.changeIdeaUpdates)
-	assertIdeaBeforePrompt(t, got.View(), "missing title", "error parsing title:")
+	assert.Empty(t, client.changeDefUpdates)
+	assertDefBeforePrompt(t, got.View(), "missing title", "error parsing title:")
 
-	content, err := os.ReadFile(workspace.IdeaPath())
+	content, err := os.ReadFile(workspace.DefPath())
 	require.NoError(t, err)
 	assert.Equal(t, "missing title", string(content))
 }
 
-func TestUpdateIdeaParseErrorCancelDiscardsIdeaAndReturnsToList(t *testing.T) {
+func TestUpdateDefParseErrorCancelDiscardsDefAndReturnsToList(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.WriteIdea("missing title"))
+	require.NoError(t, workspace.WriteDef("missing title"))
 	client := &fakeClient{}
 	m := NewModelWithClient(client)
-	m.state = UpdateIdeaState
+	m.state = UpdateDefState
 	m.agentWorkspace = workspace.Dir
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
-	m.agentFlow.Stage = agent.StageIdeaEntry
-	m.agentFlow.IdeaEntryContent = "missing title"
-	m.openDropdown(UpdateIdeaState, dropdownIdea, UpdateIdeaState, UpdateIdeaState, "error parsing title:", []dto.Option{
+	m.agentFlow.Stage = agent.StageDefEntry
+	m.agentFlow.DefEntryContent = "missing title"
+	m.openDropdown(UpdateDefState, dropdownDef, UpdateDefState, UpdateDefState, "error parsing title:", []dto.Option{
 		{ID: "/edit", Label: "/edit"},
 		{ID: "/cancel", Label: "/cancel"},
 	}, false)
@@ -2553,22 +2591,22 @@ func TestUpdateIdeaParseErrorCancelDiscardsIdeaAndReturnsToList(t *testing.T) {
 	require.Nil(t, cmd)
 	assert.Equal(t, ChangesListState, got.state)
 	assert.False(t, got.agentFlow.Active())
-	exists, err := workspace.IdeaExists()
+	exists, err := workspace.DefExists()
 	require.NoError(t, err)
 	assert.False(t, exists)
-	assert.Empty(t, client.changeIdeaUpdates)
+	assert.Empty(t, client.changeDefUpdates)
 }
 
-func TestUpdateIdeaEscDiscardsIdeaAndReturnsToList(t *testing.T) {
+func TestUpdateDefEscDiscardsDefAndReturnsToList(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.WriteIdea("# Existing\n\nEdited idea"))
+	require.NoError(t, workspace.WriteDef("# Existing\n\nEdited def"))
 	client := &fakeClient{}
 	m := NewModelWithClient(client)
-	m.state = UpdateIdeaState
+	m.state = UpdateDefState
 	m.agentWorkspace = workspace.Dir
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
-	m.agentFlow.Stage = agent.StageIdeaEntry
-	m.detailEditField = detailEditIdea
+	m.agentFlow.Stage = agent.StageDefEntry
+	m.detailEditField = detailEditDef
 
 	got, cmd := sendKey(m, tea.KeyEsc)
 
@@ -2576,22 +2614,22 @@ func TestUpdateIdeaEscDiscardsIdeaAndReturnsToList(t *testing.T) {
 	assert.Equal(t, ChangesListState, got.state)
 	assert.Empty(t, got.detailEditField)
 	assert.False(t, got.agentFlow.Active())
-	exists, err := workspace.IdeaExists()
+	exists, err := workspace.DefExists()
 	require.NoError(t, err)
 	assert.False(t, exists)
-	assert.Empty(t, client.changeIdeaUpdates)
+	assert.Empty(t, client.changeDefUpdates)
 }
 
-func TestUpdateIdeaParseErrorEditReopensPersistentIdeaEditor(t *testing.T) {
+func TestUpdateDefParseErrorEditReopensPersistentDefEditor(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.WriteIdea("missing title"))
+	require.NoError(t, workspace.WriteDef("missing title"))
 	m := NewModelWithClient(&fakeClient{})
-	m.state = UpdateIdeaState
+	m.state = UpdateDefState
 	m.agentWorkspace = workspace.Dir
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
-	m.agentFlow.Stage = agent.StageIdeaEntry
-	m.agentFlow.IdeaEntryContent = "missing title"
-	m.openDropdown(UpdateIdeaState, dropdownIdea, UpdateIdeaState, UpdateIdeaState, "error parsing title:", []dto.Option{
+	m.agentFlow.Stage = agent.StageDefEntry
+	m.agentFlow.DefEntryContent = "missing title"
+	m.openDropdown(UpdateDefState, dropdownDef, UpdateDefState, UpdateDefState, "error parsing title:", []dto.Option{
 		{ID: "/edit", Label: "/edit"},
 		{ID: "/cancel", Label: "/cancel"},
 	}, false)
@@ -2600,22 +2638,22 @@ func TestUpdateIdeaParseErrorEditReopensPersistentIdeaEditor(t *testing.T) {
 	got := updated.(Model)
 
 	require.NotNil(t, cmd)
-	assert.Equal(t, UpdateIdeaState, got.state)
-	content, err := os.ReadFile(workspace.IdeaPath())
+	assert.Equal(t, UpdateDefState, got.state)
+	content, err := os.ReadFile(workspace.DefPath())
 	require.NoError(t, err)
 	assert.Equal(t, "missing title", string(content))
 }
 
-func TestAgentRewriteSuccessSavesIdeaAgentEditAndRemovesTempIdea(t *testing.T) {
+func TestAgentRewriteSuccessSavesDefAgentEditAndRemovesTempDef(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	idea := "# Rewritten Change\n\nTypes: feature\n\nRewritten idea"
-	require.NoError(t, workspace.WriteIdea(idea))
+	def := "# Rewritten Change\n\nTypes: feature\n\nRewritten definition"
+	require.NoError(t, workspace.WriteDef(def))
 	client := &fakeClient{
-		gotChange: dto.Change{ID: "12", Title: "Rewritten Change", Idea: idea, ChangeTypes: []string{"feature"}, AgentEdit: true},
+		gotChange: dto.Change{ID: "12", Title: "Rewritten Change", Def: def, ChangeTypes: []string{"feature"}, AgentEdit: true},
 	}
 	m := NewModelWithClient(client)
-	m.state = RewriteIdeaState
-	m.changeList.Detail = dto.Change{ID: "12", Title: "Draft", Idea: "# Draft\n\nInitial"}
+	m.state = RewriteDefState
+	m.changeList.Detail = dto.Change{ID: "12", Title: "Draft", Def: "# Draft\n\nInitial"}
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
 	m.agentFlow.Stage = agent.StageAIRunning
 
@@ -2626,26 +2664,26 @@ func TestAgentRewriteSuccessSavesIdeaAgentEditAndRemovesTempIdea(t *testing.T) {
 	model = updated.(Model)
 	require.NotNil(t, clearCmd)
 
-	assert.Equal(t, []string{idea}, client.changeIdeaUpdates)
+	assert.Equal(t, []string{def}, client.changeDefUpdates)
 	assert.Equal(t, [][]string{{"feature"}}, client.changeTypesUpdates)
-	assert.Equal(t, []string{"change/update-idea", "change/update-change-types", "change/get"}, client.requestOrder)
+	assert.Equal(t, []string{"change/update-def", "change/update-change-types", "change/get"}, client.requestOrder)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 	assert.Equal(t, ChangeDetailsState, model.state)
 	assert.Equal(t, client.gotChange, model.changeList.Detail)
 	assert.False(t, model.agentFlow.Active())
 	assert.LessOrEqual(t, model.agentViewport.TotalLineCount(), 1)
-	exists, err := workspace.IdeaExists()
+	exists, err := workspace.DefExists()
 	require.NoError(t, err)
 	assert.False(t, exists)
 }
 
 func TestAgentRewriteSaveFailureStopsRunningState(t *testing.T) {
 	workspace := agent.Workspace{Dir: t.TempDir()}
-	require.NoError(t, workspace.WriteIdea("# Rewritten Change\n\nRewritten idea"))
+	require.NoError(t, workspace.WriteDef("# Rewritten Change\n\nRewritten definition"))
 	client := &fakeClient{changeUpdateErr: errors.New("Internal Server Error")}
 	m := NewModelWithClient(client)
-	m.state = RewriteIdeaState
-	m.changeList.Detail = dto.Change{ID: "12", Title: "Draft", Idea: "# Draft\n\nInitial"}
+	m.state = RewriteDefState
+	m.changeList.Detail = dto.Change{ID: "12", Title: "Draft", Def: "# Draft\n\nInitial"}
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
 	m.agentFlow.Stage = agent.StageAIRunning
 
@@ -2671,10 +2709,10 @@ func TestAgentSpecCreateCommandPersistsGeneratedSpecPath(t *testing.T) {
 	require.NoError(t, os.WriteFile(workspace.GeneratedPath(), []byte(generated), 0o644))
 	client := &fakeClient{
 		createdChange: dto.Change{ID: "12", Title: "Generated Change"},
-		gotChange:     dto.Change{ID: "12", Title: "Generated Change", Idea: generated, Spec: generated, ChangeTypes: []string{"feature", "test"}},
+		gotChange:     dto.Change{ID: "12", Title: "Generated Change", Def: generated, Spec: generated, ChangeTypes: []string{"feature", "test"}},
 	}
 	m := NewModelWithClient(client)
-	m.state = RewriteIdeaState
+	m.state = RewriteDefState
 	m.agentWorkspace = workspace.Dir
 	m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
 	m.agentFlow.Stage = agent.StageAIRunning
@@ -2684,7 +2722,7 @@ func TestAgentSpecCreateCommandPersistsGeneratedSpecPath(t *testing.T) {
 	assert.Equal(t, ChangeDetailsState, got.state)
 	assert.Equal(t, client.gotChange, got.changeList.Detail)
 	require.Len(t, client.changeCreateInputs, 1)
-	assert.Equal(t, dto.ChangeCreateInput{ProjectID: 7, Title: "Generated Change", Idea: generated}, client.changeCreateInputs[0])
+	assert.Equal(t, dto.ChangeCreateInput{ProjectID: 7, Title: "Generated Change", Def: generated}, client.changeCreateInputs[0])
 	assert.Equal(t, []string{generated}, client.changeSpecUpdates)
 	assert.Equal(t, [][]string{{"feature", "test"}}, client.changeTypesUpdates)
 	assert.Equal(t, []dto.TestCase{
@@ -2701,7 +2739,7 @@ func TestAgentSpecCreateCommandPersistsGeneratedSpecPath(t *testing.T) {
 	}, client.requestOrder)
 }
 
-func TestChangeCreateSaveExtractsTitleAndPreservesIdea(t *testing.T) {
+func TestChangeCreateSaveExtractsTitleAndPreservesDef(t *testing.T) {
 	spec := "# New Change\n\nTypes: feature|test\n\nEpic: Epic Five\n\n## Problem Statement\nKeep every section."
 	client := &fakeClient{
 		types:         []dto.Option{{ID: "feature", Label: "feature"}, {ID: "test", Label: "test"}},
@@ -2722,7 +2760,7 @@ func TestChangeCreateSaveExtractsTitleAndPreservesIdea(t *testing.T) {
 	require.Len(t, client.changeCreateInputs, 1)
 	assert.Equal(t, 7, client.changeCreateInputs[0].ProjectID)
 	assert.Equal(t, "New Change", client.changeCreateInputs[0].Title)
-	assert.Equal(t, spec, client.changeCreateInputs[0].Idea)
+	assert.Equal(t, spec, client.changeCreateInputs[0].Def)
 	assert.Equal(t, [][]string{{"feature", "test"}}, client.changeTypesUpdates)
 	assert.Zero(t, client.epicCalls)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
@@ -2843,7 +2881,7 @@ func TestChangeSaveStructuralValidationDoesNotFetchReferences(t *testing.T) {
 		spec    string
 		wantErr string
 	}{
-		{name: "missing title", spec: "Types: feature\n\n## Problem Statement\nSpec.", wantErr: "idea title is required"},
+		{name: "missing title", spec: "Types: feature\n\n## Problem Statement\nSpec.", wantErr: "definition title is required"},
 	}
 
 	for _, tt := range tests {
@@ -3524,7 +3562,7 @@ func TestChangeDetailsTitleCancelDoesNotSave(t *testing.T) {
 	assert.Equal(t, []int{12}, client.changeGetIDs)
 }
 
-func TestExistingChangeArtifactWritesReuseUUIDIdeaWorkspaceAndSession(t *testing.T) {
+func TestExistingChangeArtifactWritesReuseUUIDArtifactWorkspaceAndSession(t *testing.T) {
 	const refUUID = "0198a86f-9b8a-7d89-ae5b-6f25b528b04c"
 	tests := []struct {
 		name      string
@@ -3537,11 +3575,11 @@ func TestExistingChangeArtifactWritesReuseUUIDIdeaWorkspaceAndSession(t *testing
 		updates   func(*fakeClient) []string
 	}{
 		{
-			name: "idea", field: detailEditIdea, operation: agent.IdeaWriteOperation,
-			initial: "# Existing\n\nOld idea", edited: "# Existing\n\nTypes: feature\n\nEdited idea",
-			agentText: "# Existing\n\nTypes: feature\n\nRewritten idea",
-			setValue:  func(change *dto.Change, value string) { change.Idea = value },
-			updates:   func(client *fakeClient) []string { return client.changeIdeaUpdates },
+			name: "def", field: detailEditDef, operation: agent.DefWriteOperation,
+			initial: "# Existing\n\nOld def", edited: "# Existing\n\nTypes: feature\n\nEdited def",
+			agentText: "# Existing\n\nTypes: feature\n\nRewritten definition",
+			setValue:  func(change *dto.Change, value string) { change.Def = value },
+			updates:   func(client *fakeClient) []string { return client.changeDefUpdates },
 		},
 		{
 			name: "spec", field: detailEditSpec, operation: agent.SpecWriteOperation,
@@ -3582,8 +3620,8 @@ func TestExistingChangeArtifactWritesReuseUUIDIdeaWorkspaceAndSession(t *testing
 			assert.Equal(t, ChangeDetailsState, got.state)
 			assert.Equal(t, agent.StageArtifactEntry, got.agentFlow.Stage)
 			assert.Equal(t, tt.operation, got.agentFlow.Workspace.Operation)
-			assert.Equal(t, "idea", got.agentFlow.Workspace.Stage)
-			assert.Equal(t, filepath.Join(tempRoot, refUUID, "idea"), got.agentFlow.Workspace.Dir)
+			assert.Equal(t, "artifact", got.agentFlow.Workspace.Stage)
+			assert.Equal(t, filepath.Join(tempRoot, refUUID, "artifact"), got.agentFlow.Workspace.Dir)
 			assert.Equal(t, "existing-session", got.agentFlow.SessionID)
 			assert.Equal(t, tt.initial, readTestFile(t, workspace.InputPath()))
 			assert.Equal(t, tt.initial, readTestFile(t, workspace.OutputPath()))
@@ -3595,7 +3633,7 @@ func TestExistingChangeArtifactWritesReuseUUIDIdeaWorkspaceAndSession(t *testing
 			got = updated.(Model)
 			require.NotNil(t, saveCmd)
 			got = applyCommand(got, saveCmd)
-			assert.Equal(t, RewriteIdeaState, got.state)
+			assert.Equal(t, RewriteDefState, got.state)
 			assert.Equal(t, agent.StageAIRunning, got.agentFlow.Stage)
 			assert.Equal(t, []string{tt.edited}, tt.updates(client))
 			assert.Equal(t, []bool{false}, client.changeArtifactAgentEdits)
@@ -3642,7 +3680,7 @@ func TestExistingChangeArtifactUnchangedReturnsToDetailsWithoutUpdate(t *testing
 	assert.Equal(t, "cancel", got.status)
 	assert.Zero(t, client.changeSpecUpdateCalls)
 	assert.Equal(t, []int{12}, client.changeGetIDs)
-	require.FileExists(t, filepath.Join(m.agentWorkspace, refUUID, "idea", "input.md"))
+	require.FileExists(t, filepath.Join(m.agentWorkspace, refUUID, "artifact", "input.md"))
 }
 
 func TestExistingChangeArtifactFollowUpFailuresKeepPersistedArtifactCurrent(t *testing.T) {
@@ -3671,10 +3709,10 @@ func TestExistingChangeArtifactFollowUpFailuresKeepPersistedArtifactCurrent(t *t
 	t.Run("agent save reload failure", func(t *testing.T) {
 		const edited = "Types: feature\n\nAgent-written spec"
 		workspace := agent.Workspace{Dir: t.TempDir()}
-		require.NoError(t, workspace.WriteIdea(edited))
+		require.NoError(t, workspace.WriteDef(edited))
 		client := &fakeClient{changeGetErr: errors.New("reload failed")}
 		m := NewModelWithClient(client)
-		m.state = RewriteIdeaState
+		m.state = RewriteDefState
 		m.changeList = m.changeList.WithDetail(dto.Change{ID: "12", Spec: "User-edited spec"})
 		m.agentFlow = agent.NewModelWithWorkspace(workspace.Dir)
 		m.agentFlow.Stage = agent.StageAIRunning
@@ -3737,8 +3775,8 @@ func TestChangeDetailsRejectsInvalidArtifactSavesBeforeBackend(t *testing.T) {
 	}
 }
 
-func TestIdeaSpecAndPRSavesApplyPresentTypesMetadata(t *testing.T) {
-	fields := []detailEditField{detailEditIdea, detailEditSpec, detailEditPullRequest}
+func TestDefSpecAndPRSavesApplyPresentTypesMetadata(t *testing.T) {
+	fields := []detailEditField{detailEditDef, detailEditSpec, detailEditPullRequest}
 	metadata := []struct {
 		name   string
 		line   string
@@ -4063,8 +4101,8 @@ func TestCtrlNShortcutsCreateChangeAndTestCase(t *testing.T) {
 	changeList.agentWorkspace = t.TempDir()
 	got, cmd := sendKey(changeList, tea.KeyCtrlN)
 	require.NotNil(t, cmd)
-	assert.Equal(t, CreateIdeaState, got.state)
-	assert.Equal(t, agent.StageIdeaEntry, got.agentFlow.Stage)
+	assert.Equal(t, CreateDefState, got.state)
+	assert.Equal(t, agent.StageDefEntry, got.agentFlow.Stage)
 
 	detail := NewModelWithClient(&fakeClient{})
 	detail.state = ChangeDetailsState
@@ -4688,11 +4726,11 @@ func TestConfigCommandRendersResolvedConfigWithoutBackendCalls(t *testing.T) {
 	assert.NotContains(t, view, "temp_dir:")
 	assert.Contains(t, view, "project_id: 7")
 	assert.Contains(t, view, "flow_dir: /repo/.mch/default")
-	assert.Contains(t, view, "slug: idea")
-	assert.Contains(t, view, "prompt: prompts/change-idea.md")
-	assert.Contains(t, view, "entry: make idea-entry")
-	assert.Contains(t, view, "exec: make idea-exec")
-	assert.Contains(t, view, "exit: make idea-exit")
+	assert.Contains(t, view, "slug: def")
+	assert.Contains(t, view, "prompt: prompts/change-def.md")
+	assert.Contains(t, view, "entry: make def-entry")
+	assert.Contains(t, view, "exec: make def-exec")
+	assert.Contains(t, view, "exit: make def-exit")
 	assert.Contains(t, view, "stage_modes:")
 	assert.Contains(t, view, "task_statuses:")
 	assert.Contains(t, view, "task_steps:")
@@ -4958,12 +4996,12 @@ func stripANSI(value string) string {
 	return b.String()
 }
 
-func assertIdeaBeforePrompt(t *testing.T, rendered string, ideaText string, promptText string) {
+func assertDefBeforePrompt(t *testing.T, rendered string, defText string, promptText string) {
 	t.Helper()
 	view := stripANSI(rendered)
-	ideaIndex := strings.Index(view, ideaText)
+	defIndex := strings.Index(view, defText)
 	promptIndex := strings.Index(view, promptText)
-	require.NotEqual(t, -1, ideaIndex, "expected idea text %q in view:\n%s", ideaText, view)
+	require.NotEqual(t, -1, defIndex, "expected def text %q in view:\n%s", defText, view)
 	require.NotEqual(t, -1, promptIndex, "expected prompt text %q in view:\n%s", promptText, view)
-	assert.Less(t, ideaIndex, promptIndex, "idea preview should render before prompt")
+	assert.Less(t, defIndex, promptIndex, "def preview should render before prompt")
 }

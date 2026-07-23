@@ -2,7 +2,7 @@ Do not use any skills for this request.
 
 # Spec Review
 
-Review the provisional Spec before implementation. Verify that it converts the Idea and relevant
+Review the provisional Spec before implementation. Verify that it converts the Definition and relevant
 branch work into a complete, internally consistent, implementation-ready guide.
 
 Perform exactly one bounded review pass, return the required result, and stop.
@@ -25,7 +25,7 @@ The branch must be named change/<change-slug>.
 
 Require:
 
-- `agent/ideas/<change-slug>.md`
+- `agent/defs/<change-slug>.md`
 - `specs/<change-slug>.md`
 
 Stop with one concise, path-specific error when either file is missing.
@@ -34,7 +34,7 @@ This is a read-only review. Do not edit, format, stage, commit, reset, restore, 
 post PR comments, or mutate tracked files, database files, generated artifacts, or application
 data.
 
-Documentation is outside the default Change Flow. Do not inspect documentation unless the Idea or
+Documentation is outside the default Change Flow. Do not inspect documentation unless the Definition or
 Spec explicitly includes documentation work or cites a retained ADR or operational runbook.
 
 ## Sources and Authority
@@ -42,10 +42,10 @@ Spec explicitly includes documentation work or cites a retained ADR or operation
 Build fresh context from the current repository on every invocation. Do not rely on conversation
 memory, prior review output, or findings from an earlier pass.
 
-The Idea and initial code originate the Change. The Spec expresses the desired future state and
+The Definition and initial code originate the Change. The Spec expresses the desired future state and
 strictly instructs what must change and how the Change must be conducted. Inspect:
 
-- the complete current Idea
+- the complete current Definition
 - the complete current provisional Spec
 - existing code as the source of truth for current behavior
 - committed, staged, unstaged, and relevant untracked branch work
@@ -65,7 +65,7 @@ Verify that the Spec:
 
 - uses Goal, Scope, Requirements, Non-Goals, Design Notes, Verification, QA Test Cases,
   Review Focus, and Follow-Ups in the required order
-- accounts for every meaningful Idea item
+- accounts for every meaningful Definition item
 - accounts for relevant implementation already applied before the Spec was written
 - describes intended final behavior without progress markers, completion statuses, or a change
   diary
@@ -80,7 +80,7 @@ Verify that the Spec:
 
 The review must converge when invoked repeatedly against corrected files:
 
-- Evaluate only the current Idea, Spec, code, branch state, and available PR evidence.
+- Evaluate only the current Definition, Spec, code, branch state, and available PR evidence.
 - Never repeat a finding that the current files have resolved.
 - Never reintroduce a resolved finding with different wording or split it into narrower variants.
 - Consolidate findings with the same root cause into one actionable finding.
@@ -104,14 +104,14 @@ Use severities:
 - P0: data loss, security breach, production outage, or unrecoverable corruption
 - P1: contradiction that makes implementation unsafe, broken core workflow, serious contract
   conflict, or destructive ambiguity
-- P2: missing material Idea or branch behavior, unverifiable Requirement, missing required
+- P2: missing material Definition or branch behavior, unverifiable Requirement, missing required
   coverage, or user-visible ambiguity
 - P3: minor correctness ambiguity that can still cause implementation or review confusion
 
 Report only concrete findings that block safe implementation or reliable review. Exclude style
 preferences, wording nits, optional improvements, and speculative concerns.
 
-Reference only the current Idea or Spec in finding locations. Use the absolute file path and the
+Reference only the current Definition or Spec in finding locations. Use the absolute file path and the
 current line or line range that must change.
 
 Number findings sequentially starting at `1`.

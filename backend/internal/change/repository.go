@@ -27,7 +27,7 @@ type (
 		Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error)
 		UpdateChangeTypes(ctx context.Context, req dto.ChangeUpdateChangeTypesRequest) (dto.Change, error)
 		UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest) (dto.Change, error)
-		UpdateIdea(ctx context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error)
+		UpdateDef(ctx context.Context, req dto.ChangeUpdateDefRequest) (dto.Change, error)
 		UpdateSpec(ctx context.Context, req dto.ChangeUpdateSpecRequest) (dto.Change, error)
 		UpdatePR(ctx context.Context, req dto.ChangeUpdatePRRequest) (dto.Change, error)
 		UpdatePRUrl(ctx context.Context, req dto.ChangeUpdatePRUrlRequest) (dto.Change, error)
@@ -54,7 +54,7 @@ const changeDetailColumns = `
 	epic_id,
 	epic_name,
 	title,
-	idea,
+	def,
 	spec,
 	pr,
 	pr_url,
@@ -174,7 +174,7 @@ func (r *Repo) Create(ctx context.Context, req dto.ChangeCreateRequest) (dto.Cha
 	var id int
 	err = tx.QueryRow(ctx, `
 		select public.fn_change_insert($1, $2, $3, $4)
-	`, req.ProjectID, *req.RefUUID, req.Title, req.Idea).Scan(&id)
+	`, req.ProjectID, *req.RefUUID, req.Title, req.Def).Scan(&id)
 	if err != nil {
 		return dto.Change{}, err
 	}
@@ -245,9 +245,9 @@ func (r *Repo) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequest
 	return finishMutation(ctx, tx, req.ID)
 }
 
-// UpdateIdea executes UpdateIdea behavior.
-func (r *Repo) UpdateIdea(ctx context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error) {
-	return r.updateArtifact(ctx, req.ID, "call public.sp_change_idea_update($1, $2, $3)", req.Idea, *req.AgentEdit)
+// UpdateDef executes UpdateDef behavior.
+func (r *Repo) UpdateDef(ctx context.Context, req dto.ChangeUpdateDefRequest) (dto.Change, error) {
+	return r.updateArtifact(ctx, req.ID, "call public.sp_change_def_update($1, $2, $3)", req.Def, *req.AgentEdit)
 }
 
 // UpdateSpec executes UpdateSpec behavior.
@@ -574,7 +574,7 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	err := row.Scan(
 		&change.ID, &refUUID, &ref, &change.Version, &slug, &change.ProjectID,
 		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
-		&change.Idea, &change.Spec, &change.PR, &change.PRUrl, &change.AgentEdit,
+		&change.Def, &change.Spec, &change.PR, &change.PRUrl, &change.AgentEdit,
 		&change.FlowStages, &change.FlowStageModes, &runClaimID, &change.RunFlowStage,
 		&change.RunTaskStep, &change.RunTaskStatus, &change.RunError, &change.RunIsCompleted,
 		&runStartedAt, &runUpdatedAt,
@@ -661,7 +661,7 @@ type state struct {
 	ChangePhase string
 	ChangeTypes []string
 	Title       string
-	Idea        string
+	Def         string
 	Spec        string
 	PR          string
 	PRUrl       string
@@ -673,10 +673,10 @@ func getState(ctx context.Context, tx pgx.Tx, id int) (state, error) {
 	var item state
 	var epicID pgtype.Int8
 	err := tx.QueryRow(ctx, `
-		select project_id, epic_id, change_phase, change_types, title, idea, spec, pr, pr_url, agent_edit, open
+		select project_id, epic_id, change_phase, change_types, title, def, spec, pr, pr_url, agent_edit, open
 		from public.change
 		where id = $1
-	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Idea, &item.Spec, &item.PR, &item.PRUrl, &item.AgentEdit, &item.Open)
+	`, id).Scan(&item.ProjectID, &epicID, &item.ChangePhase, &item.ChangeTypes, &item.Title, &item.Def, &item.Spec, &item.PR, &item.PRUrl, &item.AgentEdit, &item.Open)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return state{}, ErrNotFound
 	}

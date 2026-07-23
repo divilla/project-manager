@@ -121,7 +121,7 @@ func TestEpicDeleteRejectsEpicsWithChanges(t *testing.T) {
 	status := client.Post(t, "/api/v1/change/create", map[string]any{
 		"project_id": projectID,
 		"title":      fmt.Sprintf("api-test-epic-conflict-change-%d", time.Now().UnixNano()),
-		"idea":       "Epic conflict idea",
+		"def":        "Epic conflict def",
 	}, &createdChange)
 	require.Equal(t, http.StatusCreated, status)
 	require.NotEmpty(t, createdChange.ID)

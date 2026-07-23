@@ -3,8 +3,8 @@
 Use this structure exactly for every Spec file. Replace all placeholders and instructional text with concrete Spec content. Keep every section concise, specific, and testable.
 
 A Spec expresses the desired future state and gives strict, implementation-ready instructions for
-what must change and how the Change must be conducted. The Idea and initial code originate the
-Change: the Idea supplies direction, while code supplies current behavior and constraints. Code
+what must change and how the Change must be conducted. The Definition and initial code originate the
+Change: the Definition supplies direction, while code supplies current behavior and constraints. Code
 remains the single source of truth for current behavior throughout the Change lifecycle.
 
 Include every relevant branch change already applied manually, by an agent, or by another process.
@@ -55,7 +55,7 @@ Describe the observable end state or end states this Spec must define. Use multi
 
 - List the behavior, architecture, implementation, and explicitly requested documentation areas
   included in the Change.
-- Do not add documentation work as a routine Change stage. Include it only when the user or Idea
+- Do not add documentation work as a routine Change stage. Include it only when the user or Definition
   explicitly requests a README, ADR, or operational runbook update.
 - Keep every item directly tied to the Goal.
 - Account for relevant existing branch work and exclude adjacent work outside the requested Change.

@@ -30,29 +30,29 @@ func TestParseSpecStructureTracksOptionalTypesMetadata(t *testing.T) {
 	}
 }
 
-func TestParseIdeaStructureTracksOptionalTypesMetadata(t *testing.T) {
-	parsed, err := ParseIdeaStructure("# Change\n\nBody")
+func TestParseDefStructureTracksOptionalTypesMetadata(t *testing.T) {
+	parsed, err := ParseDefStructure("# Change\n\nBody")
 	require.NoError(t, err)
 	assert.False(t, parsed.ChangeTypesPresent)
 
-	parsed, err = ParseIdeaStructure("# Change\n\nTypes:\n\nBody")
+	parsed, err = ParseDefStructure("# Change\n\nTypes:\n\nBody")
 	require.NoError(t, err)
 	assert.True(t, parsed.ChangeTypesPresent)
 	assert.Empty(t, parsed.ChangeTypes)
 
-	parsed, err = ParseIdeaStructure("# Change\nTypes: fix|feature\n\nBody")
+	parsed, err = ParseDefStructure("# Change\nTypes: fix|feature\n\nBody")
 	require.NoError(t, err)
 	assert.True(t, parsed.ChangeTypesPresent)
 	assert.Equal(t, []string{"fix", "feature"}, parsed.ChangeTypes)
 }
 
-func TestParseIdeaStructureRequiresNonMetadataBody(t *testing.T) {
-	for _, idea := range []string{
+func TestParseDefStructureRequiresNonMetadataBody(t *testing.T) {
+	for _, def := range []string{
 		"# Change\n\n",
 		"# Change\n\nTypes:",
 		"# Change\n\nTypes: feature",
 	} {
-		_, err := ParseIdeaStructure(idea)
-		require.EqualError(t, err, "idea body is required")
+		_, err := ParseDefStructure(def)
+		require.EqualError(t, err, "definition body is required")
 	}
 }

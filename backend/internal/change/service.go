@@ -80,8 +80,8 @@ func (s *Service) RenderedArtifacts(ctx context.Context, req dto.ChangeRenderedA
 // CreateChange executes CreateChange behavior.
 func (s *Service) CreateChange(ctx context.Context, req dto.ChangeCreateRequest) (dto.Change, error) {
 	req.Title = strings.TrimSpace(req.Title)
-	req.Idea = strings.TrimSpace(req.Idea)
-	if req.ProjectID <= 0 || req.Title == "" || req.Idea == "" {
+	req.Def = strings.TrimSpace(req.Def)
+	if req.ProjectID <= 0 || req.Title == "" || req.Def == "" {
 		return dto.Change{}, ErrInvalidInput
 	}
 	if req.RefUUID == nil {
@@ -129,13 +129,13 @@ func (s *Service) UpdateTitle(ctx context.Context, req dto.ChangeUpdateTitleRequ
 	return s.renderer.RenderChange(change), nil
 }
 
-// UpdateIdea executes UpdateIdea behavior.
-func (s *Service) UpdateIdea(ctx context.Context, req dto.ChangeUpdateIdeaRequest) (dto.Change, error) {
-	req.Idea = strings.TrimSpace(req.Idea)
-	if req.ID <= 0 || req.Idea == "" || req.AgentEdit == nil {
+// UpdateDef executes UpdateDef behavior.
+func (s *Service) UpdateDef(ctx context.Context, req dto.ChangeUpdateDefRequest) (dto.Change, error) {
+	req.Def = strings.TrimSpace(req.Def)
+	if req.ID <= 0 || req.Def == "" || req.AgentEdit == nil {
 		return dto.Change{}, ErrInvalidInput
 	}
-	change, err := s.repo.UpdateIdea(ctx, req)
+	change, err := s.repo.UpdateDef(ctx, req)
 	if err != nil {
 		return dto.Change{}, err
 	}

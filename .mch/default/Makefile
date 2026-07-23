@@ -5,27 +5,24 @@ CHANGE_SLUG := $(patsubst change/%,%,$(GIT_BRANCH))
 TEMP_DIR := $(GIT_ROOT)/$${MCH_TEMP_DIR}/$${MCH_REF_UUID}/$${MCH_STAGE}
 SPEC_TEMP_DIR := $(GIT_ROOT)/$${MCH_TEMP_DIR}/$${MCH_REF_UUID}/spec
 SPEC_REVIEW_TEMP_DIR := $(GIT_ROOT)/$${MCH_TEMP_DIR}/$${MCH_REF_UUID}/spec-review
-IDEAS_DIR := $(GIT_ROOT)/agent/ideas
+DEFS_DIR := $(GIT_ROOT)/agent/defs
 SPECS_DIR := $(GIT_ROOT)/specs
-FLOW_STEPS := idea-write idea-review idea-chat spec-write pr-write spec-review spec-review-chat
-FLOW_PROMPT_STEPS := idea-write idea-review spec-write pr-write spec-review
+FLOW_STEPS := def-write def-review artifact-chat spec-write pr-write spec-review spec-review-chat
 FLOW_ENTRY_TARGETS := $(addsuffix -entry,$(FLOW_STEPS))
 FLOW_EXEC_TARGETS := $(addsuffix -exec,$(FLOW_STEPS))
 FLOW_EXIT_TARGETS := $(addsuffix -exit,$(FLOW_STEPS))
 FLOW_BEFORE_TARGETS := $(addsuffix -before,$(FLOW_STEPS))
 FLOW_RUN_TARGETS := $(addsuffix -run,$(FLOW_STEPS))
 FLOW_LEAVE_TARGETS := $(addsuffix -leave,$(FLOW_STEPS))
-FLOW_PROMPT_TARGETS := $(addsuffix -prompt,$(FLOW_PROMPT_STEPS))
 
-.PHONY: help list init diff idea-prepare idea-init idea-write idea-review idea-chat
+.PHONY: help list init diff def-prepare def-init def-write def-review artifact-chat
 .PHONY: spec-prepare spec-init spec-write pr-write spec-review spec-review-chat verify-exit fix-exit commit extract-session
 .PHONY: $(FLOW_ENTRY_TARGETS) $(FLOW_EXEC_TARGETS) $(FLOW_EXIT_TARGETS)
-.PHONY: $(FLOW_BEFORE_TARGETS) $(FLOW_RUN_TARGETS) $(FLOW_LEAVE_TARGETS) $(FLOW_PROMPT_TARGETS)
+.PHONY: $(FLOW_BEFORE_TARGETS) $(FLOW_RUN_TARGETS) $(FLOW_LEAVE_TARGETS)
 
-idea-% spec-%: export MCH_STAGE := idea
+def-% spec-% pr-% artifact-%: export MCH_STAGE := artifact
 spec-review spec-review-%: export MCH_STAGE := spec-review
 code-% polish-%: export MCH_STAGE := code
-pr-%: export MCH_STAGE := idea
 review-% fix-%: export MCH_STAGE := code-review
 merge-% stage-% master-%: export MCH_STAGE := merge
 
@@ -39,7 +36,6 @@ list:
 	@printf '%s\n' '  <stage>-before  alias for <stage>-entry'
 	@printf '%s\n' '  <stage>-run     alias for <stage>-exec'
 	@printf '%s\n' '  <stage>-leave   alias for <stage>-exit'
-	@printf '%s\n' '  <stage>-prompt  print the stage prompt'
 
 init:
 	@if [ -z "$(GIT_ROOT)" ]; then printf '%s\n' 'cannot extract repo root' >&2; exit 1; fi
@@ -52,13 +48,13 @@ init:
 	@mkdir -p "$(SPEC_TEMP_DIR)"
 	@mkdir -p "$(SPEC_REVIEW_TEMP_DIR)"
 
-idea-prepare: init
-	@cp "$(IDEAS_DIR)/$(CHANGE_SLUG).md" "$(TEMP_DIR)/output.md";
+def-prepare: init
+	@cp "$(DEFS_DIR)/$(CHANGE_SLUG).md" "$(TEMP_DIR)/output.md";
 
 spec-prepare: init
 	@cp "$(SPECS_DIR)/$(CHANGE_SLUG).md" "$(SPEC_TEMP_DIR)/output.md";
 
-idea-init: init
+def-init: init
 	@cp "$(TEMP_DIR)/output.md" "$(TEMP_DIR)/input.md";
 
 spec-init: init
@@ -67,20 +63,20 @@ spec-init: init
 diff:
 	@git diff --no-index --color=never --unified=1 -- "$(TEMP_DIR)/input.md" "$(TEMP_DIR)/output.md" | bat --language=diff -pp --theme 'Coldark-Dark' --style=plain --color=always --paging=never
 
-idea-write: idea-prepare idea-init
-	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/idea-write.md"
+def-write: def-prepare def-init
+	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/def-write.md"
 
-idea-review: idea-init
-	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/idea-review.md"
+def-review: def-init
+	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/def-review.md"
 
-idea-chat: init
-	@$(FLOW_DIR)scripts/codex-resume-session.sh
-
-spec-write: idea-init
+spec-write: def-init
 	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/spec-write.md"
 
-pr-write: idea-init
+pr-write: def-init
 	@$(FLOW_DIR)scripts/codex-exec-restore-session.sh "$(FLOW_DIR)prompts/pr-write.md"
+
+artifact-chat: init
+	@$(FLOW_DIR)scripts/codex-resume-session.sh
 
 spec-review: init
 	@cp "$(SPECS_DIR)/$(CHANGE_SLUG).md" "$(SPEC_REVIEW_TEMP_DIR)/output.md"
@@ -167,6 +163,3 @@ $(FLOW_RUN_TARGETS):
 
 $(FLOW_LEAVE_TARGETS):
 	@$(MAKE) --no-print-directory -f $(lastword $(MAKEFILE_LIST)) "$(patsubst %-leave,%-exit,$@)"
-
-$(FLOW_PROMPT_TARGETS):
-	@$(FLOW_DIR)scripts/show-prompt.sh "$(FLOW_DIR)" "$(patsubst %-prompt,%,$@)"

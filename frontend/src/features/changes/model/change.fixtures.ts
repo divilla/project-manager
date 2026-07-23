@@ -13,7 +13,7 @@ export function changeFixture(overrides: Partial<Change> = {}): Change {
     change_phase: 'backlog',
     change_types: ['feature'],
     title: 'Change',
-    idea: '',
+    def: '',
     spec: '',
     spec_html: '',
     pr: '',

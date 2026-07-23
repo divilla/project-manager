@@ -22,19 +22,19 @@ func TestWorkspaceEnsureReplacesRegularFile(t *testing.T) {
 	assert.True(t, info.IsDir())
 }
 
-func TestWorkspaceIdeaFileLifecycle(t *testing.T) {
+func TestWorkspaceDefFileLifecycle(t *testing.T) {
 	workspace := Workspace{Dir: t.TempDir()}
 
-	exists, err := workspace.IdeaExists()
+	exists, err := workspace.DefExists()
 	require.NoError(t, err)
 	assert.False(t, exists)
 
-	require.NoError(t, workspace.ResetIdea())
-	exists, err = workspace.IdeaExists()
+	require.NoError(t, workspace.ResetDef())
+	exists, err = workspace.DefExists()
 	require.NoError(t, err)
 	assert.True(t, exists)
 
-	content, err := workspace.ReadIdea()
+	content, err := workspace.ReadDef()
 	require.NoError(t, err)
 	assert.Empty(t, content)
 }
@@ -64,10 +64,10 @@ func TestFormatCommandOutputHumanizesJSONLines(t *testing.T) {
 	output := strings.Join([]string{
 		`{"type":"thread.started","thread_id":"thread-1"}`,
 		`{"type":"turn.started"}`,
-		`{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Reading idea."}}`,
-		`{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"sed -n '1,40p' /tmp/mch/initial-idea.md","aggregated_output":"","exit_code":null,"status":"in_progress"}}`,
-		`{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"sed -n '1,40p' /tmp/mch/initial-idea.md","aggregated_output":"# Idea\n\nBody.","exit_code":0,"status":"completed"}}`,
-		`{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"/tmp/mch/initial-idea.md","kind":"update"}],"status":"completed"}}`,
+		`{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Reading def."}}`,
+		`{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"sed -n '1,40p' /tmp/mch/initial-def.md","aggregated_output":"","exit_code":null,"status":"in_progress"}}`,
+		`{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"sed -n '1,40p' /tmp/mch/initial-def.md","aggregated_output":"# Definition\n\nBody.","exit_code":0,"status":"completed"}}`,
+		`{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"/tmp/mch/initial-def.md","kind":"update"}],"status":"completed"}}`,
 		`{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":5,"output_tokens":2,"reasoning_output_tokens":1}}`,
 		`{"type":"error","message":"failed"}`,
 		`plain text`,
@@ -78,11 +78,11 @@ func TestFormatCommandOutputHumanizesJSONLines(t *testing.T) {
 
 	assert.Contains(t, formatted, "thread started: thread-1")
 	assert.Contains(t, formatted, "turn started")
-	assert.Contains(t, formatted, "assistant: Reading idea.")
-	assert.Contains(t, formatted, "running command: sed -n '1,40p' /tmp/mch/initial-idea.md")
+	assert.Contains(t, formatted, "assistant: Reading def.")
+	assert.Contains(t, formatted, "running command: sed -n '1,40p' /tmp/mch/initial-def.md")
 	assert.Contains(t, formatted, "command completed (completed): exit 0")
-	assert.Contains(t, formatted, "output:\n  # Idea\n  \n  Body.")
-	assert.Contains(t, formatted, "file change completed:\n  update: /tmp/mch/initial-idea.md")
+	assert.Contains(t, formatted, "output:\n  # Definition\n  \n  Body.")
+	assert.Contains(t, formatted, "file change completed:\n  update: /tmp/mch/initial-def.md")
 	assert.Contains(t, formatted, "turn completed (input=10, cached_input=5, output=2, reasoning_output=1)")
 	assert.Contains(t, formatted, "error: failed")
 	assert.Contains(t, formatted, "plain text")
@@ -91,19 +91,19 @@ func TestFormatCommandOutputHumanizesJSONLines(t *testing.T) {
 
 func TestCodexPromptsUseExpectedSkills(t *testing.T) {
 	workspace := Workspace{Dir: "/tmp/custom-mch"}
-	assert.Equal(t, `Use $change-idea-tmp. The temporary workspace is "/tmp/custom-mch". Read and replace "/tmp/custom-mch/initial-idea.md".`, RewritePrompt(workspace))
+	assert.Equal(t, `Use $change-def-tmp. The temporary workspace is "/tmp/custom-mch". Read and replace "/tmp/custom-mch/initial-def.md".`, RewritePrompt(workspace))
 	changeWorkspace := NewChangeModel("/repo/.mch/tmp", "0198a86f-9b8a-7d89-ae5b-6f25b528b04c").Workspace
 	assert.Contains(t, RewritePrompt(changeWorkspace), changeWorkspace.InputPath())
 	assert.Contains(t, RewritePrompt(changeWorkspace), changeWorkspace.OutputPath())
-	for _, operation := range []WriteOperation{IdeaWriteOperation, SpecWriteOperation, PRWriteOperation} {
+	for _, operation := range []WriteOperation{DefWriteOperation, SpecWriteOperation, PRWriteOperation} {
 		workspace := NewArtifactModel("/repo/.mch/tmp", "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", operation).Workspace
-		assert.Equal(t, IdeaStage, workspace.Stage)
+		assert.Equal(t, ArtifactStage, workspace.Stage)
 		assert.Contains(t, RewritePrompt(workspace), filepath.Join(DefaultDir, "prompts", string(operation)+".md"))
 	}
 	assert.Equal(t, "Use $change-spec-tmp.", InitPrompt)
 }
 
-func TestExistingArtifactPreparationPreservesIdeaWorkspaceSession(t *testing.T) {
+func TestExistingArtifactPreparationPreservesDefWorkspaceSession(t *testing.T) {
 	workspace := NewArtifactModel(t.TempDir(), "0198a86f-9b8a-7d89-ae5b-6f25b528b04c", SpecWriteOperation).Workspace
 	require.NoError(t, workspace.Ensure())
 	require.NoError(t, os.WriteFile(workspace.SessionPath(), []byte("session-1\n"), 0o644))
@@ -133,7 +133,7 @@ func TestWorkflowEnvironmentOverridesInheritedValues(t *testing.T) {
 		"MCH_DEFAULT_DIR=.mch/default",
 		"MCH_TEMP_DIR=.mch/tmp",
 		"MCH_REF_UUID=0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
-		"MCH_STAGE=idea",
+		"MCH_STAGE=artifact",
 	}, env)
 }
 
@@ -179,7 +179,7 @@ Types: feature|test
 ## QA Test Cases
 
 - Start ` + "`/new-change`" + ` with no valid current project and confirm the flow stops with a recoverable project-context error and no editor, Codex, or create request runs.
-- Start ` + "`/new-change`" + ` when ` + "`/tmp/mch`" + ` is absent and confirm the directory and blank ` + "`initial-idea.md`" + ` are created.
+- Start ` + "`/new-change`" + ` when ` + "`/tmp/mch`" + ` is absent and confirm the directory and blank ` + "`initial-def.md`" + ` are created.
 - Simulate a generated test case create failure after Change create and confirm the error is displayed above the prompt and created details are not opened.
 - Complete a successful create and confirm ` + "`mch`" + ` reloads and renders the created Change detail using backend data.
 
@@ -192,7 +192,7 @@ Types: feature|test
 
 	assert.Equal(t, []string{
 		"Start `/new-change` with no valid current project and confirm the flow stops with a recoverable project-context error and no editor, Codex, or create request runs.",
-		"Start `/new-change` when `/tmp/mch` is absent and confirm the directory and blank `initial-idea.md` are created.",
+		"Start `/new-change` when `/tmp/mch` is absent and confirm the directory and blank `initial-def.md` are created.",
 		"Simulate a generated test case create failure after Change create and confirm the error is displayed above the prompt and created details are not opened.",
 		"Complete a successful create and confirm `mch` reloads and renders the created Change detail using backend data.",
 	}, parsed.TestCases)
@@ -212,7 +212,7 @@ func TestExtractQATestCasesFromSpecFragment(t *testing.T) {
 ## QA Test Cases
 
 - Start ` + "`/new-change`" + ` with no valid current project and confirm the flow stops with a recoverable project-context error and no editor, Codex, or create request runs.
-- Start ` + "`/new-change`" + ` when ` + "`/tmp/mch`" + ` is absent and confirm the directory and blank ` + "`initial-idea.md`" + ` are created.
+- Start ` + "`/new-change`" + ` when ` + "`/tmp/mch`" + ` is absent and confirm the directory and blank ` + "`initial-def.md`" + ` are created.
 - Complete a successful create and confirm ` + "`mch`" + ` reloads and renders the created Change detail using backend data.
 
 ## Review Focus
@@ -221,7 +221,7 @@ func TestExtractQATestCasesFromSpecFragment(t *testing.T) {
 
 	assert.Equal(t, []string{
 		"Start `/new-change` with no valid current project and confirm the flow stops with a recoverable project-context error and no editor, Codex, or create request runs.",
-		"Start `/new-change` when `/tmp/mch` is absent and confirm the directory and blank `initial-idea.md` are created.",
+		"Start `/new-change` when `/tmp/mch` is absent and confirm the directory and blank `initial-def.md` are created.",
 		"Complete a successful create and confirm `mch` reloads and renders the created Change detail using backend data.",
 	}, ExtractQATestCases(spec))
 }

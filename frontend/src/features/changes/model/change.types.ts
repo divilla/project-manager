@@ -34,7 +34,7 @@ export interface ChangeListItem {
 
 export interface Change extends ChangeListItem {
   version: number;
-  idea: string;
+  def: string;
   spec: string;
   spec_html: string;
   pr: string;
@@ -61,7 +61,7 @@ export interface ChangeRenderedArtifactsResponse {
 export interface ChangeCreateInput {
   project_id: number;
   title: string;
-  idea: string;
+  def: string;
 }
 
 export interface SelectOption {

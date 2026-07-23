@@ -30,13 +30,13 @@ const defaultInputPlaceholder = "Type / for commands"
 type dropdownKind string
 
 const (
-	dropdownCommand       dropdownKind = "command"
-	dropdownList          dropdownKind = "list"
-	dropdownSelect        dropdownKind = "select"
-	dropdownConfirm       dropdownKind = "confirm"
-	dropdownAgent         dropdownKind = "agent"
-	dropdownIdea          dropdownKind = "idea"
-	dropdownPersistedIdea dropdownKind = "persisted idea"
+	dropdownCommand      dropdownKind = "command"
+	dropdownList         dropdownKind = "list"
+	dropdownSelect       dropdownKind = "select"
+	dropdownConfirm      dropdownKind = "confirm"
+	dropdownAgent        dropdownKind = "agent"
+	dropdownDef          dropdownKind = "def"
+	dropdownPersistedDef dropdownKind = "persisted def"
 )
 
 type selectorSource string
@@ -63,7 +63,7 @@ const (
 	detailEditPhase       detailEditField = "phase"
 	detailEditEpic        detailEditField = "epic"
 	detailEditTypes       detailEditField = "types"
-	detailEditIdea        detailEditField = "idea"
+	detailEditDef         detailEditField = "def"
 	detailEditSpec        detailEditField = "spec"
 	detailEditPullRequest detailEditField = "pull request"
 	detailEditPRUrl       detailEditField = "pr url"
@@ -154,7 +154,7 @@ type changeTypesUpdatedForRewriteMsg struct {
 	err    error
 }
 
-type changeIdeaUpdatedForRewriteMsg struct {
+type changeDefUpdatedForRewriteMsg struct {
 	change dto.Change
 	err    error
 }
@@ -235,36 +235,38 @@ type appClient interface {
 
 // Model is the root Bubble Tea model for the mch application shell.
 type Model struct {
-	input           textarea.Model
-	state           State
-	previousState   State
-	width           int
-	height          int
-	quitting        bool
-	err             string
-	status          string
-	helpQuery       string
-	promptCursorRow int
-	promptCursorCol int
-	pendingAltO     bool
-	changesFilters  changesFilters
-	optionCatalog   optionCatalog
-	changeList      changes.Model
-	agentFlow       agent.Model
-	agentRunner     agent.Runner
-	agentWorkspace  string
-	agentSpinner    spinner.Model
-	agentViewport   viewport.Model
-	agentElapsed    int
-	newChangeUUID   func() (uuid.UUID, error)
-	currentProject  dto.Option
-	projectList     projects.Model
-	client          appClient
-	appConfig       appConfig
-	configPath      string
-	dropdown        dropdownModel
-	detailEditField detailEditField
-	activeTestCase  dto.TestCase
+	input               textarea.Model
+	state               State
+	previousState       State
+	width               int
+	height              int
+	quitting            bool
+	err                 string
+	status              string
+	helpQuery           string
+	promptCursorRow     int
+	promptCursorCol     int
+	pendingAltO         bool
+	changesFilters      changesFilters
+	optionCatalog       optionCatalog
+	changeList          changes.Model
+	agentFlow           agent.Model
+	agentRunner         agent.Runner
+	agentWorkspace      string
+	agentSpinner        spinner.Model
+	agentViewport       viewport.Model
+	agentElapsed        int
+	agentMessageCount   int
+	agentSessionResumed bool
+	newChangeUUID       func() (uuid.UUID, error)
+	currentProject      dto.Option
+	projectList         projects.Model
+	client              appClient
+	appConfig           appConfig
+	configPath          string
+	dropdown            dropdownModel
+	detailEditField     detailEditField
+	activeTestCase      dto.TestCase
 }
 
 // NewModel creates the default mch model using local config and HTTP backend access.
@@ -306,8 +308,10 @@ func newModelWithConfig(client appClient, cfg appConfig) Model {
 	input.Cursor.SetMode(cursor.CursorStatic)
 	input.Focus()
 	spin := spinner.New(
-		spinner.WithSpinner(spinner.MiniDot),
-		spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("86"))),
+		spinner.WithSpinner(spinner.Spinner{
+			Frames: []string{"·", "•", "●", "•"},
+			FPS:    250 * time.Millisecond,
+		}),
 	)
 	agentViewport := viewport.New(80, agentViewportHeight(24))
 	agentViewport.Style = agentViewportStyle()

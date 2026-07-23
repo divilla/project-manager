@@ -53,7 +53,7 @@ func UpdateTarget(state State) State {
 // SaveTarget returns the state reached after a navigation-only save.
 func SaveTarget(state State) State {
 	switch state {
-	case CreateIdeaState, UpdateIdeaState, RewriteIdeaState, ChangeCreateState, ChangeUpdateState:
+	case CreateDefState, UpdateDefState, RewriteDefState, ChangeCreateState, ChangeUpdateState:
 		return ChangeDetailsState
 	case TestCaseCreateState, TestCaseUpdateState:
 		return ChangeDetailsState
@@ -69,9 +69,9 @@ func SaveTarget(state State) State {
 // CancelTarget returns the state reached after canceling an edit/create flow.
 func CancelTarget(state State) State {
 	switch state {
-	case CreateIdeaState, ChangeCreateState:
+	case CreateDefState, ChangeCreateState:
 		return ChangesListState
-	case UpdateIdeaState, ChangeUpdateState:
+	case UpdateDefState, ChangeUpdateState:
 		return ChangeDetailsState
 	case TestCaseCreateState, TestCaseUpdateState:
 		return ChangeDetailsState

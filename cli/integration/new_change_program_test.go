@@ -28,14 +28,14 @@ import (
 const programRefUUID = "0198a86f-9b8a-7d89-ae5b-6f25b528b04c"
 
 func TestCLIProgramNewChangeScenarios(t *testing.T) {
-	idea := "# Program Change\n\nTypes: feature\n\nInitial idea"
+	def := "# Program Change\n\nTypes: feature\n\nInitial definition"
 
 	t.Run("config ignores legacy temp and creates UUID stage files through editor handoff", func(t *testing.T) {
 		backend := newProgramBackend(t)
 		root := t.TempDir()
 		legacy := filepath.Join(t.TempDir(), "legacy")
 		writeProgramConfig(t, root, backend.URL, legacy)
-		session := startProgram(t, root, programRefUUID, &programRunner{root: root}, idea)
+		session := startProgram(t, root, programRefUUID, &programRunner{root: root}, def)
 
 		session.openNewChange(t)
 		session.waitFor(t, "Create Change?")
@@ -43,7 +43,7 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		workspace := programWorkspace(root, programRefUUID)
 		require.FileExists(t, filepath.Join(workspace, "input.md"))
 		require.FileExists(t, filepath.Join(workspace, "output.md"))
-		assert.Equal(t, idea, readProgramFile(t, filepath.Join(workspace, "output.md")))
+		assert.Equal(t, def, readProgramFile(t, filepath.Join(workspace, "output.md")))
 		assert.NoDirExists(t, legacy)
 		session.selectSecondAndFinishFromChanges(t)
 	})
@@ -53,7 +53,7 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 			name   string
 			output string
 			no     bool
-		}{{name: "unchanged"}, {name: "no", output: idea, no: true}} {
+		}{{name: "unchanged"}, {name: "no", output: def, no: true}} {
 			t.Run(scenario.name, func(t *testing.T) {
 				backend := newProgramBackend(t)
 				root := t.TempDir()
@@ -98,21 +98,21 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		}
 	})
 
-	t.Run("idea validation does not require spec layout", func(t *testing.T) {
+	t.Run("def validation does not require spec layout", func(t *testing.T) {
 		for _, scenario := range []struct {
 			name            string
-			idea            string
+			def             string
 			wantTypeUpdates int
 		}{
-			{name: "leading blank before title", idea: "\n# Program Change\n\nInitial idea"},
-			{name: "no blank after title", idea: "# Program Change\nTypes: feature\n\nInitial idea", wantTypeUpdates: 1},
+			{name: "leading blank before title", def: "\n# Program Change\n\nInitial definition"},
+			{name: "no blank after title", def: "# Program Change\nTypes: feature\n\nInitial definition", wantTypeUpdates: 1},
 		} {
 			t.Run(scenario.name, func(t *testing.T) {
 				backend := newProgramBackend(t)
 				root := t.TempDir()
 				writeProgramConfig(t, root, backend.URL, "")
-				runner := &programRunner{root: root, rewritten: "# Program Change\n\nRewritten idea"}
-				session := startProgram(t, root, programRefUUID, runner, scenario.idea)
+				runner := &programRunner{root: root, rewritten: "# Program Change\n\nRewritten definition"}
+				session := startProgram(t, root, programRefUUID, runner, scenario.def)
 
 				session.openNewChange(t)
 				session.waitFor(t, "Create Change?")
@@ -130,7 +130,7 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		backend := newProgramBackend(t)
 		root := t.TempDir()
 		writeProgramConfig(t, root, backend.URL, "")
-		artifact := "# Ordered Change\n\nTypes: unsupported!\n\nEpic: Epic Five\n\nInitial idea"
+		artifact := "# Ordered Change\n\nTypes: unsupported!\n\nEpic: Epic Five\n\nInitial definition"
 		session := startProgram(t, root, programRefUUID, &programRunner{root: root}, artifact)
 
 		session.openNewChange(t)
@@ -146,9 +146,9 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		backend := newProgramBackend(t)
 		root := t.TempDir()
 		writeProgramConfig(t, root, backend.URL, "")
-		runner := &programRunner{root: root, rewritten: "# Typed Change\n\nTypes: feature\n\nRewritten idea"}
-		typedIdea := "# Typed Change\n\nTypes: fix|feature|unsupported!\n\nInitial idea"
-		session := startProgram(t, root, programRefUUID, runner, typedIdea)
+		runner := &programRunner{root: root, rewritten: "# Typed Change\n\nTypes: feature\n\nRewritten definition"}
+		typedDef := "# Typed Change\n\nTypes: fix|feature|unsupported!\n\nInitial definition"
+		session := startProgram(t, root, programRefUUID, runner, typedDef)
 
 		session.openNewChange(t)
 		session.waitFor(t, "Create Change?")
@@ -159,7 +159,7 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		assert.Equal(t, []string{
 			"/api/v1/change/create",
 			"/api/v1/change/update-change-types",
-			"/api/v1/change/update-idea",
+			"/api/v1/change/update-def",
 			"/api/v1/change/update-change-types",
 			"/api/v1/change/get",
 		}, backend.changeMutationPaths())
@@ -174,7 +174,7 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 				backend.failTypeUpdate = true
 				root := t.TempDir()
 				writeProgramConfig(t, root, backend.URL, "")
-				session := startProgram(t, root, programRefUUID, &programRunner{root: root}, idea)
+				session := startProgram(t, root, programRefUUID, &programRunner{root: root}, def)
 
 				session.openNewChange(t)
 				session.waitFor(t, "Create Change?")
@@ -184,20 +184,20 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 
 				switch action {
 				case "fix unchanged":
-					session.setEditorOutput(t, idea)
+					session.setEditorOutput(t, def)
 					session.selectFirst(t)
 					session.output.waitForCount(t, "ChangeDetailsScreen", 2)
 				case "fix invalid then cancel":
 					session.setEditorOutput(t, "missing title")
 					session.selectFirst(t)
-					session.waitFor(t, "idea title is required")
+					session.waitFor(t, "definition title is required")
 					session.selectSecond(t)
 				default:
 					session.selectSecond(t)
 				}
 
 				assert.Equal(t, 1, backend.createCount())
-				assert.Zero(t, backend.ideaUpdateCount())
+				assert.Zero(t, backend.defUpdateCount())
 				require.DirExists(t, filepath.Join(root, agent.TempDir, programRefUUID))
 				session.finishFromDetails(t)
 			})
@@ -208,8 +208,8 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		backend := newProgramBackend(t)
 		root := t.TempDir()
 		writeProgramConfig(t, root, backend.URL, "")
-		artifact := "# No Typed Change\n\nInitial idea"
-		runner := &programRunner{root: root, rewritten: "# No Typed Change\n\nRewritten idea"}
+		artifact := "# No Typed Change\n\nInitial definition"
+		runner := &programRunner{root: root, rewritten: "# No Typed Change\n\nRewritten definition"}
 		session := startProgram(t, root, programRefUUID, runner, artifact)
 
 		session.openNewChange(t)
@@ -247,8 +247,8 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		backend := newProgramBackend(t)
 		root := t.TempDir()
 		writeProgramConfig(t, root, backend.URL, "")
-		runner := &programRunner{root: root, rewritten: "# Program Change\n\nTypes: feature\n\nRewritten idea"}
-		session := startProgram(t, root, programRefUUID, runner, idea)
+		runner := &programRunner{root: root, rewritten: "# Program Change\n\nTypes: feature\n\nRewritten definition"}
+		session := startProgram(t, root, programRefUUID, runner, def)
 
 		session.openNewChange(t)
 		session.waitFor(t, "Create Change?")
@@ -257,14 +257,14 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 
 		workspace := programWorkspace(root, programRefUUID)
 		assert.Equal(t, programRefUUID, backend.lastRefUUID())
-		assert.Equal(t, idea, readProgramFile(t, filepath.Join(workspace, "input.md")))
+		assert.Equal(t, def, readProgramFile(t, filepath.Join(workspace, "input.md")))
 		assert.Equal(t, runner.rewritten, readProgramFile(t, filepath.Join(workspace, "output.md")))
 		require.DirExists(t, workspace)
 		assert.Equal(t, map[string]string{
 			"MCH_DEFAULT_DIR": agent.DefaultDir,
 			"MCH_TEMP_DIR":    agent.TempDir,
 			"MCH_REF_UUID":    programRefUUID,
-			"MCH_STAGE":       agent.IdeaStage,
+			"MCH_STAGE":       agent.ArtifactStage,
 		}, runner.environment())
 		session.finishFromDetails(t)
 	})
@@ -315,12 +315,12 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		})
 	})
 
-	t.Run("idea agent failure remains visible in the complete program", func(t *testing.T) {
+	t.Run("def agent failure remains visible in the complete program", func(t *testing.T) {
 		backend := newProgramBackend(t)
 		root := t.TempDir()
 		writeProgramConfig(t, root, backend.URL, "")
 		runner := &programRunner{root: root, err: errors.New("codex failed")}
-		session := startProgram(t, root, programRefUUID, runner, idea)
+		session := startProgram(t, root, programRefUUID, runner, def)
 
 		session.openNewChange(t)
 		session.waitFor(t, "Create Change?")
@@ -328,7 +328,7 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		session.waitFor(t, "codex failed")
 
 		assert.Contains(t, session.output.String(), "AgentRunningScreen")
-		assert.Equal(t, agent.IdeaStage, runner.environment()["MCH_STAGE"])
+		assert.Equal(t, agent.ArtifactStage, runner.environment()["MCH_STAGE"])
 		session.stop(t)
 	})
 
@@ -337,7 +337,7 @@ func TestCLIProgramNewChangeScenarios(t *testing.T) {
 		backend.failCreate = true
 		root := t.TempDir()
 		writeProgramConfig(t, root, backend.URL, "")
-		session := startProgram(t, root, programRefUUID, &programRunner{root: root}, idea)
+		session := startProgram(t, root, programRefUUID, &programRunner{root: root}, def)
 
 		session.openNewChange(t)
 		session.waitFor(t, "Create Change?")
@@ -556,9 +556,9 @@ type programBackend struct {
 	creates        []map[string]any
 	typeUpdates    [][]string
 	typeCatalogs   int
-	ideaUpdates    int
+	defUpdates     int
 	paths          []string
-	currentIdea    string
+	currentDef     string
 	failCreate     bool
 	failTypeUpdate bool
 	epics          int
@@ -592,7 +592,7 @@ func newProgramBackend(t *testing.T) *programBackend {
 		case "/api/v1/change/create":
 			b.mu.Lock()
 			b.creates = append(b.creates, payload)
-			b.currentIdea, _ = payload["idea"].(string)
+			b.currentDef, _ = payload["def"].(string)
 			fail := b.failCreate
 			b.mu.Unlock()
 			if fail {
@@ -600,10 +600,10 @@ func newProgramBackend(t *testing.T) *programBackend {
 				return
 			}
 			writeProgramJSON(w, map[string]any{"change": b.change(payload["title"], nil)})
-		case "/api/v1/change/update-idea":
+		case "/api/v1/change/update-def":
 			b.mu.Lock()
-			b.ideaUpdates++
-			b.currentIdea, _ = payload["idea"].(string)
+			b.defUpdates++
+			b.currentDef, _ = payload["def"].(string)
 			b.mu.Unlock()
 			writeProgramJSON(w, map[string]any{"change": b.change("Program Change", nil)})
 		case "/api/v1/change/update-change-types":
@@ -640,7 +640,7 @@ func (b *programBackend) change(title any, types []string) map[string]any {
 	}
 	return map[string]any{
 		"id": 12, "project_id": 7, "ref_uuid": refUUID, "title": title,
-		"idea": b.currentIdea, "change_types": types,
+		"def": b.currentDef, "change_types": types,
 	}
 }
 
@@ -684,10 +684,10 @@ func (b *programBackend) typeUpdatesCopy() [][]string {
 	return result
 }
 
-func (b *programBackend) ideaUpdateCount() int {
+func (b *programBackend) defUpdateCount() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.ideaUpdates
+	return b.defUpdates
 }
 
 func (b *programBackend) lastRefUUID() string {
@@ -764,12 +764,12 @@ func writeProgramConfig(t *testing.T, root, backendURL, legacyTemp string) {
 		config += "temp_dir: " + legacyTemp + "\n"
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "config.yaml"), []byte(config), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nname: Default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: idea-write\n    mode: write\n    prompt: prompts/idea-write.md\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nname: Default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: def-write\n    mode: write\n    prompt: prompts/def-write.md\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "help.yaml"), []byte("version: 1\n"), 0o644))
 }
 
 func programWorkspace(root, refUUID string) string {
-	return filepath.Join(root, agent.TempDir, refUUID, agent.IdeaStage)
+	return filepath.Join(root, agent.TempDir, refUUID, agent.ArtifactStage)
 }
 
 func writeProgramJSON(w http.ResponseWriter, value any) {

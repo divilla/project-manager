@@ -39,12 +39,12 @@ func TestRewriteScreenUsesColoredBlackScrollableViewport(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(repoRoot, ".mch", "default"), 0o755))
 	require.NoError(t, exec.Command("git", "init", repoRoot).Run())
 	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "config.yaml"), "backend_url: "+backend.URL+"\nproject_id: 7\n", 0o644)
-	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "flow.yaml"), "version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: idea-write\n    mode: edit\n", 0o644)
+	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "flow.yaml"), "version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: def-write\n    mode: edit\n", 0o644)
 	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "help.yaml"), "version: 1\nstage_modes: []\ntask_statuses: []\ntask_steps: []\n", 0o644)
 
 	stubDir := filepath.Join(testRoot, "bin")
 	require.NoError(t, os.MkdirAll(stubDir, 0o755))
-	writeTerminalFile(t, filepath.Join(stubDir, "editor"), "#!/bin/sh\nprintf '# PTY Change\\n\\nInitial idea\\n' > \"$1\"\n", 0o755)
+	writeTerminalFile(t, filepath.Join(stubDir, "editor"), "#!/bin/sh\nprintf '# PTY Change\\n\\nInitial definition\\n' > \"$1\"\n", 0o755)
 	codexPIDPath := filepath.Join(testRoot, "codex.pid")
 	codexReleasePath := filepath.Join(testRoot, "codex.release")
 	writeTerminalFile(t, filepath.Join(stubDir, "codex"), terminalCodexStub(), 0o755)
@@ -87,8 +87,10 @@ func TestRewriteScreenUsesColoredBlackScrollableViewport(t *testing.T) {
 	require.NoError(t, capture.waitFor("Create Change?", 5*time.Second))
 	_, err = stdin.Write([]byte{'\r'})
 	require.NoError(t, err)
-	require.NoError(t, capture.waitFor("assistant: output line 30", 8*time.Second))
-	assert.Contains(t, capture.after(0), "Type / for commands")
+	require.NoError(t, capture.waitFor("assistant: output line 75", 8*time.Second))
+	runningOutput := capture.after(0)
+	assert.Contains(t, runningOutput, "Type / for commands")
+	assert.Contains(t, runningOutput, "def-write - 33333333-3333-3333-3333-333333333333 - started - 00:")
 
 	_, err = stdin.Write([]byte{'/'})
 	require.NoError(t, err)
@@ -137,7 +139,7 @@ printf '%s\n' "$$" > "$MCH_PTY_CODEX_PID"
 printf 'Done.' > "$output"
 printf '{"type":"thread.started","thread_id":"33333333-3333-3333-3333-333333333333"}\n'
 index=1
-while [ "$index" -le 30 ]; do
+while [ "$index" -le 75 ]; do
   printf '{"type":"item.completed","item":{"type":"agent_message","text":"output line %02d"}}\n' "$index"
   index=$((index + 1))
 done
@@ -164,18 +166,18 @@ func newTerminalBackend(t *testing.T) *httptest.Server {
 			w.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id": 12, "project_id": 7, "ref_uuid": payload["ref_uuid"],
-				"title": payload["title"], "idea": payload["idea"],
+				"title": payload["title"], "def": payload["def"],
 			})
-		case "/api/v1/change/update-idea":
+		case "/api/v1/change/update-def":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"id": 12, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
-				"title": "PTY Change", "idea": payload["idea"], "agent_edit": true,
+				"title": "PTY Change", "def": payload["def"], "agent_edit": true,
 			})
 		case "/api/v1/change/get":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"change": map[string]any{
 					"id": 12, "project_id": 7, "ref_uuid": "0198a86f-9b8a-7d89-ae5b-6f25b528b04c",
-					"title": "PTY Change", "idea": "# PTY Change\n\nInitial idea\n", "agent_edit": true,
+					"title": "PTY Change", "def": "# PTY Change\n\nInitial definition\n", "agent_edit": true,
 				},
 				"test_cases": []any{},
 			})

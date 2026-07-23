@@ -126,7 +126,7 @@ func workflowEnvironment(base []string, workspace Workspace) []string {
 		"MCH_DEFAULT_DIR": DefaultDir,
 		"MCH_TEMP_DIR":    TempDir,
 		"MCH_REF_UUID":    workspace.RefUUID,
-		"MCH_STAGE":       IdeaStage,
+		"MCH_STAGE":       ArtifactStage,
 	}
 	result := make([]string, 0, len(base)+len(overrides))
 	for _, entry := range base {

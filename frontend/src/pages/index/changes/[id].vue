@@ -169,9 +169,9 @@
             <td>{{ currentChange.agent_edit ? 'Yes' : 'No' }}</td>
           </tr>
           <tr>
-            <td class="text-right text-weight-bold">Idea</td>
+            <td class="text-right text-weight-bold">Definition</td>
             <td class="change-detail-artifact-cell">
-              <pre class="change-detail-text">{{ currentChange.idea }}</pre>
+              <pre class="change-detail-text">{{ currentChange.def }}</pre>
             </td>
           </tr>
           <tr v-if="currentChange.pr_url">

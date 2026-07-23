@@ -28,7 +28,7 @@ const changeColumns = `
 	epic_id,
 	epic_name,
 	title,
-	idea,
+	def,
 	spec,
 	pr,
 	pr_url,
@@ -289,7 +289,7 @@ func scanChange(row pgx.Row) (dto.Change, error) {
 	err := row.Scan(
 		&change.ID, &refUUID, &ref, &change.Version, &slug, &change.ProjectID,
 		&change.ChangePhase, &change.ChangeTypes, &epicID, &epicName, &change.Title,
-		&change.Idea, &change.Spec, &change.PR, &change.PRUrl, &change.AgentEdit, &change.Open, &change.DoneTC,
+		&change.Def, &change.Spec, &change.PR, &change.PRUrl, &change.AgentEdit, &change.Open, &change.DoneTC,
 		&change.TotalTC, &change.Completed, &change.Created, &change.Modified,
 	)
 	if err != nil {

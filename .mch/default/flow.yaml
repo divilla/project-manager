@@ -1,48 +1,169 @@
 version: 1
 slug: default
 name: Default Change Automation
-description: Default repository Flow for moving a Change from idea capture through master promotion.
+description: Default repository Flow for moving a Change from definition capture through master promotion.
 
 help: help.yaml
 makefile: Makefile
 
 steps:
-  - slug: idea-write
-    stage: idea
-    help: rewrite the idea
-    mode: exec
-    prompt: prompts/idea-write.md
+  - slug: def-create
+    stage: artifact
+    help: Create the initial Change definition.
+    mode: editor
+    next-step: def-edit
 
-  - slug: idea-review
-    stage: idea
-    help: review the idea
-    mode: exec
-    prompt: prompts/idea-review.md
+  - slug: def-edit
+    stage: artifact
+    help: Edit the Change definition.
+    mode: editor
+    next-step: def-write
 
-  - slug: idea-chat
-    stage: idea
-    help: capture or refine the initial change idea
+  - slug: spec-edit
+    stage: artifact
+    help: Edit the Change specification.
+    mode: editor
+    commit: Spec for $slug by user
+    next-step: spec-write
+
+  - slug: pr-edit
+    stage: artifact
+    help: Edit the pull request description.
+    mode: editor
+    commit: PR for $slug by user
+    next-step: pr-write
+
+  - slug: chat
+    stage: <inherit-from-previous-step>
+    help: Discuss and refine the current Change artifact.
+    commit: Update for $slug by user
     mode: chat
 
+  - slug: def-write
+    stage: artifact
+    help: Draft or revise the Change definition.
+    mode: exec
+    prompt: prompts/def-write.md
+    next-step: def-review
+
+  - slug: def-review
+    stage: artifact
+    help: Review the Change definition for clarity, completeness, and scope.
+    mode: exec
+    prompt: prompts/def-review.md
+
+  - slug: branch-init
+    stage: artifact
+    help: Initialize and check out the Change branch.
+    mode: script
+    script: scripts/init-branch.sh
+    commit: Init for $slug by user
+    next-step: init-code-chat
+
+  - slug: init-code-chat
+    stage: artifact
+    help: Discuss the initial implementation context before specification work.
+    mode: chat
+    commit: Initial Code for $slug by user
+    next-step: spec-write
+
   - slug: spec-write
-    stage: idea
-    help: write the spec
+    stage: artifact
+    help: Draft or revise the Change specification.
     mode: exec
     prompt: prompts/spec-write.md
-
-  - slug: pr-write
-    stage: idea
-    help: write the pull request
-    mode: exec
-    prompt: prompts/pr-write.md
+    commit: Spec for $slug by agent
+    pre: scripts/spec-publish.sh
+    post: scripts/spec-save.sh
+    switch-output:
+      - case: Done.
+        goto: spec-review
+      - case: '*'
+        goto: chat
 
   - slug: spec-review
     stage: spec-review
-    help: review the spec
+    help: Review the Change specification for implementation readiness.
     mode: exec
     prompt: prompts/spec-review.md
+    switch-output:
+      - case: No blocking issues found.
+        goto: code-implement
+      - case: '*'
+        goto: chat
 
   - slug: spec-review-chat
     stage: spec-review
-    help: review the spec chat
+    help: Resolve specification review findings.
     mode: chat
+    commit: Spec for $slug by agent
+    next-step: spec-review
+
+  - slug: code-implement
+    stage: code
+    help: Implement the approved Change specification.
+    mode: exec
+    prompt: prompts/code-implement.md
+    commit: Code for $slug by agent
+    next-step: code-chat
+
+  - slug: code-chat
+    stage: code
+    help: Discuss implementation progress, decisions, and blockers.
+    mode: chat
+    commit: Code for $slug by user
+    next-step: pr-write
+
+  - slug: pr-write
+    stage: artifact
+    help: Draft the pull request description from the specification and branch diff.
+    mode: exec
+    prompt: prompts/pr-write.md
+    commit: PR for $slug by agent
+    switch-output:
+      - case: Done.
+        goto: code-review
+      - case: '*'
+        goto: chat
+
+  - slug: pr-publish
+    stage: artifact
+    help: Publish the pull request.
+    mode: script
+    script: scripts/change-pr.pl
+    next-step: code-review
+
+  - slug: code-review
+    stage: code-review
+    help: Review the implementation against the Change specification.
+    mode: exec
+    prompt: prompts/code-review.md
+    switch-output:
+      - case: No blocking issues found.
+        goto: pr-update
+      - case: '*'
+        goto: code-review-publish
+
+  - slug: code-review-publish
+    stage: code-review
+    help: Publish the implementation review findings.
+    mode: script
+    script: scripts/change-comment.pl
+    next-step: code-review-chat
+
+  - slug: code-review-chat
+    stage: code-review
+    help: Resolve implementation review findings.
+    mode: chat
+    commit: Code fix for $slug by agent
+    next-step: code-review
+
+  - slug: pr-update
+    stage: artifact
+    help: Update the pull request description to reflect the final implementation.
+    mode: exec
+    prompt: prompts/pr-update.md
+    commit: PR update for $slug by agent
+    switch-output:
+      - case: '*'
+        goto: chat

@@ -6,6 +6,7 @@ drop procedure if exists public.sp_change_assign_flow;
 drop procedure if exists public.sp_change_ref_update;
 drop procedure if exists public.sp_change_title_update;
 drop procedure if exists public.sp_change_idea_update;
+drop procedure if exists public.sp_change_def_update;
 drop procedure if exists public.sp_change_spec_update;
 drop procedure if exists public.sp_change_pr_update;
 drop procedure if exists public.sp_change_ref;
@@ -117,7 +118,7 @@ create table public.change
     change_types     text[]                   default ARRAY []::text[]  not null,
     epic_id          bigint,
     title            text                     default ''::text          not null,
-    idea             text                     default ''::text          not null,
+    def              text                     default ''::text          not null,
     spec             text                     default ''::text          not null,
     pr               text                     default ''::text          not null,
     pr_url           text                     default ''::text          not null,
@@ -242,7 +243,7 @@ SELECT c.id,
        c.epic_id,
        e.name AS epic_name,
        c.title,
-       c.idea,
+       c.def,
        c.spec,
        c.pr,
        c.pr_url,
@@ -357,7 +358,7 @@ begin
 end;
 $$;
 
-create function public.fn_change_insert(_project_id bigint, _ref_uuid uuid, _title text, _idea text) returns bigint
+create function public.fn_change_insert(_project_id bigint, _ref_uuid uuid, _title text, _def text) returns bigint
     language plpgsql
 as
 $$
@@ -367,15 +368,15 @@ declare
     _modified timestamptz;
 begin
     insert into public.change (
-        project_id, ref_uuid, title, idea
+        project_id, ref_uuid, title, def
     ) values (
-                 _project_id, _ref_uuid, _title, _idea
+                 _project_id, _ref_uuid, _title, _def
              ) returning id, agent_edit, modified into _id, _agent_edit, _modified;
 
     insert into public.change_history (
         id, version, doc_type, body, agent_edit, modified
     ) values (
-                 _id, 0, 'idea', _idea, false, _modified
+                 _id, 0, 'def', _def, false, _modified
              );
 
     return _id;
@@ -384,7 +385,7 @@ $$;
 
 
 
-create procedure public.sp_change_idea_update(_id bigint, _idea text, _agent_edit bool)
+create procedure public.sp_change_def_update(_id bigint, _def text, _agent_edit bool)
     language plpgsql
 as
 $$
@@ -393,14 +394,14 @@ declare
     _modified timestamptz;
 begin
     update public.change
-    set version=version+1, idea=_idea, agent_edit=_agent_edit, modified=now()
+    set version=version+1, def=_def, agent_edit=_agent_edit, modified=now()
     where id=_id
     returning version, modified into _version, _modified;
 
     insert into public.change_history (
         id, version, doc_type, body, agent_edit, modified
     ) values (
-        _id, _version, 'idea', _idea, _agent_edit, _modified
+        _id, _version, 'def', _def, _agent_edit, _modified
     );
 end;
 $$;

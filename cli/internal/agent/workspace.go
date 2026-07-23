@@ -40,18 +40,18 @@ func (w Workspace) Ensure() error {
 	return os.MkdirAll(w.Dir, 0o755)
 }
 
-// IdeaPath returns the Markdown idea file path.
-func (w Workspace) IdeaPath() string {
+// DefPath returns the Markdown definition file path.
+func (w Workspace) DefPath() string {
 	if w.RootDir == "" {
-		return filepath.Join(w.Dir, IdeaFileName)
+		return filepath.Join(w.Dir, DefFileName)
 	}
 	return w.OutputPath()
 }
 
-// InputPath returns the baseline Idea artifact path.
+// InputPath returns the baseline definition artifact path.
 func (w Workspace) InputPath() string { return filepath.Join(w.Dir, InputFileName) }
 
-// OutputPath returns the editable and rewritten Idea artifact path.
+// OutputPath returns the editable and rewritten definition artifact path.
 func (w Workspace) OutputPath() string { return filepath.Join(w.Dir, OutputFileName) }
 
 // GeneratedPath returns the generated Change spec path.
@@ -72,9 +72,9 @@ func (w Workspace) LogPath() string {
 // SessionPath returns the stage-local Codex session file path.
 func (w Workspace) SessionPath() string { return filepath.Join(w.Dir, SessionFileName) }
 
-// IdeaExists reports whether the idea file already exists.
-func (w Workspace) IdeaExists() (bool, error) {
-	_, err := os.Stat(w.IdeaPath())
+// DefExists reports whether the definition file already exists.
+func (w Workspace) DefExists() (bool, error) {
+	_, err := os.Stat(w.DefPath())
 	if err == nil {
 		return true, nil
 	}
@@ -84,12 +84,12 @@ func (w Workspace) IdeaExists() (bool, error) {
 	return false, err
 }
 
-// ResetIdea creates or replaces the idea file with an empty Markdown file.
-func (w Workspace) ResetIdea() error {
+// ResetDef creates or replaces the definition file with an empty Markdown file.
+func (w Workspace) ResetDef() error {
 	if err := w.Ensure(); err != nil {
 		return err
 	}
-	return os.WriteFile(w.IdeaPath(), []byte{}, 0o644)
+	return os.WriteFile(w.DefPath(), []byte{}, 0o644)
 }
 
 // InitializeChange creates a new blank input/output stage and refuses file reuse.
@@ -115,8 +115,8 @@ func (w Workspace) InitializeChange() error {
 	return nil
 }
 
-// EqualIdeaFiles reports whether the current editor pass changed output.
-func (w Workspace) EqualIdeaFiles() (bool, error) {
+// EqualDefFiles reports whether the current editor pass changed output.
+func (w Workspace) EqualDefFiles() (bool, error) {
 	input, err := os.ReadFile(w.InputPath())
 	if err != nil {
 		return false, err
@@ -184,25 +184,25 @@ func (w Workspace) RemoveChange() error {
 	return os.RemoveAll(root)
 }
 
-// WriteIdea replaces the idea file contents.
-func (w Workspace) WriteIdea(content string) error {
+// WriteDef replaces the definition file contents.
+func (w Workspace) WriteDef(content string) error {
 	if err := w.Ensure(); err != nil {
 		return err
 	}
-	return os.WriteFile(w.IdeaPath(), []byte(content), 0o644)
+	return os.WriteFile(w.DefPath(), []byte(content), 0o644)
 }
 
-// RemoveIdea removes the idea file when it exists.
-func (w Workspace) RemoveIdea() error {
-	if err := os.Remove(w.IdeaPath()); err != nil && !os.IsNotExist(err) {
+// RemoveDef removes the definition file when it exists.
+func (w Workspace) RemoveDef() error {
+	if err := os.Remove(w.DefPath()); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
 }
 
-// ReadIdea reads the current idea file contents.
-func (w Workspace) ReadIdea() (string, error) {
-	content, err := os.ReadFile(w.IdeaPath())
+// ReadDef reads the current definition file contents.
+func (w Workspace) ReadDef() (string, error) {
+	content, err := os.ReadFile(w.DefPath())
 	if err != nil {
 		return "", err
 	}

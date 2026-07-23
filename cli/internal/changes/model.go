@@ -59,10 +59,10 @@ type ParsedSpec struct {
 	ChangeTypesPresent bool
 }
 
-// ParsedIdea stores the title and full idea text extracted from idea markdown.
-type ParsedIdea struct {
+// ParsedDef stores the title and full def text extracted from def markdown.
+type ParsedDef struct {
 	Title              string
-	Idea               string
+	Def                string
 	ChangeTypes        []string
 	ChangeTypesPresent bool
 }
@@ -234,7 +234,7 @@ func DetailRows(change dto.Change) []DetailRow {
 		{Label: "Epic", Text: epicLabel(change), Selectable: true},
 		{Label: "Types", Text: strings.Join(change.ChangeTypes, "|"), Selectable: true, DividerAfter: true},
 		{Label: "Title", Text: change.Title, Selectable: true, DividerAfter: true},
-		{Label: "Idea", Text: change.Idea, Selectable: true, DividerAfter: true},
+		{Label: "Definition", Text: change.Def, Selectable: true, DividerAfter: true},
 		{Label: "Spec", Text: change.Spec, Selectable: true, DividerAfter: true},
 	}
 	for i, testCase := range change.TestCases {
@@ -468,7 +468,7 @@ func detailRowTextLines(row DetailRow, textWidth int) []string {
 }
 
 func detailRowShouldTruncate(row DetailRow) bool {
-	return row.Label == "Idea" || row.Label == "Spec" || row.Label == "PR"
+	return row.Label == "Definition" || row.Label == "Spec" || row.Label == "PR"
 }
 
 func detailDividerAfter(row DetailRow) bool {
@@ -573,17 +573,17 @@ func FilteredRows(rows []dto.Change, filters Filters) []dto.Change {
 	return filtered
 }
 
-// ParseIdeaStructure extracts the Change title and idea text.
-func ParseIdeaStructure(idea string) (ParsedIdea, error) {
-	normalized := strings.ReplaceAll(strings.ReplaceAll(idea, "\r\n", "\n"), "\r", "\n")
+// ParseDefStructure extracts the Change title and def text.
+func ParseDefStructure(def string) (ParsedDef, error) {
+	normalized := strings.ReplaceAll(strings.ReplaceAll(def, "\r\n", "\n"), "\r", "\n")
 	lines := strings.Split(normalized, "\n")
 	firstIndex := firstNonBlankLine(lines, 0)
 	if firstIndex < 0 || !strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "# ") || strings.HasPrefix(strings.TrimSpace(lines[firstIndex]), "## ") {
-		return ParsedIdea{}, fmt.Errorf("idea title is required")
+		return ParsedDef{}, fmt.Errorf("definition title is required")
 	}
 	title := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[firstIndex]), "# "))
 	if title == "" {
-		return ParsedIdea{}, fmt.Errorf("idea title is required")
+		return ParsedDef{}, fmt.Errorf("definition title is required")
 	}
 	types, typesPresent := ParseArtifactTypes(normalized)
 	bodyLines := lines[firstIndex+1:]
@@ -592,11 +592,11 @@ func ParseIdeaStructure(idea string) (ParsedIdea, error) {
 		bodyLines = bodyLines[firstBodyLine+1:]
 	}
 	if strings.TrimSpace(strings.Join(bodyLines, "\n")) == "" {
-		return ParsedIdea{}, fmt.Errorf("idea body is required")
+		return ParsedDef{}, fmt.Errorf("definition body is required")
 	}
-	return ParsedIdea{
+	return ParsedDef{
 		Title:              title,
-		Idea:               normalized,
+		Def:                normalized,
 		ChangeTypes:        types,
 		ChangeTypesPresent: typesPresent,
 	}, nil
@@ -735,7 +735,7 @@ func matchesFind(change dto.Change, query string) bool {
 		change.ChangePhase,
 		change.EpicID,
 		change.EpicName,
-		change.Idea,
+		change.Def,
 		change.Spec,
 	}
 	values = append(values, change.ChangeTypes...)

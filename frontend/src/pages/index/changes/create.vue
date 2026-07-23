@@ -26,10 +26,10 @@
       />
 
       <q-input
-        v-model="idea"
+        v-model="def"
         outlined
         type="textarea"
-        label="Idea"
+        label="Definition"
         input-style="min-height: 240px"
         :disable="loading || saving"
         :rules="requiredRules"
@@ -58,7 +58,7 @@ const changeCache = useChangeCacheStore();
 const { currentProjectId } = storeToRefs(projectSelection);
 
 const title = ref('');
-const idea = ref('');
+const def = ref('');
 const loading = ref(false);
 const saving = ref(false);
 const error = ref('');
@@ -87,13 +87,13 @@ async function createChangeFromPage() {
   if (saving.value) return;
 
   const changeTitle = title.value.trim();
-  const changeIdea = idea.value.trim();
+  const changeDefinition = def.value.trim();
   const projectId = currentProjectId.value;
   if (!projectId) {
     error.value = 'Select a project before creating a change.';
     return;
   }
-  if (!changeTitle || !changeIdea) return;
+  if (!changeTitle || !changeDefinition) return;
 
   saving.value = true;
   error.value = '';
@@ -102,7 +102,7 @@ async function createChangeFromPage() {
     const input: ChangeCreateInput = {
       project_id: projectId,
       title: changeTitle,
-      idea: changeIdea,
+      def: changeDefinition,
     };
 
     const change = await createChange(input);

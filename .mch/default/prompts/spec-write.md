@@ -1,10 +1,10 @@
 Do not use any skills for this request.
 
-Write an implementation-ready Change Spec from the Idea, initial code, and relevant branch work.
+Write an implementation-ready Change Spec from the Definition, initial code, and relevant branch work.
 
 ## Files
 
-- Input idea: `/stg-tmp-dir/input.md`
+- Input definition: `/stg-tmp-dir/input.md`
 - Output spec: `/stg-tmp-dir/output.md`
 - Change type options: `/def-dir/prompts/change-types.md`
 
@@ -33,7 +33,7 @@ instead of writing the Spec.
 
 ### Sources and Authority
 
-The Idea supplies the requested direction, and the code that existed when the Change began supplies
+The Definition supplies the requested direction, and the code that existed when the Change began supplies
 the starting behavior and constraints. The Spec must express the desired future state and give
 strict instructions for what must change and how the Change must be conducted.
 
@@ -51,23 +51,23 @@ assume implementation has not started. If a PR exists, use it as a summary and e
 resolve descriptions of current behavior from code and tests.
 
 Use targeted search to inspect relevant code and tests. Documentation is outside the default Change
-Flow: do not inspect it by default or add documentation work to the Spec unless the Idea or user
+Flow: do not inspect it by default or add documentation work to the Spec unless the Definition or user
 explicitly requests that work. Read a retained ADR or operational runbook only when it is explicitly
-cited by the Idea or user; it never overrides code.
+cited by the Definition or user; it never overrides code.
 
 ### Writing Contract
 
 - Use `/def-dir/prompts/spec-file-structure.md` exactly. Do not add, remove, rename, or reorder top-level sections.
-- Account for every meaningful Idea item. Incorporate each item as a Goal, Scope item, Requirement, Non-Goal, Design Note, QA Test Case, Review Focus item, or Follow-Up. Ask for clarification before writing when an item cannot be classified confidently.
+- Account for every meaningful Definition item. Incorporate each item as a Goal, Scope item, Requirement, Non-Goal, Design Note, QA Test Case, Review Focus item, or Follow-Up. Ask for clarification before writing when an item cannot be classified confidently.
 - Account for every relevant change already present in the branch, including work applied before
   the Spec was written, without treating applied work as correct merely because it exists.
 - Describe intended final behavior in Requirements without adding implementation statuses, completion markers, or a change diary.
 - Use existing implementation to make Requirements and Design Notes concrete, but do not assume that existing code is correct merely because it exists.
-- Preserve fenced code blocks from the Idea when they remain part of the intended Change. Reformat them only as needed to meet the 100-character line limit without changing their meaning or behavior. Ask for clarification when that is not possible.
+- Preserve fenced code blocks from the Definition when they remain part of the intended Change. Reformat them only as needed to meet the 100-character line limit without changing their meaning or behavior. Ask for clarification when that is not possible.
 - Keep every line in the generated Spec within 100 characters.
 - Do not invent product decisions, behavior, API contracts, database behavior, verification results, QA expectations, or new scope.
 - Do not claim verification passed unless evidence shows it ran successfully.
-- When the Idea conflicts with existing branch work on the intended final state, ask which behavior
+- When the Definition conflicts with existing branch work on the intended final state, ask which behavior
   the Change must deliver.
 
 ### Clarification Gate
@@ -76,10 +76,10 @@ Before writing the Spec, stop and output only concise clarifying questions if:
 
 - the scope or intended observable behavior has materially different interpretations
 - existing branch work cannot be classified as part of or unrelated to the prospective PR
-- the Idea and existing implementation conflict on a product decision
+- the Definition and existing implementation conflict on a product decision
 - API, persistence, CLI, validation, or failure behavior required for implementation is unclear
 - valid Change type slugs cannot be determined
-- any Idea statement is unclear, contradictory, or of uncertain intent
+- any Definition statement is unclear, contradictory, or of uncertain intent
 
 Use this format:
 

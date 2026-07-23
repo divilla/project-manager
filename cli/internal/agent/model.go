@@ -11,12 +11,12 @@ type Stage string
 const (
 	// StageIdle means no agent-assisted workflow is active.
 	StageIdle Stage = ""
-	// StageIdeaEntry means the user is editing the initial idea.
-	StageIdeaEntry Stage = "idea entry"
+	// StageDefEntry means the user is editing the initial definition.
+	StageDefEntry Stage = "def entry"
 	// StageCreateConfirmation means the user is confirming whether to create a Change.
 	StageCreateConfirmation Stage = "create confirmation"
-	// StagePersistedIdeaEntry means the user is correcting an Idea after its Change was created.
-	StagePersistedIdeaEntry Stage = "persisted idea entry"
+	// StagePersistedDefEntry means the user is correcting a definition after its Change was created.
+	StagePersistedDefEntry Stage = "persisted def entry"
 	// StageArtifactEntry means the user is editing an existing Change artifact.
 	StageArtifactEntry Stage = "artifact entry"
 	// StageAIRunning means a Codex process is currently active.
@@ -27,11 +27,11 @@ const (
 type WriteOperation string
 
 const (
-	// IdeaWriteOperation rewrites an Idea in the shared idea workspace.
-	IdeaWriteOperation WriteOperation = "idea-write"
-	// SpecWriteOperation writes a Spec in the shared idea workspace.
+	// DefWriteOperation rewrites a definition in the shared artifact workspace.
+	DefWriteOperation WriteOperation = "def-write"
+	// SpecWriteOperation writes a Spec in the shared artifact workspace.
 	SpecWriteOperation WriteOperation = "spec-write"
-	// PRWriteOperation writes a PR in the shared idea workspace.
+	// PRWriteOperation writes a PR in the shared artifact workspace.
 	PRWriteOperation WriteOperation = "pr-write"
 )
 
@@ -40,14 +40,14 @@ const (
 	DefaultDir = ".mch/default"
 	// TempDir is the repository-relative runtime workspace root.
 	TempDir = ".mch/tmp"
-	// IdeaStage is the only stage launched by the CLI in the new-Change workflow.
-	IdeaStage = "idea"
+	// ArtifactStage is the shared stage launched for definition, Spec, and PR artifacts.
+	ArtifactStage = "artifact"
 	// InputFileName is the immutable baseline for one editor pass.
 	InputFileName = "input.md"
-	// OutputFileName is the editable and rewritten new-Change idea artifact.
+	// OutputFileName is the editable and rewritten new-Change definition artifact.
 	OutputFileName = "output.md"
-	// IdeaFileName is the legacy existing-Change editor artifact.
-	IdeaFileName = "initial-idea.md"
+	// DefFileName is the legacy existing-Change editor artifact.
+	DefFileName = "initial-def.md"
 	// GeneratedFileName is the generated Change spec markdown file.
 	GeneratedFileName = "initial-change.md"
 	// CodexOutputName is the final text output file written by Codex exec.
@@ -62,26 +62,26 @@ const (
 	GenericError = "something went wrong - please try again"
 )
 
-// RewritePrompt returns the Codex prompt for rewriting the configured idea file.
+// RewritePrompt returns the Codex prompt for rewriting the configured definition file.
 func RewritePrompt(workspace Workspace) string {
 	if workspace.RootDir == "" {
-		return fmt.Sprintf("Use $change-idea-tmp. The temporary workspace is %q. Read and replace %q.", workspace.Dir, workspace.IdeaPath())
+		return fmt.Sprintf("Use $change-def-tmp. The temporary workspace is %q. Read and replace %q.", workspace.Dir, workspace.DefPath())
 	}
 	operation := workspace.Operation
 	if operation == "" {
-		operation = IdeaWriteOperation
+		operation = DefWriteOperation
 	}
 	return fmt.Sprintf("Execute the %s Flow prompt from %q. When following it, replace /stg-tmp-dir/ with %q and /def-dir/ with %q. Read %q and write the complete result to %q.", operation, filepath.Join(DefaultDir, "prompts", string(operation)+".md"), workspace.Dir, DefaultDir, workspace.InputPath(), workspace.OutputPath())
 }
 
 // Model stores agent-assisted workflow state.
 type Model struct {
-	Workspace        Workspace
-	Stage            Stage
-	SessionID        string
-	RepoRoot         string
-	IdeaEntryContent string
-	CommandOutput    string
+	Workspace       Workspace
+	Stage           Stage
+	SessionID       string
+	RepoRoot        string
+	DefEntryContent string
+	CommandOutput   string
 }
 
 // NewModelWithWorkspace returns an idle agent model for a specific workspace.
@@ -89,19 +89,19 @@ func NewModelWithWorkspace(dir string) Model {
 	return Model{Workspace: Workspace{Dir: dir}}
 }
 
-// NewChangeModel returns a model rooted in one UUID and idea-stage workspace.
+// NewChangeModel returns a model rooted in one UUID and artifact-stage workspace.
 func NewChangeModel(tempRoot string, refUUID string) Model {
-	return NewArtifactModel(tempRoot, refUUID, IdeaWriteOperation)
+	return NewArtifactModel(tempRoot, refUUID, DefWriteOperation)
 }
 
 // NewArtifactModel returns a model for one existing Change artifact-write operation.
-// All write operations deliberately reuse the idea workspace and session.
+// All write operations deliberately reuse the artifact workspace and session.
 func NewArtifactModel(tempRoot string, refUUID string, operation WriteOperation) Model {
 	return Model{Workspace: Workspace{
-		Dir:       filepath.Join(tempRoot, refUUID, IdeaStage),
+		Dir:       filepath.Join(tempRoot, refUUID, ArtifactStage),
 		RootDir:   filepath.Join(tempRoot, refUUID),
 		RefUUID:   refUUID,
-		Stage:     IdeaStage,
+		Stage:     ArtifactStage,
 		Operation: operation,
 	}}
 }
