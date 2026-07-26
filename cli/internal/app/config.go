@@ -47,7 +47,7 @@ type flowConfig struct {
 type flowStep struct {
 	Slug   string `yaml:"slug"`
 	Help   string `yaml:"help"`
-	Mode   string `yaml:"mode"`
+	Type   string `yaml:"type"`
 	Prompt string `yaml:"prompt"`
 	Entry  string `yaml:"entry"`
 	Exec   string `yaml:"exec"`
@@ -168,8 +168,8 @@ func loadFlowConfig(flowDir string) (flowConfig, error) {
 				return flowConfig{}, fmt.Errorf("flow step %d duplicates slug %q from step %d in %s", i+1, slug, previousIndex+1, path)
 			}
 		}
-		if strings.TrimSpace(step.Mode) == "" {
-			return flowConfig{}, fmt.Errorf("flow step %d mode is required in %s", i+1, path)
+		if strings.TrimSpace(step.Type) == "" {
+			return flowConfig{}, fmt.Errorf("flow step %d type is required in %s", i+1, path)
 		}
 	}
 	return flow, nil
@@ -239,7 +239,7 @@ func renderResolvedConfig(cfg appConfig) string {
 	for _, step := range cfg.Flow.Steps {
 		fmt.Fprintf(&b, "    - slug: %s\n", step.Slug)
 		writeConfigLine(&b, "      help", step.Help)
-		writeConfigLine(&b, "      mode", step.Mode)
+		writeConfigLine(&b, "      type", step.Type)
 		writeConfigLine(&b, "      prompt", step.Prompt)
 		writeConfigLine(&b, "      entry", step.Entry)
 		writeConfigLine(&b, "      exec", step.Exec)

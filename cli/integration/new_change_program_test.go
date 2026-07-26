@@ -764,7 +764,7 @@ func writeProgramConfig(t *testing.T, root, backendURL, legacyTemp string) {
 		config += "temp_dir: " + legacyTemp + "\n"
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "config.yaml"), []byte(config), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nname: Default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: def-write\n    mode: write\n    prompt: prompts/def-write.md\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nname: Default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: def-write\n    type: write\n    prompt: prompts/def-rewrite.md\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "help.yaml"), []byte("version: 1\n"), 0o644))
 }
 
