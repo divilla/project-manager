@@ -8,3 +8,6 @@
 #       model: sonnet
 #   docs:
 #     path: docs
+
+worktree:
+  baseBranch: change/123-cli-flow-manual
