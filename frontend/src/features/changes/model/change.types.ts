@@ -48,16 +48,6 @@ export interface ChangeDetail {
   test_cases: TestCase[];
 }
 
-export interface ChangeRenderedArtifact {
-  id: number;
-  spec_html: string;
-  pr_html: string;
-}
-
-export interface ChangeRenderedArtifactsResponse {
-  artifacts: ChangeRenderedArtifact[];
-}
-
 export interface ChangeCreateInput {
   project_id: number;
   title: string;

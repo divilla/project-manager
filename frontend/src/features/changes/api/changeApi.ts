@@ -5,7 +5,6 @@ import type {
   ChangeDetail,
   ChangeListItem,
   ChangePhase,
-  ChangeRenderedArtifactsResponse,
   ChangeType,
 } from '../model/change.types';
 
@@ -23,10 +22,6 @@ export function listChanges(projectId: number): Promise<ChangeListItem[]> {
 
 export function getChange(id: number): Promise<ChangeDetail> {
   return post<ChangeDetail>('/api/v1/change/get', { id });
-}
-
-export function getRenderedChangeArtifacts(ids: number[]): Promise<ChangeRenderedArtifactsResponse> {
-  return post<ChangeRenderedArtifactsResponse>('/api/v1/change/rendered-artifacts', { ids });
 }
 
 export function createChange(input: ChangeCreateInput): Promise<Change> {
