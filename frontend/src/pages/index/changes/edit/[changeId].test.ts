@@ -17,6 +17,7 @@ import {
   updateChangeSpec,
   updateChangeTitle,
 } from '@/features/changes/api/changeApi';
+import { createQuasarStubs } from '@/test/quasarStubs';
 import ChangeEditPage from './[changeId].vue';
 
 const routerMock = vi.hoisted(() => ({
@@ -55,53 +56,14 @@ vi.mock('@/features/epics/api/epicApi', () => ({
   listEpics: vi.fn(),
 }));
 
-const quasarStubs = {
-  QBanner: { template: '<div><slot name="avatar" /><slot /></div>' },
-  QBtn: {
-    emits: ['click'],
-    props: ['disable', 'label', 'loading'],
-    template:
-      '<button :disabled="disable || loading" type="button" @click="$emit(\'click\', $event)">{{ label }}<slot /></button>',
-  },
-  QForm: { template: '<form @submit.prevent="$emit(\'submit\', $event)"><slot /></form>' },
-  QIcon: { template: '<span />' },
-  QInput: {
-    emits: ['update:modelValue'],
-    props: ['disable', 'label', 'modelValue', 'type'],
-    template: `
-      <label>
-        <span>{{ label }}</span>
-        <textarea
-          v-if="type === 'textarea'"
-          :aria-label="label"
-          :disabled="disable"
-          :value="modelValue"
-          @input="$emit('update:modelValue', $event.target.value)"
-        />
-        <input
-          v-else
-          :aria-label="label"
-          :disabled="disable"
-          :value="modelValue"
-          @input="$emit('update:modelValue', $event.target.value)"
-        />
-      </label>
-    `,
-  },
-  QPage: { template: '<main><slot /></main>' },
-  QSelect: {
-    emits: ['update:modelValue'],
-    props: ['disable', 'label', 'modelValue', 'multiple', 'options'],
-    template:
-      '<select :aria-label="label" :disabled="disable" :multiple="multiple"><option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option></select>',
-  },
+const quasarStubs = createQuasarStubs({
   QToggle: {
     emits: ['update:modelValue'],
     props: ['disable', 'label', 'modelValue'],
     template:
       '<input type="checkbox" :aria-label="label" :checked="modelValue" :disabled="disable" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
   },
-};
+});
 
 describe('ChangeEditPage', () => {
   beforeEach(() => {
