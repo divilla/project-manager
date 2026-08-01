@@ -395,7 +395,8 @@ async function loadChangeDetail() {
     detailChange.value = detail.change;
     testCases.value = detail.test_cases;
     await ensureProjectsLoaded();
-    detectProjectMismatch(detail.change);
+    const projectConfirmationRequired = detectProjectMismatch(detail.change);
+    if (projectConfirmationRequired) return;
     await changeCache.loadProjectChanges(detail.change.project_id);
     changeCache.upsertChange(detail.change);
   } catch (err) {
@@ -422,7 +423,7 @@ function detectProjectMismatch(change: Change) {
   ) {
     projectMismatchOpen.value = false;
     projectMismatch.value = null;
-    return;
+    return false;
   }
 
   projectMismatch.value = {
@@ -432,6 +433,7 @@ function detectProjectMismatch(change: Change) {
     requiredProjectName: projectName(change.project_id),
   };
   projectMismatchOpen.value = true;
+  return true;
 }
 
 function switchToChangeProject() {

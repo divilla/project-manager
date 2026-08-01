@@ -10,6 +10,7 @@ import {
 } from '@/features/test-cases/model/testCase.fixtures';
 import { deleteChange, getChange, listChanges } from '@/features/changes/api/changeApi';
 import { listEpics } from '@/features/epics/api/epicApi';
+import { useChangeCacheStore } from '@/features/changes/model/changeCache.store';
 import {
   changeDetailFixture,
   changeFixture,
@@ -232,6 +233,41 @@ describe('ChangeDetailPage', () => {
     const projectSelection = useProjectSelectionStore();
     expect(projectSelection.currentProjectId).toBe(2);
     expect(projectSelection.routeDrivenTargetPath).toBe('/changes/2');
+  });
+
+  it('preserves the selected project cache when staying on a pasted change URL', async () => {
+    const projectAChange = changeFixture({ id: 1, title: 'Project A change', project_id: 1 });
+    const changeCache = useChangeCacheStore();
+    changeCache.setChanges([projectAChange], 1, [
+      epicFixture({ id: 1, name: 'Project A epic', project_id: 1 }),
+    ]);
+    vi.mocked(listProjects).mockResolvedValue([
+      projectFixture({ id: 1, name: 'Project A', change_count: 1 }),
+      projectFixture({ id: 2, name: 'Project B', change_count: 1 }),
+    ]);
+    vi.mocked(getChange).mockResolvedValue(
+      changeDetailFixture({
+        change: changeFixture({ id: 2, title: 'Project B change', project_id: 2 }),
+        test_cases: [],
+      }),
+    );
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Switch project?');
+    expect(changeCache.projectId).toBe(1);
+    expect(changeCache.changes).toEqual([projectAChange]);
+    expect(listChanges).not.toHaveBeenCalledWith(2);
+    expect(listEpics).not.toHaveBeenCalledWith(2);
+
+    const stayButton = wrapper.findAll('button').find((button) => button.text() === 'Stay');
+    await stayButton?.trigger('click');
+    await flushPromises();
+
+    expect(changeCache.projectId).toBe(1);
+    expect(changeCache.changes).toEqual([projectAChange]);
+    expect(listChanges).not.toHaveBeenCalledWith(2);
+    expect(listEpics).not.toHaveBeenCalledWith(2);
   });
 
   it('opens the change edit route from the menu action', async () => {
