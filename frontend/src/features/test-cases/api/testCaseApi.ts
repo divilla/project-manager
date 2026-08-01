@@ -1,13 +1,5 @@
 import { post } from '@/shared/api/httpClient';
-import type {
-  TestCase,
-  TestCaseMutation,
-  TestCaseUpdateInput,
-} from '../model/testCase.types';
-
-export function listTestCases(changeId: number): Promise<TestCase[]> {
-  return post<TestCase[]>('/api/v1/test-case/list', { change_id: changeId });
-}
+import type { TestCaseMutation, TestCaseUpdateInput } from '../model/testCase.types';
 
 export function createTestCase(
   changeId: number,
