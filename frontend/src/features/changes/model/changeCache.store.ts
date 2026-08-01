@@ -33,7 +33,7 @@ export const useChangeCacheStore = defineStore('changeCache', () => {
   function setChanges(
     items: ChangeListItem[],
     nextProjectId = projectId.value,
-    nextEpics: Epic[] = epics.value,
+    nextEpics: Epic[] = [],
   ) {
     changes.value = items;
     epics.value = nextEpics;

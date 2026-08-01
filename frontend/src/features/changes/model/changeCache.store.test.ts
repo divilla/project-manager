@@ -46,6 +46,44 @@ describe('changeCache store', () => {
     vi.clearAllMocks();
   });
 
+  it('clears epics when setting changes without an explicit epic list', () => {
+    const store = useChangeCacheStore();
+    store.setChanges([changeFixture({ id: 1, project_id: 1 })], 1, [
+      epicFixture({ id: 1, project_id: 1 }),
+    ]);
+
+    store.setChanges([]);
+
+    expect(store.changes).toEqual([]);
+    expect(store.epics).toEqual([]);
+    expect(store.projectId).toBe(1);
+  });
+
+  it('clears changes and epics when resetting the project scope', () => {
+    const store = useChangeCacheStore();
+    store.setChanges([changeFixture({ id: 1, project_id: 1 })], 1, [
+      epicFixture({ id: 1, project_id: 1 }),
+    ]);
+
+    store.setChanges([], 0);
+
+    expect(store.changes).toEqual([]);
+    expect(store.epics).toEqual([]);
+    expect(store.projectId).toBe(0);
+  });
+
+  it('preserves explicitly supplied project changes and epics', () => {
+    const store = useChangeCacheStore();
+    const nextChanges = [changeFixture({ id: 2, project_id: 2 })];
+    const nextEpics = [epicFixture({ id: 2, project_id: 2 })];
+
+    store.setChanges(nextChanges, 2, nextEpics);
+
+    expect(store.changes).toEqual(nextChanges);
+    expect(store.epics).toEqual(nextEpics);
+    expect(store.projectId).toBe(2);
+  });
+
   it('keeps loading the newest project when an older request resolves first', async () => {
     const requests = mockProjectLoads();
     const store = useChangeCacheStore();
