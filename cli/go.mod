@@ -1,6 +1,6 @@
 module mch
 
-go 1.26.4
+go 1.25.10
 
 require (
 	github.com/atotto/clipboard v0.1.4
