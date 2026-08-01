@@ -1,0 +1,10 @@
+{
+  "name": "project-manager",
+  "private": true,
+  "scripts": {
+    "type-check": "bun run --cwd frontend typecheck",
+    "lint": "bun run --cwd frontend lint:check",
+    "test": "bun run --cwd frontend test",
+    "validate": "bun run type-check && bun run lint && bun run test"
+  }
+}
