@@ -1,0 +1,23 @@
+# Project-scoped Archon config
+# Inherits defaults from ~/.archon/config.yaml.
+# Reference: https://archon.diy/reference/configuration/
+#
+# Examples:
+#   assistants:
+#     claude:
+#       model: sonnet
+#   docs:
+#     path: docs
+
+assistant: codex
+
+assistants:
+  codex:
+    model: gpt-5.6-sol
+    modelReasoningEffort: high
+
+docs:
+  path: docs
+
+worktree:
+  baseBranch: stage

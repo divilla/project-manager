@@ -50,8 +50,11 @@ AGENTS.md file must never be altered unless there is an explicit prompt to overr
 - Change specs must use the standard structure from the Change workflow:
   Goal, Scope, Requirements, Non-Goals, Design Notes,
   Verification, QA Test Cases, Review Focus, and Follow-Ups.
-- Change branches use `change/<change-name>`.
-- If implementation or PR work starts on a branch other than `change/<change-name>`, stop and alert the user.
+- Change branches normally use `change/<change-name>`.
+- Archon-managed worktrees may use branches matching `archon/task-<task-name>-<task-id>`. These branches are valid for implementation and PR
+  work and must not trigger the branch-name blocker.
+- If implementation or PR work starts on a branch matching neither `change/<change-name>` nor `archon/task-<task-name>-<task-id>`, stop and
+  alert the user.
 - Change lifecycle: backlog -> branch/rejected -> pull-request -> stage/rejected -> master/rejected.
 - The Idea and the code present when work begins originate the Change: the Idea supplies direction,
   and the initial code supplies current behavior and constraints.
