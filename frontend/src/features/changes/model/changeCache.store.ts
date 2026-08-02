@@ -9,27 +9,31 @@ export const useChangeCacheStore = defineStore('changeCache', () => {
   const epics = ref<Epic[]>([]);
   const projectId = ref(0);
   const loading = ref(false);
+  let latestRequestToken = 0;
 
   async function loadProjectChanges(nextProjectId: number) {
+    const requestToken = ++latestRequestToken;
     loading.value = true;
     try {
       const [nextChanges, nextEpics] = await Promise.all([
         listChanges(nextProjectId),
         listEpics(nextProjectId),
       ]);
-      changes.value = nextChanges;
-      epics.value = nextEpics;
-      projectId.value = nextProjectId;
-      return changes.value;
+      if (requestToken === latestRequestToken) {
+        changes.value = nextChanges;
+        epics.value = nextEpics;
+        projectId.value = nextProjectId;
+      }
+      return nextChanges;
     } finally {
-      loading.value = false;
+      if (requestToken === latestRequestToken) loading.value = false;
     }
   }
 
   function setChanges(
     items: ChangeListItem[],
     nextProjectId = projectId.value,
-    nextEpics: Epic[] = epics.value,
+    nextEpics: Epic[] = [],
   ) {
     changes.value = items;
     epics.value = nextEpics;

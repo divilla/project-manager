@@ -3,21 +3,19 @@ import { createPinia, setActivePinia } from 'pinia';
 import { listProjects } from '@/features/projects/api/projectApi';
 import type { Project } from '@/features/projects/model/project.types';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
-import {
-  deleteTestCase,
-  updateTestCaseChange,
-} from '@/features/test-cases/api/testCaseApi';
+import { deleteTestCase, updateTestCaseChange } from '@/features/test-cases/api/testCaseApi';
 import {
   testCaseFixture,
   testCaseMutationFixture,
 } from '@/features/test-cases/model/testCase.fixtures';
-import {
-  deleteChange,
-  getChange,
-  listChanges,
-} from '@/features/changes/api/changeApi';
+import { deleteChange, getChange, listChanges } from '@/features/changes/api/changeApi';
 import { listEpics } from '@/features/epics/api/epicApi';
-import { changeDetailFixture, changeFixture, epicFixture } from '@/features/changes/model/change.fixtures';
+import {
+  changeDetailFixture,
+  changeFixture,
+  epicFixture,
+} from '@/features/changes/model/change.fixtures';
+import { createQuasarStubs } from '@/test/quasarStubs';
 import ChangeDetailPage from './[id].vue';
 
 const routerMock = vi.hoisted(() => ({
@@ -71,23 +69,7 @@ function projectFixture(project: Pick<Project, 'id' | 'name' | 'change_count'>):
   };
 }
 
-const quasarStubs = {
-  QBanner: { template: '<div><slot name="avatar" /><slot /></div>' },
-  QBtn: {
-    emits: ['click'],
-    props: ['color', 'disable', 'flat', 'icon', 'label', 'loading'],
-    template: `
-      <button
-        :data-color="color"
-        :data-icon="icon"
-        :disabled="disable || loading"
-        type="button"
-        @click="$emit('click', $event)"
-      >
-        {{ label }}<slot />
-      </button>
-    `,
-  },
+const quasarStubs = createQuasarStubs({
   QBtnDropdown: {
     emits: ['click'],
     props: ['dropdownIcon'],
@@ -104,7 +86,8 @@ const quasarStubs = {
   QCheckbox: {
     emits: ['update:modelValue'],
     props: ['modelValue'],
-    template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', true)" />',
+    template:
+      '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', true)" />',
   },
   QDialog: {
     props: ['modelValue', 'persistent'],
@@ -117,26 +100,18 @@ const quasarStubs = {
       </div>
     `,
   },
-  QForm: { template: '<form @submit.prevent="$emit(\'submit\', $event)"><slot /></form>' },
-  QIcon: { props: ['name'], template: '<span :data-icon="name"><slot /></span>' },
-  QInput: { template: '<input />' },
   QItem: {
     emits: ['click'],
     props: ['disable'],
-    template: '<button type="button" :disabled="disable" @click="$emit(\'click\', $event)"><slot /></button>',
+    template:
+      '<button type="button" :disabled="disable" @click="$emit(\'click\', $event)"><slot /></button>',
   },
   QItemLabel: { template: '<span><slot /></span>' },
   QItemSection: { template: '<span><slot /></span>' },
   QList: { template: '<div><slot /></div>' },
   QMarkupTable: { template: '<table><slot /></table>' },
-  QPage: { template: '<main><slot /></main>' },
-  QSelect: {
-    emits: ['update:modelValue'],
-    props: ['modelValue', 'options'],
-    template: '<select :value="modelValue" @change="$emit(\'update:modelValue\', Number($event.target.value))"><option v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</option></select>',
-  },
   QSpinner: { template: '<span />' },
-};
+});
 
 describe('ChangeDetailPage', () => {
   beforeEach(() => {

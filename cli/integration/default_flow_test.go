@@ -21,7 +21,7 @@ type flowConfig struct {
 		Slug   string `yaml:"slug"`
 		Stage  string `yaml:"stage"`
 		Help   string `yaml:"help"`
-		Mode   string `yaml:"mode"`
+		Type   string `yaml:"type"`
 		Prompt string `yaml:"prompt"`
 	} `yaml:"steps"`
 }
@@ -41,31 +41,31 @@ func TestDefaultFlowPromptAndStageIntegration(t *testing.T) {
 	var flow flowConfig
 	require.NoError(t, yaml.Unmarshal(body, &flow))
 	expectedSteps := map[string]struct {
-		stage  string
-		help   string
-		mode   string
-		prompt string
+		stage    string
+		help     string
+		stepType string
+		prompt   string
 	}{
-		"def-create":          {stage: "artifact", help: "Create the initial Change definition.", mode: "editor"},
-		"def-edit":            {stage: "artifact", help: "Edit the Change definition.", mode: "editor"},
-		"spec-edit":           {stage: "artifact", help: "Edit the Change specification.", mode: "editor"},
-		"pr-edit":             {stage: "artifact", help: "Edit the pull request description.", mode: "editor"},
-		"chat":                {stage: "<inherit-from-previous-step>", help: "Discuss and refine the current Change artifact.", mode: "chat"},
-		"def-write":           {stage: "artifact", help: "Draft or revise the Change definition.", mode: "exec", prompt: "prompts/def-write.md"},
-		"def-review":          {stage: "artifact", help: "Review the Change definition for clarity, completeness, and scope.", mode: "exec", prompt: "prompts/def-review.md"},
-		"branch-init":         {stage: "artifact", help: "Initialize and check out the Change branch.", mode: "script"},
-		"init-code-chat":      {stage: "artifact", help: "Discuss the initial implementation context before specification work.", mode: "chat"},
-		"spec-write":          {stage: "artifact", help: "Draft or revise the Change specification.", mode: "exec", prompt: "prompts/spec-write.md"},
-		"spec-review":         {stage: "spec-review", help: "Review the Change specification for implementation readiness.", mode: "exec", prompt: "prompts/spec-review.md"},
-		"spec-review-chat":    {stage: "spec-review", help: "Resolve specification review findings.", mode: "chat"},
-		"code-implement":      {stage: "code", help: "Implement the approved Change specification.", mode: "exec", prompt: "prompts/code-implement.md"},
-		"code-chat":           {stage: "code", help: "Discuss implementation progress, decisions, and blockers.", mode: "chat"},
-		"pr-write":            {stage: "artifact", help: "Draft the pull request description from the specification and branch diff.", mode: "exec", prompt: "prompts/pr-write.md"},
-		"pr-publish":          {stage: "artifact", help: "Publish the pull request.", mode: "script"},
-		"code-review":         {stage: "code-review", help: "Review the implementation against the Change specification.", mode: "exec", prompt: "prompts/code-review.md"},
-		"code-review-publish": {stage: "code-review", help: "Publish the implementation review findings.", mode: "script"},
-		"code-review-chat":    {stage: "code-review", help: "Resolve implementation review findings.", mode: "chat"},
-		"pr-update":           {stage: "artifact", help: "Update the pull request description to reflect the final implementation.", mode: "exec", prompt: "prompts/pr-update.md"},
+		"def-create":          {stage: "artifact", help: "Create the initial Change definition.", stepType: "editor"},
+		"def-edit":            {stage: "artifact", help: "Edit the Change definition.", stepType: "editor"},
+		"spec-edit":           {stage: "artifact", help: "Edit the Change specification.", stepType: "editor"},
+		"pr-edit":             {stage: "artifact", help: "Edit the pull request description.", stepType: "editor"},
+		"def-rewrite":         {stage: "artifact", help: "Draft or revise the Change definition.", stepType: "exec", prompt: "prompts/def-rewrite.md"},
+		"def-review":          {stage: "artifact", help: "Review the Change definition for clarity, completeness, and scope.", stepType: "exec", prompt: "prompts/def-review.md"},
+		"branch-init":         {stage: "artifact", help: "Initialize and check out the Change branch.", stepType: "script"},
+		"init-code-chat":      {stage: "artifact", help: "Discuss the initial implementation context before specification work.", stepType: "chat"},
+		"spec-write":          {stage: "artifact", help: "Draft or revise the Change specification.", stepType: "exec", prompt: "prompts/spec-write.md"},
+		"spec-write-chat":     {stage: "artifact", help: "Discuss and refine the current Change artifact.", stepType: "chat"},
+		"spec-review":         {stage: "spec-review", help: "Review the Change specification for implementation readiness.", stepType: "exec", prompt: "prompts/spec-review.md"},
+		"spec-review-chat":    {stage: "spec-review", help: "Resolve specification review findings.", stepType: "chat"},
+		"code-implement":      {stage: "code", help: "Implement the approved Change specification.", stepType: "exec", prompt: "prompts/code-implement.md"},
+		"code-chat":           {stage: "code", help: "Discuss implementation progress, decisions, and blockers.", stepType: "chat"},
+		"pr-write":            {stage: "artifact", help: "Draft the pull request description from the specification and branch diff.", stepType: "exec", prompt: "prompts/pr-write.md"},
+		"pr-publish":          {stage: "artifact", help: "Publish the pull request.", stepType: "script"},
+		"code-review":         {stage: "code-review", help: "Review the implementation against the Change specification.", stepType: "exec", prompt: "prompts/code-review.md"},
+		"code-review-publish": {stage: "code-review", help: "Publish the implementation review findings.", stepType: "script"},
+		"code-review-chat":    {stage: "code-review", help: "Resolve implementation review findings.", stepType: "chat"},
+		"pr-update":           {stage: "artifact", help: "Update the pull request description to reflect the final implementation.", stepType: "exec", prompt: "prompts/pr-update.md"},
 	}
 	require.Len(t, flow.Steps, len(expectedSteps))
 	for _, step := range flow.Steps {
@@ -73,7 +73,7 @@ func TestDefaultFlowPromptAndStageIntegration(t *testing.T) {
 		require.True(t, ok, "unexpected Flow step %q", step.Slug)
 		assert.Equal(t, expected.stage, step.Stage)
 		assert.Equal(t, expected.help, step.Help)
-		assert.Equal(t, expected.mode, step.Mode)
+		assert.Equal(t, expected.stepType, step.Type)
 		assert.Equal(t, expected.prompt, step.Prompt)
 		delete(expectedSteps, step.Slug)
 		if strings.HasPrefix(step.Prompt, "prompts/") && step.Slug != "pr-update" {
@@ -440,6 +440,87 @@ func TestChangeBranchInitializationGuards(t *testing.T) {
 	assert.Contains(t, out, "already exists remotely")
 }
 
+func TestDefaultFlowCommitScriptGuardsSlugAndPushes(t *testing.T) {
+	root := repositoryRoot(t)
+	script := filepath.Join(root, ".mch", "default", "scripts", "commit.sh")
+	repo := newGitRemoteFixture(t)
+
+	gitRun(t, repo, "checkout", "-b", "change/123-commit-script")
+	gitRun(t, repo, "push", "-u", "origin", "change/123-commit-script")
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "work.txt"), []byte("committed\n"), 0o644))
+	headBefore := gitOutput(t, repo, "rev-parse", "HEAD")
+
+	out, err := commandInRepo(repo, script, "124-other-change", "Wrong commit")
+	require.Error(t, err)
+	assert.Contains(t, out, "branch slug 123-commit-script does not match change slug 124-other-change")
+	assert.Equal(t, headBefore, gitOutput(t, repo, "rev-parse", "HEAD"))
+
+	out, err = commandInRepo(repo, script, "123-commit-script", "Configured commit message")
+	require.NoError(t, err, out)
+	assert.Equal(t, "Configured commit message", gitOutput(t, repo, "log", "-1", "--format=%s"))
+	assert.Equal(t, gitOutput(t, repo, "rev-parse", "HEAD"), gitOutput(t, repo, "rev-parse", "origin/change/123-commit-script"))
+}
+
+func TestDefaultFlowPRPublishCreatesPRAndPushesURL(t *testing.T) {
+	root := repositoryRoot(t)
+	script := filepath.Join(root, ".mch", "default", "scripts", "pr-publish.sh")
+	repo := newGitRemoteFixture(t)
+	gitRun(t, repo, "checkout", "-b", "change/123-publish")
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "agent", "prs"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(repo, "agent", "prs", "123-publish.md"),
+		[]byte("# Publish This Change\n\nPR body.\n"),
+		0o644,
+	))
+
+	fakeBin := t.TempDir()
+	ghLog := filepath.Join(fakeBin, "gh.log")
+	fakeGH := `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "api" && "$2" == "user" ]]; then
+  printf '%s\n' 'divilla'
+  exit 0
+fi
+if [[ "$1" == "pr" && "$2" == "create" ]]; then
+  printf '%s\n' "$@" > "$FAKE_GH_LOG"
+  printf '%s\n' 'https://github.com/divilla/project-manager/pull/123'
+  exit 0
+fi
+printf 'unexpected gh arguments: %s\n' "$*" >&2
+exit 1
+`
+	require.NoError(t, os.WriteFile(filepath.Join(fakeBin, "gh"), []byte(fakeGH), 0o755))
+	nestedDir := filepath.Join(repo, "nested")
+	require.NoError(t, os.MkdirAll(nestedDir, 0o755))
+
+	cmd := exec.Command(script)
+	cmd.Dir = nestedDir
+	cmd.Env = append(
+		os.Environ(),
+		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"FAKE_GH_LOG="+ghLog,
+	)
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(output))
+	assert.Equal(t, "Write PR URL for 123-publish by agent", gitOutput(t, repo, "log", "-1", "--format=%s"))
+	assert.Equal(t, "Write PR for 123-publish by agent", gitOutput(t, repo, "log", "-1", "--format=%s", "--skip=1"))
+	assert.Equal(t, gitOutput(t, repo, "rev-parse", "HEAD"), gitOutput(t, repo, "rev-parse", "origin/change/123-publish"))
+	assert.Equal(
+		t,
+		"https://github.com/divilla/project-manager/pull/123\n",
+		readFile(t, filepath.Join(repo, "agent", "prurls", "123-publish")),
+	)
+	ghArgs := readFile(t, ghLog)
+	assert.Contains(t, ghArgs, "--base\nstage\n")
+	assert.Contains(t, ghArgs, "--head\ndivilla:change/123-publish\n")
+	assert.Contains(t, ghArgs, "--title\nPublish This Change\n")
+	assert.Contains(t, ghArgs, "--body-file\nagent/prs/123-publish.md\n")
+
+	out, err := commandInRepo(repo, script, "unexpected")
+	require.Error(t, err)
+	assert.Contains(t, out, "usage: pr-publish.sh")
+}
+
 func TestChangeSlugExtractionGrammar(t *testing.T) {
 	root := repositoryRoot(t)
 	scripts := []struct {
@@ -495,6 +576,7 @@ func TestChangeSlugGrammarIsSharedByWorkflowEntryPoints(t *testing.T) {
 		filepath.Join(root, "scripts", "change-code.pl"),
 		filepath.Join(root, "scripts", "change-fix.pl"),
 		filepath.Join(root, "scripts", "change-pr.pl"),
+		filepath.Join(root, ".mch", "default", "scripts", "pr-publish.sh"),
 		filepath.Join(root, "scripts", "change-update.pl"),
 		filepath.Join(root, "scripts", "change-stage.pl"),
 	} {

@@ -71,7 +71,7 @@ func runCLIProgramExistingArtifactWrite(t *testing.T, scenario artifactProgramSc
 	flowDir := filepath.Join(repo, ".mch", "default")
 	require.NoError(t, os.MkdirAll(filepath.Join(flowDir, "prompts"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(repo, ".mch", "config.yaml"), []byte("backend_url: "+backend.URL+"\nproject_id: 7\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: "+scenario.operation+"\n    stage: artifact\n    mode: exec\n    prompt: prompts/"+scenario.operation+".md\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: "+scenario.operation+"\n    stage: artifact\n    type: exec\n    prompt: prompts/"+scenario.operation+".md\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "help.yaml"), []byte("version: 1\nstage_modes: []\ntask_statuses: []\ntask_steps: []\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "prompts", scenario.operation+".md"), []byte(scenario.prompt), 0o644))
 
@@ -255,7 +255,7 @@ func TestCLIProgramExistingSpecKeepsPersistedArtifactAfterFollowUpFailure(t *tes
 			flowDir := filepath.Join(repo, ".mch", "default")
 			require.NoError(t, os.MkdirAll(filepath.Join(flowDir, "prompts"), 0o755))
 			require.NoError(t, os.WriteFile(filepath.Join(repo, ".mch", "config.yaml"), []byte("backend_url: "+backend.URL+"\nproject_id: 7\n"), 0o644))
-			require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: spec-write\n    stage: artifact\n    mode: exec\n    prompt: prompts/spec-write.md\n"), 0o644))
+			require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: spec-write\n    stage: artifact\n    type: exec\n    prompt: prompts/spec-write.md\n"), 0o644))
 			require.NoError(t, os.WriteFile(filepath.Join(flowDir, "help.yaml"), []byte("version: 1\nstage_modes: []\ntask_statuses: []\ntask_steps: []\n"), 0o644))
 			require.NoError(t, os.WriteFile(filepath.Join(flowDir, "prompts", "spec-write.md"), []byte("write spec"), 0o644))
 

@@ -12,10 +12,16 @@ sub fail {
 my $branch = qx{git branch --show-current};
 chomp $branch;
 
-my ($change_name) = $branch =~ m{^change/([0-9]+-[0-9A-Za-z_-]+)$}
-    or fail("current branch is not a change/<change-slug> branch: $branch");
+my $change_name;
+if ($branch =~ m{^change/([0-9]+-[0-9A-Za-z_-]+)$}) {
+    $change_name = $1;
+} elsif ($branch =~ m{^archon/task-([0-9A-Za-z_-]+-[0-9]+)$}) {
+    $change_name = $1;
+} else {
+    fail("current branch is not a change/<change-slug> or archon/task-<task-name>-<task-id> branch: $branch");
+}
 
-my $change_branch = "change/$change_name";
+my $change_branch = $branch;
 
 ensure_clean_worktree();
 run_checked(qw(git fetch origin));

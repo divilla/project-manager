@@ -25,7 +25,7 @@ func TestAppConfigLoadsRepositoryMCHConfigFlowAndHelp(t *testing.T) {
 	assert.Equal(t, "default", cfg.Flow.Slug)
 	require.Len(t, cfg.Flow.Steps, 3)
 	assert.Equal(t, "def-write", cfg.Flow.Steps[0].Slug)
-	assert.Equal(t, "edit", cfg.Flow.Steps[0].Mode)
+	assert.Equal(t, "edit", cfg.Flow.Steps[0].Type)
 	assert.Equal(t, "def-review", cfg.Flow.Steps[1].Slug)
 	assert.Equal(t, "make def-review-exec", cfg.Flow.Steps[1].Exec)
 	assert.Equal(t, []string{"skip", "prompt", "exec"}, flowOptionSlugs(cfg.FlowHelp.StageModes))
@@ -121,7 +121,7 @@ func TestAppConfigErrorsOnMalformedFlowAndEmptyHelpSlugs(t *testing.T) {
 	assert.Contains(t, err.Error(), "stage_modes option slug is required")
 }
 
-func TestAppConfigErrorsOnDuplicateFlowStepSlugAndMissingMode(t *testing.T) {
+func TestAppConfigErrorsOnDuplicateFlowStepSlugAndMissingType(t *testing.T) {
 	root := t.TempDir()
 	writeMCHFixture(t, root, "backend_url: http://backend.test\n"+"temp_dir: /workspace/custom-mch\n")
 	flow := `version: 1
@@ -131,9 +131,9 @@ help: help.yaml
 makefile: Makefile
 steps:
   - slug: custom
-    mode: edit
+    type: edit
   - slug: custom
-    mode: exec
+    type: exec
 `
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte(flow), 0o644))
 
@@ -150,14 +150,14 @@ help: help.yaml
 makefile: Makefile
 steps:
   - slug: custom
-    mode:
+    type:
 `
 	require.NoError(t, os.WriteFile(filepath.Join(root, ".mch", "default", "flow.yaml"), []byte(flow), 0o644))
 
 	_, err = loadAppConfig(root)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "flow step 1 mode is required")
+	assert.Contains(t, err.Error(), "flow step 1 type is required")
 }
 
 func TestAppConfigAllowsCustomAndMissingFlowHelpOptions(t *testing.T) {
@@ -186,7 +186,7 @@ func testAppConfig(overrides appConfig) appConfig {
 			Description:    "Default test Flow.",
 			Help:           "help.yaml",
 			Makefile:       "Makefile",
-			Steps:          []flowStep{{Slug: "def", Help: "capture def", Mode: "prompt", Prompt: "prompts/change-def.md", Entry: "make def-entry", Exec: "make def-exec", Exit: "make def-exit"}},
+			Steps:          []flowStep{{Slug: "def", Help: "capture def", Type: "prompt", Prompt: "prompts/change-def.md", Entry: "make def-entry", Exec: "make def-exec", Exit: "make def-exit"}},
 			UtilityPrompts: map[string]string{"change-def-tmp": "prompts/change-def-tmp.md"},
 		},
 		FlowHelp: flowHelpConfig{
@@ -239,17 +239,17 @@ makefile: Makefile
 steps:
   - slug: def-write
     help: write def
-    mode: edit
+    type: edit
   - slug: def-review
     help: review def
-    mode: exec
+    type: exec
     prompt: prompts/def-review.md
     entry: make def-review-entry
     exec: make def-review-exec
     exit: make def-review-exit
   - slug: def-refine
     help: refine def
-    mode: prompt
+    type: prompt
 utility_prompts:
   change-def-tmp: prompts/change-def-tmp.md
 `

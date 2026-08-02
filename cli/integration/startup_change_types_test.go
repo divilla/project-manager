@@ -36,7 +36,7 @@ func TestCLIStartupRebuildsChangeTypeSlugsPrompt(t *testing.T) {
 	promptsDir := filepath.Join(flowDir, "prompts")
 	require.NoError(t, os.MkdirAll(promptsDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(repo, ".mch", "config.yaml"), []byte("backend_url: "+server.URL+"\nproject_id: 0\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: def\n    mode: edit\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte("version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: def\n    type: edit\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(flowDir, "help.yaml"), []byte("version: 1\n"), 0o644))
 	promptPath := filepath.Join(promptsDir, "change-types.md")
 	require.NoError(t, os.WriteFile(promptPath, []byte("stale\n"), 0o644))

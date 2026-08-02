@@ -39,7 +39,7 @@ func TestRewriteScreenUsesColoredBlackScrollableViewport(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(repoRoot, ".mch", "default"), 0o755))
 	require.NoError(t, exec.Command("git", "init", repoRoot).Run())
 	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "config.yaml"), "backend_url: "+backend.URL+"\nproject_id: 7\n", 0o644)
-	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "flow.yaml"), "version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: def-write\n    mode: edit\n", 0o644)
+	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "flow.yaml"), "version: 1\nslug: default\nhelp: help.yaml\nmakefile: Makefile\nsteps:\n  - slug: def-write\n    type: edit\n", 0o644)
 	writeTerminalFile(t, filepath.Join(repoRoot, ".mch", "default", "help.yaml"), "version: 1\nstage_modes: []\ntask_statuses: []\ntask_steps: []\n", 0o644)
 
 	stubDir := filepath.Join(testRoot, "bin")

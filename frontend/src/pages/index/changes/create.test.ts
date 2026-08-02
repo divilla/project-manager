@@ -5,6 +5,7 @@ import { changeFixture } from '@/features/changes/model/change.fixtures';
 import { useProjectSelectionStore } from '@/features/projects/model/projectSelection.store';
 import { listProjects } from '@/features/projects/api/projectApi';
 import { listEpics } from '@/features/epics/api/epicApi';
+import { createQuasarStubs } from '@/test/quasarStubs';
 import ChangeCreatePage from './create.vue';
 
 const routerMock = vi.hoisted(() => ({ push: vi.fn() }));
@@ -17,18 +18,7 @@ vi.mock('@/features/changes/api/changeApi', () => ({
 vi.mock('@/features/projects/api/projectApi', () => ({ listProjects: vi.fn() }));
 vi.mock('@/features/epics/api/epicApi', () => ({ listEpics: vi.fn() }));
 
-const quasarStubs = {
-  QBanner: { template: '<div><slot /></div>' },
-  QBtn: { props: ['label'], template: '<button>{{ label }}</button>' },
-  QForm: { template: '<form @submit.prevent="$emit(\'submit\', $event)"><slot /></form>' },
-  QIcon: { template: '<span />' },
-  QInput: {
-    emits: ['update:modelValue'],
-    props: ['label', 'modelValue', 'type'],
-    template: '<label>{{ label }}<textarea v-if="type === \'textarea\'" :aria-label="label" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" /><input v-else :aria-label="label" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" /></label>',
-  },
-  QPage: { template: '<main><slot /></main>' },
-};
+const quasarStubs = createQuasarStubs();
 
 describe('ChangeCreatePage', () => {
   beforeEach(async () => {
