@@ -8,6 +8,37 @@ const (
 	KindSteps    DocumentKind = "steps"
 )
 
+type Directory struct {
+	Stage        int
+	Path         string
+	Parent       *Directory
+	Children     []*Directory
+	Files        []*File
+	DefaultsFile *File
+	StepsFiles   []*File
+	//RuntimeDefaults RuntimeDefaults
+}
+
+type File struct {
+	Stage     string `yaml:"stage"`
+	Path      string
+	Kind      DocumentKind
+	Directory *Directory
+	Bytes     []byte
+	//Root            *RootFile
+	//Defaults        *DefaultsFile
+	//Steps           *StepsFile
+	//ParentDefaults  *Defaults
+	//RuntimeDefaults RuntimeDefaults
+	//RuntimeSteps    []RuntimeStep
+}
+
+type BaseDefinition struct {
+	App  string     `yaml:"app"`
+	Kind string     `yaml:"kind"`
+	Spec YAMLString `yaml:"spec"`
+}
+
 type Metadata struct {
 	Name   string   `yaml:"name"`
 	Labels []string `yaml:"labels"`
@@ -50,25 +81,6 @@ type StepsFile struct {
 	Spec     struct {
 		Steps []Step `yaml:"steps"`
 	} `yaml:"spec"`
-}
-
-type File struct {
-	FilePath        string
-	Kind            DocumentKind
-	Root            *RootFile
-	Defaults        *DefaultsFile
-	Steps           *StepsFile
-	ParentDefaults  *Defaults
-	RuntimeDefaults RuntimeDefaults
-	RuntimeSteps    []RuntimeStep
-}
-
-type Directory struct {
-	Stage           int
-	Dir             string
-	RuntimeDefaults RuntimeDefaults
-	Files           []*File
-	Children        []*Directory
 }
 
 // Suite is the parsed tree anchored by the selected working directory.
