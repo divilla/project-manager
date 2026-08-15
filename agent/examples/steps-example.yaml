@@ -1,18 +1,18 @@
-app: apihydra #required - used for filtering when mixed non-apihydra YAML files
-kind: tasks #required - can be config or tasks
+app: apihydra # required - used for filtering when mixed non-apihydra YAML files
+kind: steps # required - root, defaults, or steps
 metadata:
-  name: create-tasks #optional - must be unique if used - used for querying tasks
-  labels: [create, tasks] #optional - used for querying tasks
+  name: create-steps #optional - must be unique if used - used for querying steps
+  labels: [create, steps] #optional - used for querying steps
 spec:
-  tasks:
+  steps:
     - vars: #optional - write-once values available before request resolution
         project_id: 1
       request:
         method: POST #optional - default GET - default with body POST
-        baseUrl: https://api.example.com #optional - typically inherited from `config`
-        basePath: /api/v1 #optional - typically inherited from `config`
+        baseUrl: https://api.example.com #optional - typically inherited from defaults
+        basePath: /api/v1 #optional - typically inherited from defaults
         path: /api/users #required
-        headers: #optional - typically inherited from `config`
+        headers: #optional - typically inherited from defaults
           Content-Type: application/json
           Accept: application/json
         timeout: 10 #optional - seconds - typically inherited - default 10

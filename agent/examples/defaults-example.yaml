@@ -1,0 +1,6 @@
+app: apihydra # required - used for filtering when mixed non-apihydra YAML files
+kind: defaults # optional - at most one in each non-root directory
+spec:
+  basePath: /api/v2
+  headers:
+    X-Suite-Area: billing

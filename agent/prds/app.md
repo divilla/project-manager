@@ -13,17 +13,17 @@ APIHydra is an API integration-testing CLI designed primarily for use by AI
 agents. Its test suites and terminal output must also remain easy for humans to
 navigate, inspect, understand, and troubleshoot.
 
-An APIHydra suite is a directory tree containing YAML configuration and step
-files. APIHydra resolves inherited configuration, expands run-wide variables,
-turns declarative steps into concrete curl commands, executes those commands,
-and validates their JSON responses.
+An APIHydra suite is a directory tree containing a root document, optional
+defaults documents, and step documents. APIHydra resolves inherited defaults,
+expands run-wide variables, turns declarative steps into concrete curl commands,
+executes those commands, and validates their JSON responses.
 
 ## Goals
 
 - Let AI agents define and run API integration tests through a concise,
   declarative YAML format.
 - Keep test suites readable and directly inspectable by human users.
-- Support reusable configuration across directories without duplicating common
+- Support reusable defaults across directories without duplicating common
   request values.
 - Support stateful integration flows by passing values from earlier steps to
   later steps.
@@ -60,13 +60,20 @@ suite root.
 
 ### YAML document kinds
 
-APIHydra recognizes two kinds of YAML documents:
+APIHydra recognizes three kinds of YAML documents:
 
-- `config`: shared values used to resolve steps.
+- `root`: the mandatory suite marker and initial defaults.
+- `defaults`: inherited values used to resolve steps below the suite root.
 - `steps`: one or more declarative curl steps.
 
 Documents identify themselves as APIHydra documents and declare their kind.
-The current schema uses `app: apihydra` and `kind: config|steps`.
+The schema uses `app: apihydra` and `kind: root|defaults|steps`.
+
+Exactly one `root` document must exist directly in the directory selected by
+the CLI. This prevents a run from silently treating an arbitrary directory as
+a suite. A `root` document also supplies that directory's defaults. Descendant
+directories may use `defaults` documents, but a `defaults` document can never
+anchor a suite.
 
 An APIHydra document may optionally declare metadata:
 
@@ -79,13 +86,13 @@ metadata:
 Metadata is used only when the user requests a filtered test run. It is not
 required for, and does not alter, a normal full-suite run.
 
-### RuntimeConfiguration
+### RuntimeDefaults
 
 Every directory in the discovered suite tree has one effective
-`RuntimeConfiguration`. It is the resolved set of configuration values
-available to step files in that directory.
+`RuntimeDefaults`. It is the resolved set of inherited default values available
+to step files in that directory.
 
-Common configuration values initially include:
+Common default values initially include:
 
 - `baseUrl`
 - `basePath`
@@ -101,25 +108,25 @@ stage, its immediate child directories form the second stage, and each
 subsequent directory depth forms the next stage.
 
 Directories within one stage execute concurrently. A stage must finish before
-the next stage begins. Configuration inheritance continues to follow directory
+the next stage begins. Defaults inheritance continues to follow directory
 ancestry and is independent of stage grouping.
 
 ### Step
 
 A `Step` is a declarative set of curl execution parameters. A step may define
 request values itself and may omit values that are available from its
-directory's `RuntimeConfiguration`.
+directory's `RuntimeDefaults`.
 
 ### RuntimeStep
 
 A `RuntimeStep` is a step after all available missing values have been populated
-from its directory's `RuntimeConfiguration`.
+from its directory's `RuntimeDefaults`.
 
 ```text
-Step + directory RuntimeConfiguration -> RuntimeStep
+Step + directory RuntimeDefaults -> RuntimeStep
 ```
 
-Step-defined values take precedence over configuration values. A value absent
+Step-defined values take precedence over inherited defaults. A value absent
 from both sources remains undefined and causes validation failure when that
 value is required to execute or validate the step.
 
@@ -133,47 +140,52 @@ value is required to execute or validate the step.
    beneath the selected suite root, at any directory depth.
 3. A YAML file whose `app` field is missing or is not exactly `apihydra` must be
    treated as unrelated and ignored.
-4. A YAML file declaring `app: apihydra` must declare `kind: config` or
-   `kind: steps`. A missing or unsupported kind must produce a configuration
-   error.
-5. No APIHydra document kinds other than `config` and `steps` are supported.
+4. A YAML file declaring `app: apihydra` must declare `kind: root`,
+   `kind: defaults`, or `kind: steps`. A missing or unsupported kind must
+   produce a configuration error.
+5. No APIHydra document kinds other than `root`, `defaults`, and `steps` are
+   supported.
 6. `metadata`, `metadata.name`, and `metadata.labels` must all be optional.
 7. When supplied, `metadata.name` must be unique within the suite so name-based
    filtering is unambiguous.
 8. When supplied, `metadata.labels` must be an array of strings.
 9. Metadata must affect step selection only when the user requests a filtered
    run. It must have no effect on an unfiltered full-suite run.
-10. The suite root must contain exactly one `config` document.
-11. If the suite root has no config, APIHydra must report a configuration error
-   and must not execute steps.
-12. Any directory may contain at most one config document.
-13. If any directory contains multiple config documents, APIHydra must report a
-   configuration error and must not execute steps.
-14. A child directory may contain no config document or one config document.
-15. A non-root config's parent must be discovered from the filesystem hierarchy.
-   Starting with the config file's parent directory, APIHydra must search
-   ancestor directories upward until it finds the nearest config file.
-16. A root config has no parent config.
-17. An unfiltered suite that resolves to zero steps, whether because it has no
+10. The selected suite-root directory must contain exactly one `root` document.
+11. If the selected directory has no root document or multiple root documents,
+   APIHydra must report a configuration error and must not execute steps.
+12. A root document below the selected suite-root directory must produce a
+   configuration error; roots cannot be nested.
+13. The selected suite-root directory must not contain a `defaults` document,
+   because its root document already supplies the root defaults.
+14. A non-root directory may contain no defaults document or one defaults
+   document.
+15. If any non-root directory contains multiple defaults documents, APIHydra
+   must report a configuration error and must not execute steps.
+16. A defaults document's parent defaults must be discovered from the filesystem
+   hierarchy. Starting with its parent directory, APIHydra must search ancestor
+   directories upward until it finds the nearest defaults or root document.
+17. A root document has no parent defaults.
+18. An unfiltered suite that resolves to zero steps, whether because it has no
     steps documents or only empty steps documents, must produce an error, execute
     no curl commands, and return exit code `2`.
-18. Each APIHydra YAML file must contain exactly one YAML document. An APIHydra
+19. Each APIHydra YAML file must contain exactly one YAML document. An APIHydra
     file containing multiple `---`-separated documents must produce a fatal
     configuration error.
-19. APIHydra documents must be decoded using strict schema validation. Any
+20. APIHydra documents must be decoded using strict schema validation. Any
     unknown field must produce a fatal configuration error identifying the file
     and YAML field path, and APIHydra must return exit code `2` without executing
     steps.
-20. Duplicate YAML mapping keys must produce a fatal configuration error even
+21. Duplicate YAML mapping keys must produce a fatal configuration error even
     when their values are identical. The error must identify the file and
     duplicated key.
-21. APIHydra must group discovered directories into stages by their depth
+22. APIHydra must group discovered directories into stages by their depth
     relative to the suite root.
-22. The suite-root directory must belong to the first stage. All directories
+23. The suite-root directory must belong to the first stage. All directories
     with the same relative depth must belong to the same stage.
-23. A stage may contain one or more directories. Directories containing no
+24. A stage may contain one or more directories. Directories containing no
     selected steps contribute no execution work but must remain available for
-    configuration inheritance and descendant discovery.
+    defaults inheritance and descendant discovery.
 
 ### 1.1 Filtered execution
 
@@ -188,8 +200,8 @@ value is required to execute or validate the step.
    the exact name filter and every label filter.
 6. Filters must select whole `steps` documents. Every step in a selected
    document must execute; individual steps are not filtered.
-7. Config documents must not be excluded by step filters. APIHydra must load all
-   configs needed to resolve selected step documents.
+7. Root and defaults documents must not be excluded by step filters. APIHydra
+   must load every defaults chain needed to resolve selected step documents.
 8. An invocation without name or label filters must execute the entire suite.
 9. If the supplied filters select no steps documents or resolve to zero steps,
    APIHydra must report that no steps matched, execute no curl commands, and
@@ -218,44 +230,44 @@ apih tests --name create-steps --label smoke
 6. The initial product does not require the external `yq` command. This may be
    revisited if a later workflow requires it.
 
-### 2. Configuration inheritance
+### 2. Defaults inheritance
 
-1. The root config establishes the root directory's
-   `RuntimeConfiguration`.
-2. A child directory without its own config inherits the effective
-   `RuntimeConfiguration` available from its nearest ancestor config.
-3. A child directory with its own config inherits values from the nearest config
-   found by searching upward from its parent directory and overrides inherited
-   values that it defines locally.
+1. The root document establishes the root directory's `RuntimeDefaults`.
+2. A child directory without its own defaults document inherits the effective
+   `RuntimeDefaults` available from its nearest ancestor defaults or root
+   document.
+3. A child directory with its own defaults document inherits values from the
+   nearest defaults or root document found by searching upward from its parent
+   directory and overrides inherited values that it defines locally.
 4. Values not overridden by the child remain inherited from the parent
-   configuration chain.
-5. Header maps must merge by header name. Headers absent from the child config
+   defaults chain.
+5. Header maps must merge by header name. Headers absent from the child defaults
    remain inherited, while a child header replaces the inherited header with the
    same name.
 6. Header-name comparison must be case-insensitive. APIHydra must canonicalize
    emitted header names using standard HTTP header casing. Thus a child
    `Content-Type` overrides a parent `content-type` and is emitted as
    `Content-Type`.
-7. The resolved result is the child directory's `RuntimeConfiguration`.
+7. The resolved result is the child directory's `RuntimeDefaults`.
 8. All step files in a directory receive that directory's
-   `RuntimeConfiguration`.
+   `RuntimeDefaults`.
 
 ### 3. Runtime step resolution
 
-1. APIHydra must resolve every declared step against the
-   `RuntimeConfiguration` of the directory containing its step file.
-2. To locate a step file's config, APIHydra must search first in the step file's
-   own directory and then upward through ancestor directories until it finds the
-   nearest config file.
+1. APIHydra must resolve every declared step against the `RuntimeDefaults` of
+   the directory containing its step file.
+2. To locate a step file's defaults, APIHydra must search first in the step
+   file's own directory and then upward through ancestor directories until it
+   finds the nearest defaults or root document.
 3. A value explicitly defined by the step must override the corresponding
-   runtime-configuration value.
+   runtime-default value.
 4. For each undefined step value, APIHydra must use the corresponding
-   runtime-configuration value when one exists.
-5. Step-level headers must merge with runtime-configuration headers by header
+   runtime-default value when one exists.
+5. Step-level headers must merge with runtime-default headers by header
    name. Runtime headers absent from the step remain present, while a step header
    replaces the runtime header with the same name.
 6. Step-level header merging must use the same case-insensitive comparison and
-   canonical output names as configuration inheritance.
+   canonical output names as defaults inheritance.
 7. The result of resolution must be represented as a `RuntimeStep` suitable for
    curl execution and response validation.
 8. APIHydra must validate a runtime step before executing it and report missing
@@ -300,16 +312,16 @@ apih tests --name create-steps --label smoke
     handling. APIHydra must not implement a custom exhaustive RFC validator;
     operational URL problems may be reported by curl as execution failures.
 16. `timeout` must be expressed in seconds. If it remains undefined after step
-    and runtime-configuration resolution, it must default to `10`.
+    and runtime-default resolution, it must default to `10`.
 17. `retries` must control curl retry behavior. If it remains undefined after
-    step and runtime-configuration resolution, it must default to `3`.
+    step and runtime-default resolution, it must default to `3`.
 18. The resolved timeout must be a positive number and must map directly to
     curl's `--max-time` option.
 19. The resolved retry count must be a non-negative integer and must map directly
     to curl's `--retry` option. Thus `retries: 3` permits the initial attempt plus
     up to three retries.
 20. A step-defined `timeout` or `retries` value must override the corresponding
-    runtime-configuration value like any other scalar step setting.
+    runtime-default value like any other scalar step setting.
 21. APIHydra must pass the resolved timeout and retry values to curl.
 22. The request `body` must be handled as a literal JSON string.
 23. After variable substitution and before curl execution, APIHydra must use
@@ -676,14 +688,19 @@ stage 2
 
 ## Acceptance scenarios
 
-### Root config is required
+### Root document is required
 
-Given a selected suite root with step files but no config file, when `apih` is
-run, then it reports a configuration error and executes no curl commands.
+Given a selected suite root with step files or a defaults file but no root
+document, when `apih` is run, then it reports a configuration error and executes
+no curl commands.
 
-Given a valid root config but zero steps anywhere in an unfiltered suite, when
-`apih` is run, then it reports an error, executes no curl commands, and returns
-exit code `2`.
+Given a valid root document but zero steps anywhere in an unfiltered suite,
+when `apih` is run, then it reports an error, executes no curl commands, and
+returns exit code `2`.
+
+Given a root document below the selected suite-root directory, when `apih` is
+run, then it reports a nested-root configuration error and executes no curl
+commands.
 
 ### Unrelated YAML files are ignored
 
@@ -714,8 +731,8 @@ selection only during a filtered run.
 Given steps documents with optional metadata, when `apih -n create-steps` is
 run, then only the document named `create-steps` is selected. When
 `apih -l create -l smoke` is run, only documents containing both labels are
-selected. All config documents required by the selected steps remain available
-for resolution.
+selected. The root document and all defaults documents required by the selected
+steps remain available for resolution.
 
 Given filters that match no steps documents, APIHydra reports an error, executes
 no curl commands, and returns exit code `2`.
@@ -726,28 +743,32 @@ Given selected steps that require curl, jq, or Git, when any required executable
 is unavailable, then APIHydra identifies it, executes no requests, and returns
 exit code `3`. The absence of `yq` does not affect the initial product.
 
-### One config per directory
+### One defaults document per non-root directory
 
-Given any directory containing two config files, when `apih` loads the suite,
-then it reports the conflicting files as a configuration error and executes no
-curl commands.
+Given a non-root directory containing two defaults documents, when `apih` loads
+the suite, then it reports the conflicting files as a configuration error and
+executes no curl commands.
 
-### Configuration inheritance
+Given the selected suite-root directory contains a defaults document in
+addition to its root document, when `apih` loads the suite, then it reports the
+defaults document as a configuration error and executes no curl commands.
 
-Given a root config with `baseUrl`, `basePath`, and headers, and a child config
-that overrides `basePath`, when the child config searches its ancestor
-directories and resolves the root config as its nearest parent, then a step in
-the child uses the root `baseUrl` and inherited headers together with the child
-`basePath`.
+### Defaults inheritance
+
+Given a root document with `baseUrl`, `basePath`, and headers, and a child
+defaults document that overrides `basePath`, when the child searches its
+ancestor directories and resolves the root document as its nearest defaults,
+then a step in the child uses the root `baseUrl` and inherited headers together
+with the child `basePath`.
 
 Given a parent header named `content-type` and a child header named
-`Content-Type`, when the child runtime configuration is resolved, then only the
+`Content-Type`, when the child runtime defaults are resolved, then only the
 child value remains and the header is emitted as `Content-Type`.
 
-### Directory configuration applies to local steps
+### Directory defaults apply to local steps
 
 Given multiple step files in one directory, when they are resolved, then every
-step uses the same directory `RuntimeConfiguration` except where a step defines
+step uses the same directory `RuntimeDefaults` except where a step defines
 its own value.
 
 ### Request method defaults

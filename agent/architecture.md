@@ -20,7 +20,7 @@ reserved for thin wrappers around external tools.
 
 ### Public contracts are the stable surface
 
-A service is a concrete Go type shaped like the existing `config.Loader`. It
+A service is a concrete Go type shaped like the existing `suite.Loader`. It
 has a constructor, exported methods, and any exported types required by those
 methods. A service may have one operation or several related operations.
 
@@ -42,7 +42,7 @@ models package.
 ### Services wrap logical concepts
 
 Every service must own a coherent entity or capability that a human can name,
-such as configuration, stages, steps, variables, requests, responses, or
+such as suites, defaults, stages, steps, variables, requests, responses, or
 output. A service boundary is valid when a developer can readily answer:
 
 - What concept does this service own?
@@ -114,7 +114,7 @@ Inter-service data carriers live in one neutral package under
 package and prevents service-to-service dependency chains.
 
 Prefer returning a new or explicitly enriched model. If a service mutates a
-shared model such as `WrapperGroup`, that mutation must be part of its public
+shared model such as `Suite`, that mutation must be part of its public
 contract; hidden state changes are not allowed.
 
 ## Package layout
@@ -147,7 +147,8 @@ cmd/cli/                  process entry point
 internal/models/          all inter-service carrier types
 internal/orchestrator/    service construction and complete application flow
 internal/errors/          source-aware APIHydra errors and formatting
-internal/config/          discovery, parsing, and configuration services
+internal/suite/           YAML discovery and suite-tree parsing services
+internal/defaults/        defaults inheritance and resolution behavior
 internal/stage/           stage planning behavior
 internal/step/            step resolution behavior
 internal/variable/        write-once store and substitution behavior
@@ -182,7 +183,7 @@ Step -> RuntimeStep -> StepResult
 ```
 
 - `Step` represents the declarative YAML step.
-- `RuntimeStep` represents a step after configuration, defaults, and available
+- `RuntimeStep` represents a step after inherited defaults and available
   variables have been resolved.
 - `StepResult` represents execution, capture, and validation outcomes.
 
@@ -191,42 +192,58 @@ The PRD term is `Step`, not `Task`. Target model names and YAML fields must use
 
 ### Parsed directory structure
 
-The parser's existing directory-oriented structure remains the foundation of
-the data model. In target terminology it has this shape:
+The suite's directory-oriented structure has this shape:
 
 ```go
-type Wrapper struct {
-    FilePath      string
-    ParentConfig  *Config
-    RuntimeConfig Config
-    RuntimeSteps  []RuntimeStep
+type Suite struct {
+    WorkDir string
+    Root    *Directory
 }
 
-type WrapperGroup struct {
-    Wrappers      []*Wrapper
-    WrapperGroups []*WrapperGroup
+type Directory struct {
+    Depth           int
+    Dir             string
+    RuntimeDefaults RuntimeDefaults
+    Files           []*File
+    Children        []*Directory
+}
+
+type File struct {
+    FilePath        string
+    Kind            DocumentKind
+    Root            *RootFile
+    Defaults        *DefaultsFile
+    Steps           *StepsFile
+    ParentDefaults  *Defaults
+    RuntimeDefaults RuntimeDefaults
+    RuntimeSteps    []RuntimeStep
 }
 ```
 
-One `Wrapper` carries the original YAML file path and the resolved state related
-to that file:
+One `Suite` represents the directory selected by the CLI. Its `Root` directory
+must contain the suite's one root file. A `Directory` preserves filesystem
+ancestry through `Children` and owns every parsed `File` in that directory.
 
-- `ParentConfig` identifies the applicable nearest configuration.
-- `RuntimeConfig` contains the effective inherited configuration.
-- `RuntimeSteps` contains steps populated from that runtime configuration.
+One `File` carries the original YAML file path and the resolved state related to
+that file:
 
-One `WrapperGroup` represents one filesystem directory. `Wrappers` contains
-files in that directory, while `WrapperGroups` contains its child directories.
-This structure preserves filesystem ancestry for configuration inheritance.
+- `Root`, `Defaults`, or `Steps` contains the kind-specific parsed document.
+- `ParentDefaults` identifies the applicable nearest ancestor defaults.
+- `RuntimeDefaults` contains the effective inherited defaults.
+- `RuntimeSteps` contains steps populated from those runtime defaults.
 
-The current code still uses the earlier `Task` and `RuntimeTasks` names. Those
-are implementation lag, not target architecture; implementation Specs should
-migrate them to the PRD's step terminology.
+This structure keeps suite identity, directory hierarchy, and YAML files
+distinct while preserving the ancestry needed for defaults inheritance.
+
+`kind: root` is distinct from `kind: defaults`. Exactly one root document must
+exist directly in the selected suite-root directory. It both anchors the suite
+and supplies its initial defaults. A defaults document may appear only below
+the suite root and cannot make an arbitrary selected directory a valid root.
 
 ### Stages
 
 A stage is a logical execution barrier containing one or more directories. It
-does not replace `WrapperGroup`; a planning service derives stages from the
+does not replace `Directory`; a planning service derives stages from the
 parsed directory tree.
 
 Conceptually:
@@ -234,7 +251,7 @@ Conceptually:
 ```go
 type Stage struct {
     Depth       int
-    Directories []*WrapperGroup
+    Directories []*Directory
 }
 ```
 
@@ -284,9 +301,10 @@ The intended flow is:
 ```text
 resolve CLI input
   -> discover YAML files
-  -> parse files into WrapperGroup
+  -> parse files into Suite
+  -> require exactly one root document in the selected directory
   -> select step documents
-  -> resolve configuration inheritance
+  -> resolve defaults inheritance
   -> resolve RuntimeSteps
   -> derive stages from directory depth
   -> preflight required external tools
@@ -320,7 +338,7 @@ A wrapper owns only external-process mechanics:
 - Standard input, output, and error capture.
 - The tool's exact exit status.
 
-Wrappers must not own APIHydra configuration inheritance, stage scheduling,
+Wrappers must not own APIHydra defaults inheritance, stage scheduling,
 step behavior, variable policy, validation policy, or user-facing error text.
 They should use generic arguments and results and must not import
 `internal/models` or internal service packages.

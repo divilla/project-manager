@@ -1,4 +1,4 @@
-package config
+package suite
 
 import (
 	"fmt"
@@ -19,8 +19,11 @@ func (l *Loader) Files() ([]string, error) {
 	var files []string
 
 	info, err := os.Stat(l.WorkDir)
-	if err != nil || !info.IsDir() {
+	if err != nil {
 		return nil, fmt.Errorf("%s is not a directory: %w", l.WorkDir, err)
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", l.WorkDir)
 	}
 
 	err = filepath.WalkDir(l.WorkDir, func(path string, entry fs.DirEntry, walkErr error) error {
