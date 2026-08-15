@@ -36,11 +36,13 @@ outputs:
 
 ```go
 Directory.ResolvedDefaults models.Defaults
-Directory.ResolvedSteps    []models.Step
+Directory.ResolvedSteps    [][]models.Step
 ```
 
-Resolved values must be independent copies. Resolving a suite must not mutate or
-alias maps owned by `DefaultsDefinition` or `StepsDefinition`.
+Resolved values must be independent copies. Apart from assigning the
+non-YAML `Step.Definition` and `Step.Index` provenance fields, resolving a suite
+must not mutate or alias values owned by `DefaultsDefinition` or
+`StepsDefinition`.
 
 The lifecycle boundary is:
 
@@ -70,8 +72,11 @@ also leaves `Runner` available for the later execution service.
 - Resolving each directory's defaults from its parent and its optional local
   defaults definition.
 - Merging headers case-insensitively and emitting canonical HTTP header names.
-- Flattening local steps definitions in their decoded order.
+- Preserving local steps grouped by their decoded steps definition and in their
+  decoded order.
 - Resolving every local step against its directory's resolved defaults.
+- Attaching each declared and resolved step to its exact source
+  `StepsDefinition` with a one-based index within that definition.
 - Applying built-in request method, timeout, and retry defaults.
 - Ensuring each resolved step has the values required by later request
   processing.
@@ -152,18 +157,21 @@ candidate values.
 ### Mutation policy
 
 - `ResolveDefaults` mutates only `Directory.ResolvedDefaults`.
-- `ResolveSteps` reads `Directory.ResolvedDefaults` and mutates only
-  `Directory.ResolvedSteps`.
+- `ResolveSteps` reads `Directory.ResolvedDefaults` and mutates
+  `Directory.ResolvedSteps` plus only the `Definition` and `Index` provenance
+  fields of entries in `StepsDefinition.Spec.Steps`.
 - All other directory, file, definition, and declared value fields are
   read-only.
 - Each method is independently transactional across the complete supplied tree.
-  An error or cancellation leaves the field owned by that method at its
-  pre-call value.
+  An error or cancellation leaves the fields owned by that method at their
+  pre-call values.
 - A successful repeated call replaces the field owned by that method throughout
   the tree; it must not append to or merge with results from a previous call.
 - Every output map and nested mutable value is copied deeply enough that later
   resolved-output mutation cannot modify decoded declarations, parent resolved
   values, or a sibling resolved step.
+- `Step.Definition` is the sole intentional alias into decoded state. It is a
+  read-only provenance pointer to the exact containing `StepsDefinition`.
 
 ## Types specification
 
@@ -183,14 +191,15 @@ type Directory struct {
     DefaultsDefinition *DefaultsDefinition
     StepsDefinitions   []*StepsDefinition
     ResolvedDefaults    Defaults
-    ResolvedSteps       []Step
+    ResolvedSteps       [][]Step
 }
 ```
 
 `ResolveDefaults` reads `Parent`, `Children`, and
 `DefaultsDefinition`, and writes only `ResolvedDefaults`.
 `ResolveSteps` reads `Children`, `StepsDefinitions`, and
-`ResolvedDefaults`, and writes only `ResolvedSteps`.
+`ResolvedDefaults`, and writes `ResolvedSteps` plus each source step's
+`Definition` and `Index` provenance fields.
 
 Traversal follows `Children`; it must not recursively follow `Parent`.
 Resolution must verify that every child's `Parent` points to its containing
@@ -228,21 +237,42 @@ request-level built-ins.
 
 ### `models.Step`
 
-Each `Directory.ResolvedSteps` entry is a fully independent copy of one decoded
-step with inherited and built-in request values populated. Fields unrelated to
-defaults resolution, including `Vars` and all `Response` fields, are preserved
-unchanged in value and copied without mutable aliases.
+Each outer `Directory.ResolvedSteps` entry corresponds to one
+`Directory.StepsDefinitions` entry. Each inner entry is a resolved copy of one
+decoded step with inherited and built-in request values populated. Fields
+unrelated to defaults resolution, including `Vars` and all `Response` fields,
+are preserved unchanged in value and copied without mutable aliases.
 
 In particular, `Request.Body` and `Response.Expected` remain `YAMLString`
 values and may still contain variable references. Their variable-aware parsing
 belongs to preparation, after this service returns.
 
-`ResolvedSteps` is flattened in this deterministic order:
+`ResolvedSteps` preserves this deterministic two-dimensional structure:
 
-1. `Directory.StepsDefinitions` order.
-2. `StepsDefinition.Spec.Steps` declaration order within each definition.
+1. Outer slice indexes correspond exactly to `Directory.StepsDefinitions`
+   indexes.
+2. Inner slice indexes correspond exactly to
+   `StepsDefinition.Spec.Steps` declaration indexes.
 
-A directory with no declared steps receives an empty `ResolvedSteps` slice.
+A directory with no steps definitions receives an empty outer `ResolvedSteps`
+slice. A steps definition with no declared steps contributes an empty inner
+slice so later definitions retain their positional correspondence.
+
+For a step at zero-based position `i` in `StepsDefinition.Spec.Steps`, Resolver
+must set the source step and its resolved copy to:
+
+```go
+definition.Spec.Steps[i].Definition = definition
+definition.Spec.Steps[i].Index = i + 1
+
+resolved.Definition = definition.Spec.Steps[i].Definition
+resolved.Index = definition.Spec.Steps[i].Index
+```
+
+`Definition` points to the exact containing `*models.StepsDefinition`, and
+`Index` is one-based for user-facing identity and errors. The pointer is an
+intentional read-only provenance link; Resolver must not clone the definition.
+No other field on the decoded source step may change.
 
 ### Presence-sensitive declarations
 
@@ -441,8 +471,9 @@ do not prove that defaults resolution was skipped.
   cannot be resolved, presence information cannot be recovered, or the context
   is cancelled.
 
-An error or cancellation leaves every `ResolvedDefaults` untouched and every
-`ResolvedSteps` at its pre-call value.
+An error or cancellation leaves every `ResolvedDefaults` untouched, every
+`ResolvedSteps` at its pre-call value, and all source-step `Definition` and
+`Index` fields at their pre-call values.
 
 ### Directory traversal
 
@@ -455,8 +486,11 @@ The `Stage` field does not control traversal and is not changed.
 
 ### Resolution
 
-For each declared step in a directory, Resolver deep-copies the declaration and
-resolves its request fields as follows:
+For each directory, Resolver allocates one candidate outer slice entry per
+`StepsDefinition`. For each declared step at zero-based position `i` within that
+definition, Resolver assigns the source step's `Definition` to the exact
+containing definition and `Index` to `i + 1`. It then deep-copies the annotated
+declaration and resolves its request fields as follows:
 
 - An explicitly declared step value wins.
 - Otherwise `baseUrl`, `basePath`, `headers`, `timeout`, and `retries` are taken
@@ -475,6 +509,9 @@ resolves its request fields as follows:
 
 After resolution, every resolved step must have:
 
+- A `Definition` pointer to its exact containing `StepsDefinition`.
+- An `Index` equal to its one-based position within
+  `StepsDefinition.Spec.Steps`.
 - A non-empty request base URL.
 - A non-empty request method.
 - A non-empty request path.
@@ -491,7 +528,7 @@ components remain separate on the resolved `Step` for the preparation stage.
 ### Source-aware errors
 
 A resolved-step error identifies the originating `StepsDefinition.File.Path`,
-the step's zero-based index within that definition, and the relevant YAML path.
+the step's one-based `Index` within that definition, and the relevant YAML path.
 Errors must not depend on pointer addresses or unordered map iteration.
 
 ### Acceptance criteria
@@ -499,74 +536,86 @@ Errors must not depend on pointer addresses or unordered map iteration.
 #### AC-ResolveSteps-1: Populate every directory
 
 Given directories with and without steps definitions, when the method succeeds,
-then each `ResolvedSteps` contains its resolved local steps and directories
-without declared steps have an empty slice.
+then each `ResolvedSteps` has one outer entry per local steps definition, each
+inner entry contains that definition's resolved steps, and directories without
+steps definitions have an empty outer slice.
 
 #### AC-ResolveSteps-2: Preserve step order
 
 Given multiple steps definitions in one directory, when they are resolved,
-then `ResolvedSteps` contains all their steps in definition and declaration
-order.
+then the outer `ResolvedSteps` indexes preserve definition order and each inner
+slice preserves its definition's declaration order, including an empty inner
+slice for an empty definition.
 
-#### AC-ResolveSteps-3: Overlay step request values
+#### AC-ResolveSteps-3: Attach definition and one-based index
+
+Given a step at zero-based slice position `i` in a `StepsDefinition`, when it is
+resolved, then both the source step and resolved copy have `Definition` pointing
+to that exact definition and `Index` equal to `i + 1`. Every other decoded
+source-step field remains unchanged.
+
+#### AC-ResolveSteps-4: Overlay step request values
 
 Given directory resolved defaults and a step that explicitly overrides some
 request fields, when the method succeeds, then the resolved step uses every
 explicit step value and inherits each omitted defaultable field.
 
-#### AC-ResolveSteps-4: Merge step headers
+#### AC-ResolveSteps-5: Merge step headers
 
 Given resolved default headers and step headers with case-insensitive overlap,
 when the step is resolved, then the step value wins, unrelated defaults remain,
 and every output header name is canonical.
 
-#### AC-ResolveSteps-5: Apply method defaults
+#### AC-ResolveSteps-6: Apply method defaults
 
 Given an omitted request method, when the step has a body then the resolved
 method is `POST`, and when it has no body the resolved method is `GET`. Given an
 explicit method, its spelling is preserved exactly.
 
-#### AC-ResolveSteps-6: Apply timeout and retry defaults
+#### AC-ResolveSteps-7: Apply timeout and retry defaults
 
 Given no step or directory timeout and retry declarations, when the step is
 resolved, then its resolved timeout is `10` and retries is `3`. Inherited values
 override those built-ins, and explicit step values override inherited values.
 
-#### AC-ResolveSteps-7: Preserve an explicit zero retry count
+#### AC-ResolveSteps-8: Preserve an explicit zero retry count
 
 Given an inherited positive retry count and a step explicitly declaring
 `request.retries: 0`, when the step is resolved, then its resolved retry count is
 zero rather than the inherited or built-in value.
 
-#### AC-ResolveSteps-8: Require a resolved base URL
+#### AC-ResolveSteps-9: Require a resolved base URL
 
 Given a declared step for which neither the step nor its directory defaults
 supply `baseUrl`, when the method is called, then it returns a source-aware
-error, leaves all `ResolvedSteps` unchanged, and preserves `ResolvedDefaults`.
+error, leaves all `ResolvedSteps` and source-step provenance fields unchanged,
+and preserves `ResolvedDefaults`.
 
-#### AC-ResolveSteps-9: Avoid mutable aliases
+#### AC-ResolveSteps-10: Avoid mutable aliases
 
 Given successfully resolved steps, when a resolved header, variable, capture,
 type declaration, or other nested mutable value is changed, then no decoded
 definition, resolved defaults, or sibling resolved step changes.
 
-#### AC-ResolveSteps-10: Replace prior steps
+#### AC-ResolveSteps-11: Replace prior steps
 
 Given previously populated resolved steps, when the method succeeds again, then
 every directory reflects only the current steps definitions and contains no
 stale or duplicated step.
 
-#### AC-ResolveSteps-11: Reject inconsistent input transactionally
+#### AC-ResolveSteps-12: Reject inconsistent input transactionally
 
 Given a broken child link or steps definition whose source file does not belong
 to its directory, when the method is called, then it returns an error, leaves
-all `ResolvedSteps` unchanged, and preserves `ResolvedDefaults`.
+all `ResolvedSteps` and source-step provenance fields unchanged, and preserves
+`ResolvedDefaults`.
 
-#### AC-ResolveSteps-12: Honor cancellation transactionally
+#### AC-ResolveSteps-13: Honor cancellation transactionally
 
 Given cancellation before or during traversal, when the method observes the
 cancelled context, then it returns the context error, performs no further work,
-leaves all `ResolvedSteps` unchanged, and preserves `ResolvedDefaults`.
+leaves all `ResolvedSteps` and source-step provenance fields unchanged, and
+preserves `ResolvedDefaults`.
 
 #### AC-Resolver-1: Remain filesystem- and process-free
 

@@ -25,7 +25,7 @@ type Directory struct {
 	DefaultsDefinition *DefaultsDefinition
 	StepsDefinitions   []*StepsDefinition
 	ResolvedDefaults   Defaults
-	ResolvedSteps      []Step
+	ResolvedSteps      [][]Step
 }
 
 type File struct {
@@ -98,6 +98,8 @@ type Step struct {
 		Types    map[string][]string `yaml:"types"`
 		Expected YAMLString          `yaml:"expected"`
 	} `yaml:"response"`
+	Definition *StepsDefinition `yaml:"-"`
+	Index      int              `yaml:"-"`
 }
 
 type YAMLString string
