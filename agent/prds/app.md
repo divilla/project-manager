@@ -13,9 +13,9 @@ APIHydra is an API integration-testing CLI designed primarily for use by AI
 agents. Its test suites and terminal output must also remain easy for humans to
 navigate, inspect, understand, and troubleshoot.
 
-An APIHydra suite is a directory tree containing YAML configuration and task
+An APIHydra suite is a directory tree containing YAML configuration and step
 files. APIHydra resolves inherited configuration, expands run-wide variables,
-turns declarative tasks into concrete curl commands, executes those commands,
+turns declarative steps into concrete curl commands, executes those commands,
 and validates their JSON responses.
 
 ## Goals
@@ -25,8 +25,8 @@ and validates their JSON responses.
 - Keep test suites readable and directly inspectable by human users.
 - Support reusable configuration across directories without duplicating common
   request values.
-- Support stateful integration flows by passing values from earlier tasks to
-  later tasks.
+- Support stateful integration flows by passing values from earlier steps to
+  later steps.
 - Run independent work concurrently while preserving explicit dependency order.
 - Produce clear configuration, runtime, request, and validation failures.
 
@@ -36,7 +36,7 @@ and validates their JSON responses.
 - Mutable or reassignable variables.
 - Full-response equality when only selected values are declared under
   `response.expected`.
-- Parallel execution of tasks declared in the same task file.
+- Parallel execution of steps declared in the same step file.
 - Arbitrary raw curl arguments. Curl capabilities must be exposed through
   explicit typed YAML fields.
 
@@ -62,18 +62,18 @@ suite root.
 
 APIHydra recognizes two kinds of YAML documents:
 
-- `config`: shared values used to resolve tasks.
-- `tasks`: one or more declarative curl tasks.
+- `config`: shared values used to resolve steps.
+- `steps`: one or more declarative curl steps.
 
 Documents identify themselves as APIHydra documents and declare their kind.
-The current schema uses `app: apihydra` and `kind: config|tasks`.
+The current schema uses `app: apihydra` and `kind: config|steps`.
 
 An APIHydra document may optionally declare metadata:
 
 ```yaml
 metadata:
-  name: create-tasks
-  labels: [create, tasks]
+  name: create-steps
+  labels: [create, steps]
 ```
 
 Metadata is used only when the user requests a filtered test run. It is not
@@ -83,7 +83,7 @@ required for, and does not alter, a normal full-suite run.
 
 Every directory in the discovered suite tree has one effective
 `RuntimeConfiguration`. It is the resolved set of configuration values
-available to task files in that directory.
+available to step files in that directory.
 
 Common configuration values initially include:
 
@@ -93,24 +93,35 @@ Common configuration values initially include:
 - `timeout`
 - `retries`
 
-### Task
+### Stage
 
-A `Task` is a declarative set of curl execution parameters. A task may define
+A `Stage` is an execution barrier containing one or more directories at the
+same depth beneath the suite root. The suite-root directory forms the first
+stage, its immediate child directories form the second stage, and each
+subsequent directory depth forms the next stage.
+
+Directories within one stage execute concurrently. A stage must finish before
+the next stage begins. Configuration inheritance continues to follow directory
+ancestry and is independent of stage grouping.
+
+### Step
+
+A `Step` is a declarative set of curl execution parameters. A step may define
 request values itself and may omit values that are available from its
 directory's `RuntimeConfiguration`.
 
-### RuntimeTask
+### RuntimeStep
 
-A `RuntimeTask` is a task after all available missing values have been populated
+A `RuntimeStep` is a step after all available missing values have been populated
 from its directory's `RuntimeConfiguration`.
 
 ```text
-Task + directory RuntimeConfiguration -> RuntimeTask
+Step + directory RuntimeConfiguration -> RuntimeStep
 ```
 
-Task-defined values take precedence over configuration values. A value absent
+Step-defined values take precedence over configuration values. A value absent
 from both sources remains undefined and causes validation failure when that
-value is required to execute or validate the task.
+value is required to execute or validate the step.
 
 ## Functional requirements
 
@@ -123,28 +134,28 @@ value is required to execute or validate the task.
 3. A YAML file whose `app` field is missing or is not exactly `apihydra` must be
    treated as unrelated and ignored.
 4. A YAML file declaring `app: apihydra` must declare `kind: config` or
-   `kind: tasks`. A missing or unsupported kind must produce a configuration
+   `kind: steps`. A missing or unsupported kind must produce a configuration
    error.
-5. No APIHydra document kinds other than `config` and `tasks` are supported.
+5. No APIHydra document kinds other than `config` and `steps` are supported.
 6. `metadata`, `metadata.name`, and `metadata.labels` must all be optional.
 7. When supplied, `metadata.name` must be unique within the suite so name-based
    filtering is unambiguous.
 8. When supplied, `metadata.labels` must be an array of strings.
-9. Metadata must affect task selection only when the user requests a filtered
+9. Metadata must affect step selection only when the user requests a filtered
    run. It must have no effect on an unfiltered full-suite run.
 10. The suite root must contain exactly one `config` document.
 11. If the suite root has no config, APIHydra must report a configuration error
-   and must not execute tasks.
+   and must not execute steps.
 12. Any directory may contain at most one config document.
 13. If any directory contains multiple config documents, APIHydra must report a
-   configuration error and must not execute tasks.
+   configuration error and must not execute steps.
 14. A child directory may contain no config document or one config document.
 15. A non-root config's parent must be discovered from the filesystem hierarchy.
    Starting with the config file's parent directory, APIHydra must search
    ancestor directories upward until it finds the nearest config file.
 16. A root config has no parent config.
-17. An unfiltered suite that resolves to zero tasks, whether because it has no
-    tasks documents or only empty tasks documents, must produce an error, execute
+17. An unfiltered suite that resolves to zero steps, whether because it has no
+    steps documents or only empty steps documents, must produce an error, execute
     no curl commands, and return exit code `2`.
 18. Each APIHydra YAML file must contain exactly one YAML document. An APIHydra
     file containing multiple `---`-separated documents must produce a fatal
@@ -152,49 +163,56 @@ value is required to execute or validate the task.
 19. APIHydra documents must be decoded using strict schema validation. Any
     unknown field must produce a fatal configuration error identifying the file
     and YAML field path, and APIHydra must return exit code `2` without executing
-    tasks.
+    steps.
 20. Duplicate YAML mapping keys must produce a fatal configuration error even
     when their values are identical. The error must identify the file and
     duplicated key.
+21. APIHydra must group discovered directories into stages by their depth
+    relative to the suite root.
+22. The suite-root directory must belong to the first stage. All directories
+    with the same relative depth must belong to the same stage.
+23. A stage may contain one or more directories. Directories containing no
+    selected steps contribute no execution work but must remain available for
+    configuration inheritance and descendant discovery.
 
 ### 1.1 Filtered execution
 
 1. APIHydra must support `--name <name>` and its short form `-n <name>`.
-2. A name filter must select a `tasks` document whose `metadata.name` exactly
+2. A name filter must select a `steps` document whose `metadata.name` exactly
    matches the supplied name.
 3. APIHydra must support repeatable `--label <label>` and its short form
    `-l <label>`.
-4. Repeated label filters must use AND semantics: a selected tasks document must
+4. Repeated label filters must use AND semantics: a selected steps document must
    contain every requested label.
-5. When name and label filters are combined, a tasks document must satisfy both
+5. When name and label filters are combined, a steps document must satisfy both
    the exact name filter and every label filter.
-6. Filters must select whole `tasks` documents. Every task in a selected
-   document must execute; individual tasks are not filtered.
-7. Config documents must not be excluded by task filters. APIHydra must load all
-   configs needed to resolve selected task documents.
+6. Filters must select whole `steps` documents. Every step in a selected
+   document must execute; individual steps are not filtered.
+7. Config documents must not be excluded by step filters. APIHydra must load all
+   configs needed to resolve selected step documents.
 8. An invocation without name or label filters must execute the entire suite.
-9. If the supplied filters select no tasks documents or resolve to zero tasks,
-   APIHydra must report that no tasks matched, execute no curl commands, and
+9. If the supplied filters select no steps documents or resolve to zero steps,
+   APIHydra must report that no steps matched, execute no curl commands, and
    return exit code `2`.
 
 Examples:
 
 ```text
-apih --name create-tasks
-apih -n create-tasks
+apih --name create-steps
+apih -n create-steps
 apih --label create
 apih -l create -l smoke
-apih tests --name create-tasks --label smoke
+apih tests --name create-steps --label smoke
 ```
 
 ### 1.2 External-tool preflight
 
 1. After filtering and runtime resolution but before executing any request,
-   APIHydra must determine which external tools the selected tasks require.
+   APIHydra must determine which external tools the selected steps require.
 2. `curl` must always be available.
-3. `jq` must be available when any selected task has a request body or uses
+3. `jq` must be available when any selected step has a request body or uses
    response capture, expected-value comparison, or type validation.
-4. `git` must be available when any selected task uses `response.expected`.
+4. `git` must be available when any selected step uses `response.expected`.
 5. If a required tool is unavailable, APIHydra must execute no requests, report
    the missing dependency, and return exit code `3`.
 6. The initial product does not require the external `yq` command. This may be
@@ -219,33 +237,33 @@ apih tests --name create-tasks --label smoke
    `Content-Type` overrides a parent `content-type` and is emitted as
    `Content-Type`.
 7. The resolved result is the child directory's `RuntimeConfiguration`.
-8. All task files in a directory receive that directory's
+8. All step files in a directory receive that directory's
    `RuntimeConfiguration`.
 
-### 3. Runtime task resolution
+### 3. Runtime step resolution
 
-1. APIHydra must resolve every declared task against the
-   `RuntimeConfiguration` of the directory containing its task file.
-2. To locate a task file's config, APIHydra must search first in the task file's
+1. APIHydra must resolve every declared step against the
+   `RuntimeConfiguration` of the directory containing its step file.
+2. To locate a step file's config, APIHydra must search first in the step file's
    own directory and then upward through ancestor directories until it finds the
    nearest config file.
-3. A value explicitly defined by the task must override the corresponding
+3. A value explicitly defined by the step must override the corresponding
    runtime-configuration value.
-4. For each undefined task value, APIHydra must use the corresponding
+4. For each undefined step value, APIHydra must use the corresponding
    runtime-configuration value when one exists.
-5. Task-level headers must merge with runtime-configuration headers by header
-   name. Runtime headers absent from the task remain present, while a task header
+5. Step-level headers must merge with runtime-configuration headers by header
+   name. Runtime headers absent from the step remain present, while a step header
    replaces the runtime header with the same name.
-6. Task-level header merging must use the same case-insensitive comparison and
+6. Step-level header merging must use the same case-insensitive comparison and
    canonical output names as configuration inheritance.
-7. The result of resolution must be represented as a `RuntimeTask` suitable for
+7. The result of resolution must be represented as a `RuntimeStep` suitable for
    curl execution and response validation.
-8. APIHydra must validate a runtime task before executing it and report missing
+8. APIHydra must validate a runtime step before executing it and report missing
    required values as errors.
 
 ### 4. Request execution
 
-1. Each `RuntimeTask` must resolve to a concrete curl command.
+1. Each `RuntimeStep` must resolve to a concrete curl command.
 2. Request parameters may include method, base URL, base path, path, headers,
    timeout, retries, query parameters, and body.
 3. An explicitly declared `request.method` must always take precedence.
@@ -263,14 +281,14 @@ apih tests --name create-tasks --label smoke
    baseUrl + [basePath] + path + [?query]
    ```
 
-9. `baseUrl` and `path` must be present after runtime-task resolution.
+9. `baseUrl` and `path` must be present after runtime-step resolution.
 10. `basePath` is optional. When undefined, it contributes an empty string to
    the final URL. When defined, it must not be an empty string and must be
    included between `baseUrl` and `path`.
 11. `query` is optional. When undefined, no query delimiter or query text is
     appended. When defined, it must not be an empty string and APIHydra must
     append `?` followed by its value.
-12. A defined-but-empty `basePath` or `query` must produce a runtime-task
+12. A defined-but-empty `basePath` or `query` must produce a runtime-step
     validation error.
 13. APIHydra must use Go's URL-aware `net/url` behavior to parse the base URL,
     normalize and join URL path components, and assign the optional raw query.
@@ -281,17 +299,17 @@ apih tests --name create-tasks --label smoke
 15. URL validation must remain lightweight and rely on Go's standard URL
     handling. APIHydra must not implement a custom exhaustive RFC validator;
     operational URL problems may be reported by curl as execution failures.
-16. `timeout` must be expressed in seconds. If it remains undefined after task
+16. `timeout` must be expressed in seconds. If it remains undefined after step
     and runtime-configuration resolution, it must default to `10`.
 17. `retries` must control curl retry behavior. If it remains undefined after
-    task and runtime-configuration resolution, it must default to `3`.
+    step and runtime-configuration resolution, it must default to `3`.
 18. The resolved timeout must be a positive number and must map directly to
     curl's `--max-time` option.
 19. The resolved retry count must be a non-negative integer and must map directly
     to curl's `--retry` option. Thus `retries: 3` permits the initial attempt plus
     up to three retries.
-20. A task-defined `timeout` or `retries` value must override the corresponding
-    runtime-configuration value like any other scalar task setting.
+20. A step-defined `timeout` or `retries` value must override the corresponding
+    runtime-configuration value like any other scalar step setting.
 21. APIHydra must pass the resolved timeout and retry values to curl.
 22. The request `body` must be handled as a literal JSON string.
 23. After variable substitution and before curl execution, APIHydra must use
@@ -303,7 +321,7 @@ apih tests --name create-tasks --label smoke
 
 ### 5. Global variable store
 
-1. A run must have one active, in-memory key-value store shared by all task
+1. A run must have one active, in-memory key-value store shared by all step
    runners.
 2. Both keys and values in the store must be strings.
 3. Stored values must preserve their JSON literal representation. For example:
@@ -313,26 +331,26 @@ apih tests --name create-tasks --label smoke
    date      -> "2026-01-01T00:00:00"
    ```
 
-4. A task may declare literal variables in a task-level `vars` map using YAML
+4. A step may declare literal variables in a step-level `vars` map using YAML
    key-value pairs. These variables are written before the request is resolved.
-5. Values under `task.vars` may be any JSON-compatible YAML scalar, array,
+5. Values under `step.vars` may be any JSON-compatible YAML scalar, array,
    object, or `null`. APIHydra must serialize each value as compact JSON before
    writing it to the string-to-string store. For example, YAML `1`, `true`,
    `Test`, `[1, 2]`, and `null` are stored as `1`, `true`, `"Test"`, `[1,2]`,
    and `null` respectively.
-6. A task variable value that cannot be represented as JSON must produce a
+6. A step variable value that cannot be represented as JSON must produce a
    configuration error.
-7. A task may capture variables from its curl response using `jq` expressions
+7. A step may capture variables from its curl response using `jq` expressions
    declared in `response.capture`.
 8. APIHydra must execute response-capture expressions after curl returns and
-   before substituting or validating `response.expected`, allowing a task to use
+   before substituting or validating `response.expected`, allowing a step to use
    a value captured from its own response in its expected-value assertions.
 9. Response capture must use the terminal `jq` application.
 10. A response-derived variable must store the literal text emitted for the
    extracted JSON value.
-11. Variables are global to the run. Every task runner may access variables set
-   by previously completed tasks, regardless of whether they came from a
-   task-level declaration or response capture.
+11. Variables are global to the run. Every step runner may access variables set
+   by previously completed steps, regardless of whether they came from a
+   step-level declaration or response capture.
 12. Variable keys are write-once. Any second attempt to set an existing key must
    produce a fatal runtime configuration error at the exact assignment point.
    The original value must remain unchanged and APIHydra must stop the suite
@@ -380,34 +398,34 @@ apih tests --name create-tasks --label smoke
 
 ### 7. Response validation
 
-1. A task's `response` section must be optional. When omitted, the task passes
+1. A step's `response` section must be optional. When omitted, the step passes
    if curl completes successfully; APIHydra must not validate HTTP status or
    response body content.
-2. APIHydra must require a valid JSON response body when the task declares any
+2. APIHydra must require a valid JSON response body when the step declares any
    of `response.capture`, `response.expected`, or `response.types`. It must use
    `jq` to validate the actual response JSON.
 3. When none of those JSON-based response features is present, the body may be
    empty or non-JSON and APIHydra may validate status alone.
 4. If jq rejects an actual response that requires JSON processing, APIHydra must
    stop immediately and forward jq's exact exit code.
-5. A task may declare accepted HTTP status codes as an array under
+5. A step may declare accepted HTTP status codes as an array under
    `response.status`, for example `status: [200, 201]`.
 6. When present, `response.status` must be a non-empty array of unique integers
    from `100` through `599`. An empty array, duplicate value, non-integer, or
    out-of-range value must produce a fatal configuration error with exit code
    `2`.
 7. When `response.status` is present, the actual HTTP response status must equal
-   one of the declared values. Otherwise, status validation must fail the task.
+   one of the declared values. Otherwise, status validation must fail the step.
 8. When `response.status` is omitted, APIHydra must accept any HTTP response
    status.
 9. A status mismatch must not stop the remaining suite from executing.
 10. A status mismatch must not short-circuit other response processing. When the
    response body is valid JSON, APIHydra must still run `response.capture`,
    `response.expected`, and `response.types` and collect all failures for the
-   task.
+   step.
 11. Variables captured from a valid JSON response become available according to
    the normal variable rules even when status validation failed.
-12. A task may declare value assertions under `response.expected`.
+12. A step may declare value assertions under `response.expected`.
 13. `response.expected` must be handled as a literal JSON string and expanded
     using the run-wide variable store before validation. APIHydra must use `jq`
     to validate the substituted expected JSON.
@@ -436,7 +454,7 @@ apih tests --name create-tasks --label smoke
 22. If Git reports a difference, exact-value validation must fail and APIHydra
    must report the Git diff to the user.
 23. If Git reports no difference, exact-value validation must pass.
-24. A task may declare type assertions under `response.types`.
+24. A step may declare type assertions under `response.types`.
 25. A type assertion validates only that the selected response value has the
    declared target type; it does not validate the value itself.
 26. Each entry in `response.types` must map a full `jq` expression selecting a
@@ -513,20 +531,20 @@ apih tests --name create-tasks --label smoke
 42. An empty declaration array, unknown token, duplicate modifier, or base type
     outside the first position must produce a fatal configuration error with
     exit code `2`.
-43. A task may use `expected`, `types`, or both.
-44. A mismatch in status, exact-value, or type validation must fail the task and
+43. A step may use `expected`, `types`, or both.
+44. A mismatch in status, exact-value, or type validation must fail the step and
     must identify the failed assertion clearly.
 
 ### 8. Response variable extraction
 
-1. A task may map variable keys to `jq` expressions under `response.capture`.
+1. A step may map variable keys to `jq` expressions under `response.capture`.
 2. APIHydra must apply each expression to the curl response JSON using the
    terminal `jq` application.
 3. Each successful expression result must be written to the global variable
    store using the configured key.
 4. Duplicate keys must be rejected according to the store's write-once rule.
 5. Captured variables become visible immediately after successful extraction,
-   including to `response.expected` in the producing task.
+   including to `response.expected` in the producing step.
 6. APIHydra must accept a non-zero `jq` exit status when it is caused by the
    filter producing the JSON value `null` or `false`; the corresponding literal
    value must still be captured.
@@ -543,48 +561,48 @@ apih tests --name create-tasks --label smoke
 
 ### 9. Execution order and concurrency
 
-APIHydra executes the suite using directory barriers and parallel independent
-branches:
+APIHydra executes stages sequentially while running independent work within a
+stage concurrently:
 
-1. Tasks within one task YAML file must execute sequentially in declaration
+1. Stages must execute in ascending directory-depth order, beginning with the
+   stage containing the suite-root directory.
+2. A stage must not begin until every directory and step file in the preceding
+   stage has finished.
+3. All directories within one stage must execute concurrently.
+4. Different step YAML files within one directory must execute concurrently.
+5. Steps within one step YAML file must execute sequentially in declaration
    order.
-2. Different task YAML files in the same directory must execute in parallel.
-3. All task files in a directory must finish before any immediate child
-   directory begins.
-4. After the parent directory finishes, all of its immediate child directories
-   must execute in parallel.
-5. Each child directory recursively follows the same rules: its files run in
-   parallel, tasks within each file run sequentially, and its children wait for
-   it to finish.
-6. A task may rely on variables created by an earlier task in the same file or
-   by a completed ancestor directory.
-7. A task must not rely on a variable created concurrently in another file or
-   sibling directory because no completion order is guaranteed between parallel
-   branches.
-8. Concurrent attempts to create the same variable key must not overwrite one
+6. A stage finishes only after all its directories, step files, and steps have
+   finished.
+7. A step may rely on variables created by an earlier step in the same file or
+   by any completed earlier stage.
+8. A step must not rely on a variable created concurrently in another file or
+   directory in the same stage because no completion order is guaranteed
+   between concurrent branches.
+9. Concurrent attempts to create the same variable key must not overwrite one
    another; at most one write may succeed. Detection of any duplicate write must
    trigger the fatal duplicate-assignment policy.
-9. A task validation failure must not stop suite execution.
-10. After validation fails, APIHydra must continue later sequential tasks in the
-    same file, other task files, and all child and sibling directories according
-    to the normal scheduling rules.
-11. APIHydra must collect validation failures throughout the run and return exit
+10. A step validation failure must not stop suite execution.
+11. After validation fails, APIHydra must continue later sequential steps in the
+    same file, other step files, and all current and later stages according to
+    the normal scheduling rules.
+12. APIHydra must collect validation failures throughout the run and return exit
     code `101` after the entire suite finishes when at least one validation
     failed.
-12. Pre-execution configuration errors that prevent the suite from being
-    resolved remain fatal and must prevent task execution.
-13. An operational failure from curl, jq, Git, or another external tool must be
+13. Pre-execution configuration errors that prevent the suite from being
+    resolved remain fatal and must prevent step execution.
+14. An operational failure from curl, jq, Git, or another external tool must be
     fatal. APIHydra must stop execution immediately and forward that tool's exact
     non-zero exit code.
-14. A non-zero tool status with defined semantic meaning must follow that
+15. A non-zero tool status with defined semantic meaning must follow that
     meaning instead of the operational-failure rule. In particular, Git diff
     status `1` means a validation mismatch, and the accepted jq status for a
     `null` or `false` result is not an error.
-15. Duplicate variable assignment is a fatal runtime configuration error, not a
+16. Duplicate variable assignment is a fatal runtime configuration error, not a
     recoverable validation failure. It must stop execution when detected.
-16. Missing variable references are fatal runtime configuration errors and must
+17. Missing variable references are fatal runtime configuration errors and must
     stop execution when detected.
-17. When any fatal error occurs during parallel execution, APIHydra must stop
+18. When any fatal error occurs during parallel execution, APIHydra must stop
     scheduling work, cancel all in-flight external processes, wait for them to
     terminate, and return the original fatal error code. Cancellation outcomes
     must not replace that original code.
@@ -592,39 +610,45 @@ branches:
 An example execution tree is:
 
 ```text
-root task files (parallel; each file internally sequential)
-  -> wait for root completion
-  -> child directories (parallel)
-       -> each child's task files (parallel; each file internally sequential)
-       -> wait for that child
-       -> that child's child directories (parallel)
+stage 0
+  -> suite-root directory
+       -> step files in parallel; each file's steps are sequential
+  -> wait for stage 0
+stage 1
+  -> all immediate child directories in parallel
+       -> each directory's step files in parallel
+       -> each file's steps sequentially
+  -> wait for all of stage 1
+stage 2
+  -> all second-level descendant directories in parallel
+  -> continue one stage per directory depth
 ```
 
 ### 10. Errors and observability
 
 1. APIHydra must distinguish configuration errors, runtime-resolution errors,
    curl execution errors, and response-validation failures.
-2. Errors must identify the relevant file and task whenever applicable.
-3. Configuration errors must be detected before any task execution when they
+2. Errors must identify the relevant file and step whenever applicable.
+3. Configuration errors must be detected before any step execution when they
    can be found during suite loading and resolution.
 4. Terminal output must be structured and consistent enough for AI agents to
    interpret reliably.
 5. Terminal output must remain concise and readable enough for a human to trace
-   directory, file, task, request, and validation context.
+   stage, directory, file, step, request, and validation context.
 6. The command must return a non-zero exit status when configuration,
    execution, or validation fails.
-7. Task validation errors must be reported without preventing the rest of a
+7. Step validation errors must be reported without preventing the rest of a
    successfully resolved suite from running.
 8. Exit codes must follow this contract:
 
    - `0`: the suite completed with no validation failures.
    - `2`: invocation, discovery, YAML, configuration, or filter-selection error;
      fatal immediately. This includes duplicate variable assignment detected
-     during task execution and missing variable references detected during
+     during step execution and missing variable references detected during
      substitution.
    - `3`: missing external dependency or internal APIHydra failure; fatal
      immediately.
-   - `101`: one or more task validation failures; returned after the complete
+   - `101`: one or more step validation failures; returned after the complete
      suite runs.
    - Any operational non-zero exit from an invoked external tool: forwarded
      exactly and fatal immediately.
@@ -638,25 +662,26 @@ root task files (parallel; each file internally sequential)
    complete, independently parseable JSON event object.
 4. JSON events must stream as execution progresses rather than being emitted
    only after the whole suite completes.
-5. The event stream must represent suite lifecycle, task results, errors, and a
+5. The event stream must represent suite lifecycle, step results, errors, and a
    final suite summary.
 6. Parallel events may appear in actual completion order. Each event must carry
-   enough file and task identity to associate it with the correct task.
+   enough stage, directory, file, and step identity to associate it with the
+   correct step.
 7. In JSON mode, standard output must not contain ANSI escape codes or
    human-formatted prose outside JSON event objects.
 8. Failure details, including Git diffs from expected-value validation, must be
    represented as JSON string fields in the relevant event.
 9. The final summary event must state whether the suite passed and provide
-   enough counts to determine how many tasks passed and failed.
+   enough counts to determine how many steps passed and failed.
 
 ## Acceptance scenarios
 
 ### Root config is required
 
-Given a selected suite root with task files but no config file, when `apih` is
+Given a selected suite root with step files but no config file, when `apih` is
 run, then it reports a configuration error and executes no curl commands.
 
-Given a valid root config but zero tasks anywhere in an unfiltered suite, when
+Given a valid root config but zero steps anywhere in an unfiltered suite, when
 `apih` is run, then it reports an error, executes no curl commands, and returns
 exit code `2`.
 
@@ -681,23 +706,23 @@ loaded, then APIHydra identifies the file and duplicated key, returns exit code
 ### Metadata is optional
 
 Given APIHydra documents without metadata, when an unfiltered suite is run, then
-all tasks execute normally. Given optional names or labels, they affect task
+all steps execute normally. Given optional names or labels, they affect step
 selection only during a filtered run.
 
 ### Filter by name and labels
 
-Given tasks documents with optional metadata, when `apih -n create-tasks` is
-run, then only the document named `create-tasks` is selected. When
+Given steps documents with optional metadata, when `apih -n create-steps` is
+run, then only the document named `create-steps` is selected. When
 `apih -l create -l smoke` is run, only documents containing both labels are
-selected. All config documents required by the selected tasks remain available
+selected. All config documents required by the selected steps remain available
 for resolution.
 
-Given filters that match no tasks documents, APIHydra reports an error, executes
+Given filters that match no steps documents, APIHydra reports an error, executes
 no curl commands, and returns exit code `2`.
 
 ### External-tool preflight
 
-Given selected tasks that require curl, jq, or Git, when any required executable
+Given selected steps that require curl, jq, or Git, when any required executable
 is unavailable, then APIHydra identifies it, executes no requests, and returns
 exit code `3`. The absence of `yq` does not affect the initial product.
 
@@ -711,7 +736,7 @@ curl commands.
 
 Given a root config with `baseUrl`, `basePath`, and headers, and a child config
 that overrides `basePath`, when the child config searches its ancestor
-directories and resolves the root config as its nearest parent, then a task in
+directories and resolves the root config as its nearest parent, then a step in
 the child uses the root `baseUrl` and inherited headers together with the child
 `basePath`.
 
@@ -719,24 +744,24 @@ Given a parent header named `content-type` and a child header named
 `Content-Type`, when the child runtime configuration is resolved, then only the
 child value remains and the header is emitted as `Content-Type`.
 
-### Directory configuration applies to local tasks
+### Directory configuration applies to local steps
 
-Given multiple task files in one directory, when they are resolved, then every
-task uses the same directory `RuntimeConfiguration` except where a task defines
+Given multiple step files in one directory, when they are resolved, then every
+step uses the same directory `RuntimeConfiguration` except where a step defines
 its own value.
 
 ### Request method defaults
 
-Given a task without an explicit method or body, when it is resolved, then its
-runtime method is `GET`. Given a task without an explicit method but with a body,
+Given a step without an explicit method or body, when it is resolved, then its
+runtime method is `GET`. Given a step without an explicit method but with a body,
 its runtime method is `POST`. Given any explicit method, the explicit value is
 used regardless of body presence.
 
 ### Timeout and retry defaults
 
-Given no configured or task-defined timeout or retry count, when a runtime task
+Given no configured or step-defined timeout or retry count, when a runtime step
 is resolved, then it uses a 10-second timeout and 3 retries. Given inherited
-values, the task uses them; given task-level values, they override the inherited
+values, the step uses them; given step-level values, they override the inherited
 values and are passed to curl.
 
 ### URL composition
@@ -745,7 +770,7 @@ Given `baseUrl: https://api.example.com`, `basePath: /api/v1`, `path: /users`,
 and `query: page=1&limit=20`, when the runtime request is built, then its URL is
 `https://api.example.com/api/v1/users?page=1&limit=20`. Given no `basePath` or
 `query`, only `baseUrl + path` is used. Given a present but empty `basePath` or
-`query`, runtime-task validation fails.
+`query`, runtime-step validation fails.
 
 Given redundant boundary slashes in `baseUrl`, `basePath`, or `path`, when the
 URL is joined, then APIHydra normalizes the URL path without corrupting its
@@ -754,12 +779,12 @@ reported through the normal curl execution failure.
 
 ### Request variable assignment and use
 
-Given one task with `vars: {change_id: 1}`, when a later task uses
+Given one step with `vars: {change_id: 1}`, when a later step uses
 `$change_id` in its request body, then APIHydra replaces the reference with the
 literal `1` and validates the resulting body as JSON before executing curl.
 
-Given JSON-compatible scalar, array, object, or null values under `task.vars`,
-when the task is loaded, then each value is serialized as compact JSON and
+Given JSON-compatible scalar, array, object, or null values under `step.vars`,
+when the step is loaded, then each value is serialized as compact JSON and
 stored as a string. A value that cannot be represented as JSON causes a
 configuration error.
 
@@ -774,13 +799,13 @@ Given `$$` in a body or expected string, substitution produces a literal `$`.
 
 ### Response extraction and later use
 
-Given a task with `response.capture: {change_id: .id}`, when curl returns and
-the capture succeeds, then the same task's `response.expected` and later
-sequential tasks may reference the stored JSON literal through `$change_id`.
+Given a step with `response.capture: {change_id: .id}`, when curl returns and
+the capture succeeds, then the same step's `response.expected` and later
+sequential steps may reference the stored JSON literal through `$change_id`.
 
 ### Variables are write-once
 
-Given a store that already contains `change_id`, when any task tries to set
+Given a store that already contains `change_id`, when any step tries to set
 `change_id` again, then APIHydra reports a fatal error at that assignment,
 preserves the original value, stops the suite immediately, and returns exit code
 `2`.
@@ -804,28 +829,28 @@ actual JSON response with the expected value.
 ### HTTP status validation
 
 Given `response.status: [200, 201]`, when curl returns status `201`, then status
-validation passes; when curl returns status `400`, the task fails, the failure
+validation passes; when curl returns status `400`, the step fails, the failure
 identifies the unexpected status, and the remaining suite continues.
 
-Given a status-only task and a `204 No Content` response, when the task is
+Given a status-only step and a `204 No Content` response, when the step is
 validated, then the empty body is accepted. Given the same empty body with
 `capture`, `expected`, or `types` configured, jq rejects the response, APIHydra
 stops immediately, and jq's exit code is forwarded.
 
-Given a task without a `response` section, when curl exits successfully, then
-the task passes without inspecting its HTTP status or body.
+Given a step without a `response` section, when curl exits successfully, then
+the step passes without inspecting its HTTP status or body.
 
 ### Status failure does not skip body validation
 
 Given a status mismatch and a valid JSON response body, when the response is
 processed, then APIHydra records the status failure, still performs capture,
 expected-value comparison, and type validation, and reports every failure found
-for the task.
+for the step.
 
 ### Exact-value mismatch
 
 Given an actual response of `{"id":2}` and an expected value of `{"id":1}`,
-when the response is validated, then Git reports a diff and the task fails with
+when the response is validated, then Git reports a diff and the step fails with
 that diff.
 
 Given invalid substituted JSON under `response.expected`, when jq validation
@@ -869,18 +894,21 @@ Given a `datetime` assertion, values such as `2026-01-01`, `2026-01-01Z`,
 component but no timezone, or with a fractional-second precision other than
 three or six digits, fails.
 
-### File and directory scheduling
+### Stage scheduling
 
-Given two task files in the root and two child directories, when the suite runs,
-then the root files run concurrently, each file's tasks retain declaration
-order, neither child starts until both root files finish, and both children may
-then run concurrently.
+Given two step files in the suite root, two immediate child directories, and
+second-level descendants beneath either child, when the suite runs, then the
+root files run concurrently in the first stage and each file's steps retain
+declaration order. The two child directories run concurrently in the second
+stage only after the first stage finishes. No second-level descendant begins
+until every directory in the second stage finishes, after which all
+second-level descendant directories may run concurrently in the third stage.
 
 ### Validation failures do not stop the suite
 
-Given a task that fails status, expected-value comparison, or type validation,
-when other tasks remain anywhere in the resolved suite, then APIHydra records
-the failure, executes every remaining task according to the normal schedule,
+Given a step that fails status, expected-value comparison, or type validation,
+when other steps remain anywhere in the resolved suite, then APIHydra records
+the failure, executes every remaining step according to the normal schedule,
 and returns exit code `101` after the suite completes.
 
 ### External-tool failures are forwarded
@@ -899,9 +927,9 @@ fatal error rather than a cancellation code.
 ### JSON event output
 
 Given `apih --json`, when the suite runs, then every standard-output line is a
-valid JSON event without ANSI formatting, task events identify their source file
-and task, failures contain structured details, and the final event summarizes
-passed and failed task counts.
+valid JSON event without ANSI formatting, step events identify their source file
+and step, failures contain structured details, and the final event summarizes
+passed and failed step counts.
 
 ## Open product decisions
 

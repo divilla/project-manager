@@ -2,11 +2,31 @@ package config
 
 type (
 	Wrapper struct {
-		FilePath      string
-		ParentConfig  *Config
-		Config        Config
+		// original file path
+		FilePath string
+		// Config in first parent that contains it for `config` type or `config` in current dir
+		// or first parent containing it for `steps` files
+		ParentConfig *Config
+		// Effective config for both steps and config files
 		RuntimeConfig Config
-		RuntimeTasks  []Task
+		// Steps populated with Runtime config values
+		RuntimeSteps []Step
+	}
+
+	// WrapperGroup is Dir organized structure
+	WrapperGroup struct {
+		// Stage 0 is starting dir - all children are stage 1 and so one
+		// Stage with same nr is executed in paralle
+		// Different stages execute sequentaly from 0 on...
+		Stage int
+		// Original Dir
+		Dir string
+		// Runtime Config passed to all steps files
+		RuntimeConfig *Config
+		// Same dir
+		Wrappers []*Wrapper
+		// Child dirs
+		WrapperGroups []*WrapperGroup
 	}
 
 	Config struct {
@@ -20,11 +40,11 @@ type (
 			BaseURL  string            `yaml:"baseUrl"`
 			BasePath string            `yaml:"basePath"`
 			Headers  map[string]string `yaml:"headers"`
-			Tasks    []Task            `yaml:"tasks"`
+			Steps    []Step            `yaml:"steps"`
 		}
 	}
 
-	Task struct {
+	Step struct {
 		Request struct {
 			Vars     map[string]interface{} `yaml:"vars"`
 			Method   string                 `yaml:"method"`
@@ -57,6 +77,6 @@ func NewParser(workDir string, files []string) *Parser {
 	}
 }
 
-func (p *Parser) Parse() {
-
+func (p *Parser) Parse() *WrapperGroup {
+	return &WrapperGroup{}
 }
