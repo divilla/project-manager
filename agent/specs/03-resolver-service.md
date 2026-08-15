@@ -77,7 +77,7 @@ also leaves `Runner` available for the later execution service.
   decoded order.
 - Resolving every local step against its directory's resolved defaults.
 - Attaching each declared and resolved step to its exact source
-  `StepsDefinition` with a one-based index within that definition.
+  `StepsDefinition` with a zero-based index within that definition.
 - Applying built-in request method, timeout, and retry defaults.
 - Ensuring each resolved step has the values required by later request
   processing.
@@ -195,10 +195,10 @@ error is attached when one exists.
 
 Defaults paths use forms such as `$.spec.baseUrl` and `$.spec.headers`. Step
 paths use the source definition and the zero-based YAML position derived from
-the resolved step's one-based index:
+the resolved step's zero-based index:
 
 ```text
-$.spec.steps[<Step.Index - 1>].request.baseUrl
+$.spec.steps[<Step.Index>].request.baseUrl
 ```
 
 Errors without an attributable YAML definition do not use `errs.Definition`.
@@ -212,11 +212,11 @@ when a Resolver method returns the error, then its filename, one-based line,
 YAML path, static message, and optional attached cause follow the
 `errs.Definition` contract.
 
-#### AC-ResolverErrors-2: Translate step indexes to YAML indexes
+#### AC-ResolverErrors-2: Use step indexes as YAML indexes
 
-Given a resolved step with one-based `Step.Index`, when Resolver constructs its
-definition error, then the YAML path uses `Step.Index - 1` as the zero-based
-`spec.steps` sequence index.
+Given a resolved step with zero-based `Step.Index`, when Resolver constructs its
+definition error, then the YAML path uses `Step.Index` directly as the
+zero-based `spec.steps` sequence index.
 
 #### AC-ResolverErrors-3: Keep non-definition errors outside definition format
 
@@ -314,14 +314,14 @@ must set the source step and its resolved copy to:
 
 ```go
 definition.Spec.Steps[i].Definition = definition
-definition.Spec.Steps[i].Index = i + 1
+definition.Spec.Steps[i].Index = i
 
 resolved.Definition = definition.Spec.Steps[i].Definition
 resolved.Index = definition.Spec.Steps[i].Index
 ```
 
 `Definition` points to the exact containing `*models.StepsDefinition`, and
-`Index` is one-based for user-facing identity and errors. The pointer is an
+`Index` is zero-based for user-facing identity and errors. The pointer is an
 intentional read-only provenance link; Resolver must not clone the definition.
 No other field on the decoded source step may change.
 
@@ -540,7 +540,7 @@ The `Stage` field does not control traversal and is not changed.
 For each directory, Resolver allocates one candidate outer slice entry per
 `StepsDefinition`. For each declared step at zero-based position `i` within that
 definition, Resolver assigns the source step's `Definition` to the exact
-containing definition and `Index` to `i + 1`. It then deep-copies the annotated
+containing definition and `Index` to `i`. It then deep-copies the annotated
 declaration and resolves its request fields as follows:
 
 - An explicitly declared step value wins.
@@ -561,7 +561,7 @@ declaration and resolves its request fields as follows:
 After resolution, every resolved step must have:
 
 - A `Definition` pointer to its exact containing `StepsDefinition`.
-- An `Index` equal to its one-based position within
+- An `Index` equal to its zero-based position within
   `StepsDefinition.Spec.Steps`.
 - A non-empty request base URL.
 - A non-empty request method.
@@ -579,7 +579,7 @@ components remain separate on the resolved `Step` for the preparation stage.
 ### Source-aware errors
 
 A resolved-step error identifies the originating `StepsDefinition.File.Path`,
-the step's one-based `Index` within that definition, and the relevant YAML path.
+the step's zero-based `Index` within that definition, and the relevant YAML path.
 Errors must not depend on pointer addresses or unordered map iteration.
 
 ### Acceptance criteria
@@ -598,11 +598,11 @@ then the outer `ResolvedSteps` indexes preserve definition order and each inner
 slice preserves its definition's declaration order, including an empty inner
 slice for an empty definition.
 
-#### AC-ResolveSteps-3: Attach definition and one-based index
+#### AC-ResolveSteps-3: Attach definition and zero-based index
 
 Given a step at zero-based slice position `i` in a `StepsDefinition`, when it is
 resolved, then both the source step and resolved copy have `Definition` pointing
-to that exact definition and `Index` equal to `i + 1`. Every other decoded
+to that exact definition and `Index` equal to `i`. Every other decoded
 source-step field remains unchanged.
 
 #### AC-ResolveSteps-4: Overlay step request values

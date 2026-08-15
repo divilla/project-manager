@@ -29,17 +29,11 @@ type Directory struct {
 }
 
 type File struct {
-	Stage     string `yaml:"stage"`
+	Stage     int
 	Path      string
 	Kind      DocumentKind
-	Directory *Directory
 	Bytes     []byte
-	//Root            *RootFile
-	//Defaults        *DefaultsFile
-	//Steps           *StepsFile
-	//ParentDefaults  *Defaults
-	//RuntimeDefaults RuntimeDefaults
-	//RuntimeSteps    []RuntimeStep
+	Directory *Directory
 }
 
 type BaseDefinition struct {
@@ -100,6 +94,18 @@ type Step struct {
 	} `yaml:"response"`
 	Definition *StepsDefinition `yaml:"-"`
 	Index      int              `yaml:"-"`
+}
+
+func (s *Step) DirectoryStage() int {
+	return s.Definition.File.Directory.Stage
+}
+
+func (s *Step) DirectoryPath() string {
+	return s.Definition.File.Directory.Path
+}
+
+func (s *Step) FilePath() string {
+	return s.Definition.File.Path
 }
 
 type YAMLString string
