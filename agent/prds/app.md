@@ -37,6 +37,7 @@ executes those commands, and validates their JSON responses.
 - Full-response equality when only selected values are declared under
   `response.expected`.
 - Parallel execution of steps declared in the same step file.
+- Parallel execution of different step files belonging to the same directory.
 - Arbitrary raw curl arguments. Curl capabilities must be exposed through
   explicit typed YAML fields.
 
@@ -102,14 +103,23 @@ Common default values initially include:
 
 ### Stage
 
-A `Stage` is an execution barrier containing one or more directories at the
-same depth beneath the suite root. The suite-root directory forms the first
-stage, its immediate child directories form the second stage, and each
-subsequent directory depth forms the next stage.
+Every discovered directory has a non-negative integer `Stage` property. The
+suite-root directory has stage `0`; each child directory has its parent's stage
+plus `1`. Therefore directories at the same depth beneath the suite root have
+the same stage number.
 
-Directories within one stage execute concurrently. A stage must finish before
-the next stage begins. Defaults inheritance continues to follow directory
-ancestry and is independent of stage grouping.
+Stage numbers are execution barriers. APIHydra executes stages in numeric order
+from `0` through the maximum discovered stage. For one stage, APIHydra starts
+exactly one goroutine for every directory assigned to that stage. Those
+directory goroutines execute concurrently, and the next stage cannot begin
+until all of them finish.
+
+Within one directory, execution is entirely sequential. Its selected step YAML
+files execute in ascending lexicographic path order. APIHydra executes every
+step in one file in declaration order before it begins the next file.
+
+Defaults inheritance continues to follow directory ancestry and is independent
+of stage execution grouping.
 
 ### Step
 
@@ -179,13 +189,14 @@ value is required to execute or validate the step.
 21. Duplicate YAML mapping keys must produce a fatal configuration error even
     when their values are identical. The error must identify the file and
     duplicated key.
-22. APIHydra must group discovered directories into stages by their depth
-    relative to the suite root.
-23. The suite-root directory must belong to the first stage. All directories
-    with the same relative depth must belong to the same stage.
+22. APIHydra must assign every discovered directory a non-negative integer
+    `Stage` property.
+23. The suite-root directory must have stage `0`. Every child directory's stage
+    must equal its parent directory's stage plus `1`; consequently, all
+    directories with the same relative depth have the same stage.
 24. A stage may contain one or more directories. Directories containing no
-    selected steps contribute no execution work but must remain available for
-    defaults inheritance and descendant discovery.
+    selected steps contribute no request work but must retain their stage and
+    remain available for defaults inheritance and descendant discovery.
 
 ### 1.1 Filtered execution
 
@@ -579,54 +590,68 @@ apih tests --name create-steps --label smoke
 
 ### 9. Execution order and concurrency
 
-APIHydra executes stages sequentially while running independent work within a
-stage concurrently:
+APIHydra executes stages sequentially. It executes directories within the same
+stage concurrently, while executing all selected files and steps within one
+directory sequentially:
 
-1. Stages must execute in ascending directory-depth order, beginning with the
-   stage containing the suite-root directory.
-2. A stage must not begin until every directory and step file in the preceding
-   stage has finished.
-3. All directories within one stage must execute concurrently.
-4. Different step YAML files within one directory must execute concurrently.
-5. Steps within one step YAML file must execute sequentially in declaration
-   order.
-6. A stage finishes only after all its directories, step files, and steps have
+1. APIHydra must determine the maximum `Directory.Stage` value and execute
+   every stage number in ascending numeric order from `0` through that maximum.
+2. Stage `N+1` must not begin until every directory goroutine in stage `N` has
+   finished. A stage finishes only after every file and step in all of its
+   directories has finished.
+3. For each stage, APIHydra must start exactly one goroutine per directory whose
+   `Stage` property equals the current stage number.
+4. Directory goroutines within the same stage execute concurrently. A directory
+   containing no selected step files performs no request work and completes its
+   goroutine normally.
+5. A directory goroutine must execute that directory's selected step YAML files
+   sequentially in ascending lexicographic order of their cleaned file paths.
+   This is the deterministic order already held by `Directory.StepsFiles`.
+6. The directory goroutine must execute every step in the first file
+   sequentially in declaration order before starting the next file. It repeats
+   this rule until all steps in all selected step files in that directory have
    finished.
-7. A step may rely on variables created by an earlier step in the same file or
-   by any completed earlier stage.
-8. A step must not rely on a variable created concurrently in another file or
-   directory in the same stage because no completion order is guaranteed
-   between concurrent branches.
-9. Concurrent attempts to create the same variable key must not overwrite one
-   another; at most one write may succeed. Detection of any duplicate write must
-   trigger the fatal duplicate-assignment policy.
-10. A step validation failure must not stop suite execution.
-11. After validation fails, APIHydra must continue later sequential steps in the
-    same file, other step files, and all current and later stages according to
+7. APIHydra must not start a separate goroutine for a file or step. Files and
+   steps belonging to the same directory must never overlap in execution.
+8. A step may rely on variables created by an earlier step in the same file, by
+   any step in an alphabetically earlier completed file in the same directory,
+   or by any completed earlier stage.
+9. A step must not rely on a variable created by another directory in the same
+   stage because those directory goroutines execute concurrently and have no
+   defined relative completion order.
+10. Concurrent attempts from different directory goroutines to create the same
+    variable key must not overwrite one another; at most one write may succeed.
+    Detection of any duplicate write must trigger the fatal
+    duplicate-assignment policy.
+11. A step validation failure must not stop suite execution.
+12. After validation fails, APIHydra must continue later sequential steps in the
+    same file, later alphabetically ordered files in the same directory, other
+    directory goroutines, and all later stages according to
     the normal scheduling rules.
-12. APIHydra must collect validation failures throughout the run and return exit
+13. APIHydra must collect validation failures throughout the run and return exit
     code `101` after the entire suite finishes when at least one validation
     failed.
-13. Pre-execution configuration errors that prevent the suite from being
+14. Pre-execution configuration errors that prevent the suite from being
     resolved remain fatal and must prevent step execution.
-14. An operational failure from curl, jq, Git, or another external tool must be
+15. An operational failure from curl, jq, Git, or another external tool must be
     fatal. APIHydra must stop execution immediately and forward that tool's exact
     non-zero exit code.
-15. A non-zero tool status with defined semantic meaning must follow that
+16. A non-zero tool status with defined semantic meaning must follow that
     meaning instead of the operational-failure rule. In particular, Git diff
     status `1` means a validation mismatch, and the accepted jq status for a
     `null` or `false` result is not an error.
-16. Duplicate variable assignment is a fatal runtime configuration error, not a
+17. Duplicate variable assignment is a fatal runtime configuration error, not a
     recoverable validation failure. It must stop execution when detected.
-17. Missing variable references are fatal runtime configuration errors and must
+18. Missing variable references are fatal runtime configuration errors and must
     stop execution when detected.
-18. When any fatal error occurs during parallel execution, APIHydra must stop
-    scheduling work, cancel all in-flight external processes, wait for them to
-    terminate, and return the original fatal error code. Cancellation outcomes
-    must not replace that original code.
-19. For each step, APIHydra must load `step.vars`, substitute, validate, order,
+19. When any fatal error occurs while directory goroutines are running,
+    APIHydra must stop scheduling work, cancel all in-flight external processes,
+    wait for every started directory goroutine to terminate, and return the
+    original fatal error code. Cancellation outcomes must not replace that
+    original code.
+20. For each step, APIHydra must load `step.vars`, substitute, validate, order,
     and format `request.body`, and then execute the request.
-20. After curl returns, APIHydra must store the response text in the runtime
+21. After curl returns, APIHydra must store the response text in the runtime
     step's `response.body`, capture response variables, and only then
     substitute, validate, order, and format `response.expected`. This order lets
     a step use its own captured variables in `response.expected`.
@@ -636,16 +661,20 @@ An example execution tree is:
 ```text
 stage 0
   -> suite-root directory
-       -> step files in parallel; each file's steps are sequential
+       -> 01-users.yaml: execute all steps sequentially
+       -> 02-projects.yaml: execute all steps sequentially
+       -> continue through remaining files alphabetically
   -> wait for stage 0
 stage 1
-  -> all immediate child directories in parallel
-       -> each directory's step files in parallel
-       -> each file's steps sequentially
+  -> start one goroutine for each immediate child directory
+       -> directory A: files alphabetically, all steps sequentially
+       -> directory B: files alphabetically, all steps sequentially
+       -> directory A and directory B run concurrently
   -> wait for all of stage 1
 stage 2
-  -> all second-level descendant directories in parallel
-  -> continue one stage per directory depth
+  -> start one goroutine for each directory whose Stage is 2
+  -> wait for all of stage 2
+  -> continue through maxStage
 ```
 
 ### 10. Errors and observability
@@ -836,6 +865,7 @@ Given `$$` in a body or expected string, substitution produces a literal `$`.
 Given a step with `response.capture: {change_id: .id}`, when curl returns and
 the capture succeeds, then the same step's `response.expected` and later
 sequential steps may reference the stored JSON literal through `$change_id`.
+This includes steps in alphabetically later files in the same directory.
 
 ### Variables are write-once
 
@@ -934,13 +964,22 @@ three or six digits, fails.
 
 ### Stage scheduling
 
-Given two step files in the suite root, two immediate child directories, and
-second-level descendants beneath either child, when the suite runs, then the
-root files run concurrently in the first stage and each file's steps retain
-declaration order. The two child directories run concurrently in the second
-stage only after the first stage finishes. No second-level descendant begins
-until every directory in the second stage finishes, after which all
-second-level descendant directories may run concurrently in the third stage.
+Given `01-first.yaml` and `02-second.yaml` in the suite-root directory, when
+stage `0` runs, then APIHydra executes every declared step in `01-first.yaml`
+sequentially before it starts the first step in `02-second.yaml`. No file or
+step in that directory executes concurrently with another file or step in the
+same directory.
+
+Given two immediate child directories at stage `1`, when stage `0` has
+finished, then APIHydra starts one goroutine for each child directory. The two
+directories execute concurrently, while each goroutine executes its own files
+alphabetically and all steps sequentially. Stage `2` does not begin until both
+stage `1` directory goroutines finish.
+
+Given second-level descendants at stage `2`, when every stage `1` directory has
+finished, then APIHydra starts one goroutine for each stage `2` directory. This
+barrier-and-directory-goroutine pattern repeats in numeric order through the
+maximum discovered `Directory.Stage`.
 
 ### Validation failures do not stop the suite
 
