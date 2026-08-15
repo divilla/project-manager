@@ -6,6 +6,7 @@
 - Package: `internal/definition`
 - Package name: `definition`
 - Shared models: `internal/models`
+- Error construction: `pkg/errs`
 - Status: implementation specification
 
 ## Base specification
@@ -64,13 +65,16 @@ a descendant defaults file decodes to a `DefaultsDefinition` whose kind is
 - Validation of response status declarations.
 - Validation of response type-declaration structure.
 - File- and YAML-path-aware configuration errors.
+- Construction of YAML-source errors through `errs.Definition`.
 
 ### Non-responsibilities
 
 `Decoder` does not:
 
 - Discover directories or files.
-- Read files from the filesystem; it consumes `File.Bytes` loaded by `Loader`.
+- Read files from the filesystem for decoding; it consumes `File.Bytes` loaded
+  by `Loader`. On an error path, `errs.Definition` may read the source file only
+  to resolve the formatted line number.
 - Recognize unrelated YAML or classify APIHydra document kinds.
 - Revalidate root/defaults placement or file cardinality already owned by
   `Loader`.
@@ -173,6 +177,55 @@ next useful boundary. A cancelled call returns the context error.
 - Validation failure or cancellation never modifies the supplied tree or any
   decoded definition.
 
+### Error construction
+
+Every Decoder error attributable to a specific YAML definition must be built
+with:
+
+```go
+errs.Definition(sourcePath, yamlPath, staticMessage, cause)
+```
+
+During `DecodeFiles`, before a definition exists, the Decoder uses the
+classified source `File.Path` directly. It supplies the most specific YAML path
+available, a stable non-empty static message for the failed Decoder rule, and
+the underlying YAML or typed-decoding error when one exists. Pure validation
+failures pass a nil cause.
+
+Document-wide errors use `$`. Schema fields use exact paths such as
+`$.metadata.name`, `$.spec.timeout`, or
+`$.spec.steps[0].request.path`. YAML sequence positions in these paths remain
+zero-based.
+
+For a duplicate metadata name, the later definition in deterministic traversal
+order is the primary error location at `$.metadata.name`; the static message
+identifies the earlier definition's file. Duplicate-key, unknown-field, and
+typed-decoding causes must remain attached through `errs.Definition`.
+
+Errors without an attributable YAML location do not use `errs.Definition`.
+These include nil roots, broken in-memory relationships without a usable source
+definition, suite-level absence of all steps definitions, and context
+cancellation.
+
+#### AC-DecoderErrors-1: Build YAML-source errors with `errs.Definition`
+
+Given a decoding or validation failure attributable to a YAML file and member,
+when a Decoder method returns the error, then its filename, one-based line, YAML
+path, static message, and optional attached cause follow the `errs.Definition`
+contract.
+
+#### AC-DecoderErrors-2: Preserve decoding causes
+
+Given a duplicate-key, unknown-field, YAML-syntax, or typed-decoding cause, when
+the Decoder returns its definition error, then `errors.Is` and `errors.As`
+continue through the wrapper produced by `errs.Definition`.
+
+#### AC-DecoderErrors-3: Keep non-definition errors outside definition format
+
+Given cancellation or an input-tree failure without an attributable YAML
+member, when the Decoder returns the error, then it does not fabricate arguments
+for `errs.Definition`.
+
 ## Types specification
 
 ### `models.Directory`
@@ -219,7 +272,9 @@ type File struct {
 }
 ```
 
-`File.Bytes` is the sole YAML input. The Decoder performs no filesystem read.
+`File.Bytes` is the sole input used to decode a definition. Decoder performs no
+filesystem read for decoding; `errs.Definition` may read `File.Path` only after
+a source-aware error must be formatted.
 `File.Path` identifies the source in every file-specific decoding or validation
 error.
 

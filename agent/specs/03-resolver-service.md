@@ -6,6 +6,7 @@
 - Package: `internal/definition`
 - Package name: `definition`
 - Shared models: `internal/models`
+- Error construction: `pkg/errs`
 - Status: implementation specification
 
 ## Base specification
@@ -83,6 +84,7 @@ also leaves `Runner` available for the later execution service.
 - Populating `Directory.ResolvedDefaults` and `Directory.ResolvedSteps` for every
   traversed directory.
 - Reporting source-file- and YAML-path-aware resolution errors.
+- Construction of YAML-source errors through `errs.Definition`.
 
 ### Non-responsibilities
 
@@ -102,6 +104,10 @@ also leaves `Runner` available for the later execution service.
 - Process response captures, comparisons, or type assertions.
 - Regroup directories into stages or execute a stage.
 - Produce terminal or machine-readable output.
+
+On an error path, `errs.Definition` may read the source YAML file solely to
+resolve the formatted line number. Resolver itself performs no other filesystem
+access.
 
 ### Public contract
 
@@ -172,6 +178,51 @@ candidate values.
   values, or a sibling resolved step.
 - `Step.Definition` is the sole intentional alias into decoded state. It is a
   read-only provenance pointer to the exact containing `StepsDefinition`.
+
+### Error construction
+
+Every Resolver error attributable to a defaults or steps definition must be
+built with:
+
+```go
+errs.Definition(definition.File.Path, yamlPath, staticMessage, cause)
+```
+
+The Resolver supplies the exact source file, the most specific YAML path, and a
+stable non-empty static message for the failed resolution rule. Resolution
+rules normally pass a nil cause; an underlying source-inspection or conversion
+error is attached when one exists.
+
+Defaults paths use forms such as `$.spec.baseUrl` and `$.spec.headers`. Step
+paths use the source definition and the zero-based YAML position derived from
+the resolved step's one-based index:
+
+```text
+$.spec.steps[<Step.Index - 1>].request.baseUrl
+```
+
+Errors without an attributable YAML definition do not use `errs.Definition`.
+These include nil roots, broken directory relationships without a usable source
+definition, and context cancellation.
+
+#### AC-ResolverErrors-1: Build YAML-source errors with `errs.Definition`
+
+Given a defaults- or step-resolution failure attributable to a YAML member,
+when a Resolver method returns the error, then its filename, one-based line,
+YAML path, static message, and optional attached cause follow the
+`errs.Definition` contract.
+
+#### AC-ResolverErrors-2: Translate step indexes to YAML indexes
+
+Given a resolved step with one-based `Step.Index`, when Resolver constructs its
+definition error, then the YAML path uses `Step.Index - 1` as the zero-based
+`spec.steps` sequence index.
+
+#### AC-ResolverErrors-3: Keep non-definition errors outside definition format
+
+Given cancellation or an input-tree failure without an attributable YAML
+member, when Resolver returns the error, then it does not fabricate arguments
+for `errs.Definition`.
 
 ## Types specification
 

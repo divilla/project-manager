@@ -6,6 +6,7 @@
 - Package: `internal/definition`
 - Package name: `definition`
 - Shared models: `internal/models`
+- Error construction: `pkg/errs`
 - Status: implementation specification
 
 ## Base specification
@@ -49,6 +50,7 @@ WorkDir
 - Base validation of recognized APIHydra definitions.
 - Classification of root, defaults, and steps definitions.
 - Root/defaults placement validation that can be decided from base definitions.
+- Construction of YAML-source errors through `errs.Definition`.
 
 ### Non-responsibilities
 
@@ -129,6 +131,46 @@ filesystem or decoding work.
 - A method returning an error must not expose a partially applied mutation from
   that method. Work must be collected in temporary state and committed only
   after that method has completed successfully.
+
+### Error construction
+
+Every Loader error attributable to a specific YAML definition must be built
+with:
+
+```go
+errs.Definition(file.Path, yamlPath, staticMessage, cause)
+```
+
+The Loader supplies:
+
+- The exact `File.Path` as the filename.
+- The most specific YAML path available.
+- A stable, non-empty static message describing the Loader-owned rule.
+- The underlying decoding error as `cause` when one exists, or nil for a pure
+  classification or placement rule.
+
+Document-wide errors use `$`. Field errors use paths such as `$.app`, `$.kind`,
+or `$.spec`. Placement and cardinality errors use the offending definition's
+`$.kind` path. When multiple files conflict, deterministic traversal chooses
+the primary offending file and the static message identifies the other
+conflicting paths.
+
+Errors without a YAML definition location do not use `errs.Definition`. These
+include invalid working directories, directory traversal and file-reading
+failures before definition decoding, nil or inconsistent in-memory trees,
+missing-root errors with no candidate definition, and context cancellation.
+
+#### AC-LoaderErrors-1: Build YAML-source errors with `errs.Definition`
+
+Given a Loader failure attributable to a YAML file and member, when the Loader
+returns the error, then its filename, one-based line, YAML path, static message,
+and optional attached cause follow the `errs.Definition` contract.
+
+#### AC-LoaderErrors-2: Keep non-definition errors outside definition format
+
+Given a filesystem, context, or structural failure without an attributable YAML
+member, when the Loader returns the error, then it does not fabricate arguments
+for `errs.Definition`.
 
 ## Types specification
 
