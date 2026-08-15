@@ -325,9 +325,10 @@ apih tests --name create-steps --label smoke
 21. APIHydra must pass the resolved timeout and retry values to curl.
 22. The request `body` must be handled as a literal JSON string.
 23. After variable substitution and before curl execution, APIHydra must use
-    `jq` to validate the final request body as JSON.
-24. Body validation must not reformat or otherwise change the literal body text
-    passed to curl.
+    `jq` to validate the final request body as JSON and recursively order object
+    members alphabetically.
+24. APIHydra must render the validated and ordered request body as
+    pretty-formatted JSON. The formatted body is the body passed to curl.
 25. If jq rejects the request body, APIHydra must stop immediately and forward
     jq's exact exit code. The invalid request must not execute.
 
@@ -403,10 +404,14 @@ apih tests --name create-steps --label smoke
    `[A-Za-z_][A-Za-z0-9_:]*`, including references such as `$change:id` and
    `${change:id}`.
 7. `$$` must produce one literal `$` and must not start a variable reference.
-8. APIHydra must use `jq` to validate the resulting body or expected text as JSON
-   after all substitutions.
-9. If jq rejects the substituted JSON, APIHydra must stop immediately and
-   forward jq's exact exit code. An invalid request must not execute.
+8. After all substitutions, APIHydra must use `jq` to validate both request
+   `body` and response `expected` values as JSON and recursively order object
+   members alphabetically.
+9. APIHydra must render both validated and ordered values as pretty-formatted
+   JSON and replace the corresponding runtime step members with that text.
+10. If jq rejects either substituted value, APIHydra must stop immediately and
+    forward jq's exact exit code. An invalid request body must not execute; an
+    invalid expected value must stop response processing after curl returns.
 
 ### 7. Response validation
 
@@ -439,8 +444,9 @@ apih tests --name create-steps --label smoke
    the normal variable rules even when status validation failed.
 12. A step may declare value assertions under `response.expected`.
 13. `response.expected` must be handled as a literal JSON string and expanded
-    using the run-wide variable store before validation. APIHydra must use `jq`
-    to validate the substituted expected JSON.
+    using the run-wide variable store before validation. APIHydra must apply the
+    shared variable-substitution rule that validates, recursively orders, and
+    pretty-formats the substituted JSON.
 14. `response.expected` may contain any valid JSON value: object, array, string,
     number, boolean, or `null`.
 15. When expected is an object, it is a partial assertion and may contain only
@@ -448,10 +454,10 @@ apih tests --name create-steps --label smoke
 16. When expected is a top-level array, scalar, or `null`, APIHydra must compare
     it against the entire actual response rather than performing object-member
     projection.
-17. In the same jq operation, APIHydra must recursively order expected object
-    members alphabetically and render the result as pretty-formatted JSON.
-    Compact JSON output must not be used for comparison. If jq rejects expected,
-    APIHydra must stop immediately and forward jq's exact exit code.
+17. Expected object members must be ordered recursively and the result rendered
+    as pretty-formatted JSON. Compact JSON output must not be used for
+    comparison. If jq rejects expected, APIHydra must stop immediately and
+    forward jq's exact exit code.
 18. For an object expectation, APIHydra must use `jq` to project the actual
     response down to the members declared by the expected JSON, recursively
     order the projected object members alphabetically, and render the result as
@@ -618,6 +624,12 @@ stage concurrently:
     scheduling work, cancel all in-flight external processes, wait for them to
     terminate, and return the original fatal error code. Cancellation outcomes
     must not replace that original code.
+19. For each step, APIHydra must load `step.vars`, substitute, validate, order,
+    and format `request.body`, and then execute the request.
+20. After curl returns, APIHydra must store the response text in the runtime
+    step's `response.body`, capture response variables, and only then
+    substitute, validate, order, and format `response.expected`. This order lets
+    a step use its own captured variables in `response.expected`.
 
 An example execution tree is:
 
@@ -802,7 +814,8 @@ reported through the normal curl execution failure.
 
 Given one step with `vars: {change_id: 1}`, when a later step uses
 `$change_id` in its request body, then APIHydra replaces the reference with the
-literal `1` and validates the resulting body as JSON before executing curl.
+literal `1`, validates the resulting body as JSON, recursively orders its object
+members, and pretty-formats it before executing curl.
 
 Given JSON-compatible scalar, array, object, or null values under `step.vars`,
 when the step is loaded, then each value is serialized as compact JSON and
@@ -876,6 +889,10 @@ that diff.
 
 Given invalid substituted JSON under `response.expected`, when jq validation
 runs, then APIHydra stops immediately and forwards jq's exact exit code.
+
+Given valid request `body` and response `expected` JSON whose object members are
+not alphabetically ordered, when variable parsing completes, then both runtime
+members contain recursively ordered, pretty-formatted JSON.
 
 ### Missing and null expected members differ
 

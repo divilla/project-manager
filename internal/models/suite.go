@@ -88,10 +88,11 @@ type Step struct {
 		Body     YAMLString        `yaml:"body"`
 	} `yaml:"request"`
 	Response struct {
-		Status   []int               `yaml:"status"`
-		Capture  map[string]string   `yaml:"capture"`
-		Types    map[string][]string `yaml:"types"`
-		Expected YAMLString          `yaml:"expected"`
+		Status   []int                 `yaml:"status"`
+		Body     string                `yaml:"body"`
+		Expected YAMLString            `yaml:"expected"`
+		Types    map[string][]string   `yaml:"types"`
+		Capture  map[string]YAMLString `yaml:"capture"`
 	} `yaml:"response"`
 	Definition *StepsDefinition `yaml:"-"`
 	Index      int              `yaml:"-"`

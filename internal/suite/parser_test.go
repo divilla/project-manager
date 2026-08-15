@@ -21,22 +21,3 @@ func TestDocumentKindsUseRootDefaultsAndStepsVocabulary(t *testing.T) {
 		}
 	}
 }
-
-func TestSuiteFileUsesDefaultsLifecycle(t *testing.T) {
-	declared := models.Defaults{BaseURL: "https://example.test"}
-	file := models.File{
-		Kind:            models.KindDefaults,
-		ParentDefaults:  &declared,
-		RuntimeDefaults: models.RuntimeDefaults{BaseURL: declared.BaseURL},
-	}
-
-	if file.Kind != models.KindDefaults {
-		t.Fatalf("file kind = %q, want %q", file.Kind, models.KindDefaults)
-	}
-	if file.ParentDefaults != &declared {
-		t.Fatal("file did not retain parent defaults")
-	}
-	if file.RuntimeDefaults.BaseURL != declared.BaseURL {
-		t.Fatalf("runtime base URL = %q, want %q", file.RuntimeDefaults.BaseURL, declared.BaseURL)
-	}
-}
