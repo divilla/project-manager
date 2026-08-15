@@ -24,8 +24,8 @@ type Directory struct {
 	StepsFiles         []*File
 	DefaultsDefinition *DefaultsDefinition
 	StepsDefinitions   []*StepsDefinition
-	RuntimeDefaults    Defaults
-	RuntimeSteps       []Step
+	ResolvedDefaults   Defaults
+	ResolvedSteps      []Step
 }
 
 type File struct {

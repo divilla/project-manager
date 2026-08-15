@@ -1,9 +1,10 @@
-# internal.suite.Loader Service
+# internal.definition.Loader Service
 
 ## Status
 
-- Service: `internal/suite.Loader`
-- Package: `internal/suite`
+- Service: `internal/definition.Loader`
+- Package: `internal/definition`
+- Package name: `definition`
 - Shared models: `internal/models`
 - Status: implementation specification
 
@@ -57,7 +58,7 @@ WorkDir
 - Validate kind-specific fields inside `spec`.
 - Decode metadata.
 - Resolve defaults inheritance.
-- Resolve runtime steps.
+- Resolve defaults or steps.
 - Filter steps by metadata.
 - Plan execution stages beyond recording directory depth in `Directory.Stage`.
 - Execute requests or external tools.

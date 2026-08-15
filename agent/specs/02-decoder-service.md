@@ -1,9 +1,10 @@
-# internal.suite.Decoder Service
+# internal.definition.Decoder Service
 
 ## Status
 
-- Service: `internal/suite.Decoder`
-- Package: `internal/suite`
+- Service: `internal/definition.Decoder`
+- Package: `internal/definition`
+- Package name: `definition`
 - Shared models: `internal/models`
 - Status: implementation specification
 
@@ -76,7 +77,8 @@ a descendant defaults file decodes to a `DefaultsDefinition` whose kind is
 - Resolve parent defaults or defaults inheritance.
 - Merge or canonicalize header names.
 - Filter step definitions by metadata.
-- Resolve declarative steps into `RuntimeStep` values.
+- Populate `Directory.ResolvedDefaults` or `Directory.ResolvedSteps`; those
+  belong to the next processing stage.
 - Supply inherited or built-in request defaults.
 - Compose or validate final request URLs.
 - Resolve variables or enforce the run-wide write-once variable store.
@@ -690,8 +692,8 @@ Omitted fields are valid. In particular:
 
 - An omitted `baseUrl` may later be supplied by a nearer definition or step.
 - An omitted `basePath` contributes no local override.
-- An omitted `timeout` may be inherited or receive the runtime default of 10.
-- An omitted `retries` may be inherited or receive the runtime default of 3.
+- An omitted `timeout` may be inherited or receive the built-in default of 10.
+- An omitted `retries` may be inherited or receive the built-in default of 3.
 - An omitted headers map is valid.
 
 The method must distinguish an omitted numeric field from an explicitly
@@ -712,7 +714,7 @@ The method does not validate:
 #### AC-ValidateDefaultsDefinitions-1: Accept an empty root spec
 
 Given a decoded root definition with no declared defaults fields, when defaults
-definitions are validated, then the method succeeds because runtime defaults
+definitions are validated, then the method succeeds because resolved defaults
 may be supplied later.
 
 #### AC-ValidateDefaultsDefinitions-2: Accept a descendant without defaults
@@ -835,7 +837,7 @@ The method must distinguish omission from explicit empty or zero values.
 
 It does not require a declared `request.baseUrl`, because that value may be
 inherited. It does not choose the default request method, timeout, or retry
-count; those decisions belong to runtime-step resolution.
+count; those decisions belong to resolved-step resolution.
 
 ### Step variable validation
 
