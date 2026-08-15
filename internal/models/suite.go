@@ -26,6 +26,7 @@ type Directory struct {
 	StepsDefinitions   []*StepsDefinition
 	ResolvedDefaults   Defaults
 	ResolvedSteps      [][]Step
+	RuntimeSteps       [][]Step
 }
 
 type File struct {
@@ -74,7 +75,7 @@ type Defaults struct {
 }
 
 type Step struct {
-	Vars    map[string]any `yaml:"vars"`
+	Vars    map[string]YAMLString `yaml:"vars"`
 	Request struct {
 		Method   string            `yaml:"method"`
 		BaseURL  string            `yaml:"baseUrl"`
