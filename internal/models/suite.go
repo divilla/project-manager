@@ -8,15 +8,24 @@ const (
 	KindSteps    DocumentKind = "steps"
 )
 
+// Suite is the parsed tree anchored by the selected working directory.
+type Suite struct {
+	WorkDir string
+	Root    *Directory
+}
+
 type Directory struct {
-	Stage        int
-	Path         string
-	Parent       *Directory
-	Children     []*Directory
-	Files        []*File
-	DefaultsFile *File
-	StepsFiles   []*File
-	//RuntimeDefaults RuntimeDefaults
+	Stage              int
+	Path               string
+	Parent             *Directory
+	Children           []*Directory
+	Files              []*File
+	DefaultsFile       *File
+	StepsFiles         []*File
+	DefaultsDefinition *DefaultsDefinition
+	StepsDefinitions   []*StepsDefinition
+	RuntimeDefaults    Defaults
+	RuntimeSteps       []Step
 }
 
 type File struct {
@@ -39,6 +48,24 @@ type BaseDefinition struct {
 	Spec YAMLString `yaml:"spec"`
 }
 
+type DefaultsDefinition struct {
+	App      string       `yaml:"app"`
+	Kind     DocumentKind `yaml:"kind"`
+	Metadata Metadata     `yaml:"metadata"`
+	Spec     Defaults     `yaml:"spec"`
+	File     *File        `yaml:"-"`
+}
+
+type StepsDefinition struct {
+	App      string       `yaml:"app"`
+	Kind     DocumentKind `yaml:"kind"`
+	Metadata Metadata     `yaml:"metadata"`
+	Spec     struct {
+		Steps []Step `yaml:"steps"`
+	} `yaml:"spec"`
+	File *File `yaml:"-"`
+}
+
 type Metadata struct {
 	Name   string   `yaml:"name"`
 	Labels []string `yaml:"labels"`
@@ -50,43 +77,6 @@ type Defaults struct {
 	Headers  map[string]string `yaml:"headers"`
 	Timeout  int               `yaml:"timeout"`
 	Retries  int               `yaml:"retries"`
-}
-
-type RuntimeDefaults struct {
-	BaseURL  string
-	BasePath string
-	Headers  map[string]string
-	Timeout  int
-	Retries  int
-}
-
-type RootFile struct {
-	App      string       `yaml:"app"`
-	Kind     DocumentKind `yaml:"kind"`
-	Metadata Metadata     `yaml:"metadata"`
-	Spec     Defaults     `yaml:"spec"`
-}
-
-type DefaultsFile struct {
-	App      string       `yaml:"app"`
-	Kind     DocumentKind `yaml:"kind"`
-	Metadata Metadata     `yaml:"metadata"`
-	Spec     Defaults     `yaml:"spec"`
-}
-
-type StepsFile struct {
-	App      string       `yaml:"app"`
-	Kind     DocumentKind `yaml:"kind"`
-	Metadata Metadata     `yaml:"metadata"`
-	Spec     struct {
-		Steps []Step `yaml:"steps"`
-	} `yaml:"spec"`
-}
-
-// Suite is the parsed tree anchored by the selected working directory.
-type Suite struct {
-	WorkDir string
-	Root    *Directory
 }
 
 type Step struct {
@@ -109,7 +99,5 @@ type Step struct {
 		Expected YAMLString          `yaml:"expected"`
 	} `yaml:"response"`
 }
-
-type RuntimeStep Step
 
 type YAMLString string
