@@ -4,7 +4,7 @@
 
 - Binding reference: `skeleton/internal/definition/resolver.go`
 - Shared domain and pipeline: [`app.md`](../prds/app.md)
-- Contextual definition errors: [`errs-pkg.md`](errs-pkg.md)
+- Contextual definition errors: [`errs-pkg.md`](02-errs-pkg.md)
 - Status: skeleton-aligned specification
 
 This specification owns the three Resolver operations. The PRD owns their

@@ -4,7 +4,7 @@
 
 - Binding reference: `skeleton/internal/execution/varproc.go`
 - Shared step model: [`app.md`](../prds/app.md#defaults-and-steps)
-- Phase orchestration: [`08-step-runner.md`](08-step-runner.md)
+- Phase orchestration: [`08-step-runner.md`](09-step-runner.md)
 - Status: skeleton-aligned specification
 
 This specification owns the VariableProcessor API and the step field associated

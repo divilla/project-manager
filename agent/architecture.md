@@ -55,21 +55,20 @@ is owned by the applicable package spec.
 
 `internal/definition` contains three stateless services:
 
-- [`Loader`](specs/01-loader-service.md)
-- [`Decoder`](specs/02-decoder-service.md)
-- [`Resolver`](specs/03-resolver-service.md)
+- [`Loader`](specs/03-loader-service.md)
+- [`Decoder`](specs/04-decoder-service.md)
+- [`Resolver`](specs/05-resolver-service.md)
 
-The current CLI composition order is owned by the PRD and summarized in
-[`orchestrator.md`](orchestrator.md).
+The current CLI composition order is owned by the PRD.
 
 ## Execution services
 
 `internal/execution` contains:
 
-- [`KeyValueStore`](specs/04-key-value-store-service.md)
-- [`VariableProcessor`](specs/06-variable-processor.md)
-- [`Validator`](specs/07-validator.md)
-- [`StepRunner`](specs/08-step-runner.md)
+- [`KeyValueStore`](specs/06-key-value-store-service.md)
+- [`VariableProcessor`](specs/07-variable-processor.md)
+- [`Validator`](specs/08-validator.md)
+- [`StepRunner`](specs/09-step-runner.md)
 
 StepRunner owns preparation order, execution phase order, tree validation, and
 stage scheduling. The other execution specs define only their own APIs and do
@@ -77,12 +76,12 @@ not duplicate orchestration rules.
 
 ## Reporter and commands
 
-[`Reporter`](specs/09-reporter.md) owns the terminal-output API and the exact
+[`Reporter`](specs/10-reporter.md) owns the terminal-output API and the exact
 working-directory and fatal-diagnostic behavior implemented by the skeleton.
 Its other reporting methods remain stubbed and are specified only to the extent
 of their reference comments.
 
-[`pkg/runner`](specs/05-runner-pkg.md) owns Curl, JQFilter, JQSelect, JQPretty,
+[`pkg/runner`](specs/01-runner-pkg.md) owns Curl, JQFilter, JQSelect, JQPretty,
 and GitDiff. Their signatures and reference comments are binding; command-line
 construction and result-normalization details are not yet architectural
 requirements.
@@ -90,7 +89,7 @@ requirements.
 ## Errors and exits
 
 Static classifications originate in the package that declares them.
-[`pkg/errs`](specs/errs-pkg.md) alone owns contextual construction and attached
+[`pkg/errs`](specs/02-errs-pkg.md) alone owns contextual construction and attached
 codes. The PRD owns the shared meanings of codes `0`, `101`, `102`, and `103`.
 
 ## Architecture constraints
