@@ -7,6 +7,13 @@
 - Treat the entire `skeleton/` directory as read-only reference material.
 - Treat `skeleton/` as the binding reference architecture and API. All agent
   work must align completely with it and obey its contracts.
+- `skeleton/` reflects the complete external contract: all shared types, public
+  types, public methods, and public functions must be declared there. An agent
+  must not design, specify, document, test, mock, scaffold, or implement any new
+  item in those categories before consulting the user and obtaining agreement
+  on the corresponding change to `skeleton/`. The agreed skeleton change must
+  be made before the new contract item is produced anywhere else in the
+  repository.
 - `skeleton/` is the primary and authoritative source of truth for the
   repository. The PRD, specifications, documentation, tests, and implementation
   code must all match the skeleton reference.
