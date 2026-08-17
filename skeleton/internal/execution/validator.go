@@ -13,7 +13,7 @@ type Validator struct{}
 func (v *Validator) ValidateTypes(
 	ctx context.Context,
 	step *domain.Step,
-) error {
+) []error {
 	return nil
 }
 
