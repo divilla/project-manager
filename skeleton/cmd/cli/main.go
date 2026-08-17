@@ -3,28 +3,27 @@ package main
 import (
 	"apih/skeleton/internal/definition"
 	"apih/skeleton/internal/domain"
+	"apih/skeleton/internal/reporter"
 	"apih/skeleton/pkg/errs"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 )
 
 var InvalidPathError = errors.New("invalid path")
 var WorkingDirectoryError = errors.New("working directory error")
-var OutputError = errors.New("output error")
 
 func main() {
-	exitCode, err := run(context.Background(), os.Args, os.Stdout)
+	exitCode, err := run(context.Background(), os.Args, reporter.NewReporter(os.Stdout))
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 	}
 	os.Exit(exitCode)
 }
 
-func run(ctx context.Context, args []string, output io.Writer) (int, error) {
+func run(ctx context.Context, args []string, report *reporter.Reporter) (int, error) {
 	workDir, err := os.Getwd()
 	if err != nil {
 		return errs.ExitInternal, errs.Build(errs.ExitInternal, WorkingDirectoryError, err)
@@ -42,8 +41,8 @@ func run(ctx context.Context, args []string, output io.Writer) (int, error) {
 		}
 		workDir = path
 	}
-	if _, err := fmt.Fprintf(output, "Working Directory: %s\n\n", workDir); err != nil {
-		return errs.ExitInternal, errs.Build(errs.ExitInternal, OutputError, err)
+	if err := report.WorkingDirectory(workDir); err != nil {
+		return errs.ExitInternal, err
 	}
 
 	ctx, cancel := context.WithCancel(ctx)

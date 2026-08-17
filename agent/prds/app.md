@@ -34,6 +34,7 @@ The repository uses these skeleton packages:
 | `internal/domain` | Own all shared suite, directory, file, definition, defaults, and step models. |
 | `internal/definition` | Load, classify, decode, validate, and resolve definitions. |
 | `internal/execution` | Own variables, validation, step preparation, stage scheduling, and step execution. |
+| `internal/reporter` | Own all human-readable standard output through an injected writer. |
 | `pkg/errs` | Build every contextual error and attach exit-code metadata. |
 | `pkg/runner` | Own every external command invocation. |
 
@@ -46,7 +47,9 @@ parallel model hierarchies or duplicate another package's responsibility.
 joins that value to the current directory and requires the result to identify a
 directory. Invalid paths match the CLI-owned `InvalidPathError`.
 
-After resolving the working directory, the CLI writes:
+The CLI constructs `reporter.NewReporter(os.Stdout)` and injects that Reporter
+into `run`. After resolving the working directory, it calls
+`Reporter.WorkingDirectory`, which writes:
 
 ```text
 Working Directory: <path>
@@ -227,7 +230,7 @@ classification for one or more nonfatal failures reported by either method.
 func NewStepRunner(
     variableProcessor *VariableProcessor,
     validator *Validator,
-    output io.Writer,
+    report *reporter.Reporter,
 ) *StepRunner
 
 func (s *StepRunner) Prepare(
@@ -241,7 +244,7 @@ func (s *StepRunner) Execute(
 ) (int, error)
 ```
 
-The constructor retains the supplied processor, validator, and writer.
+The constructor retains the supplied processor, validator, and Reporter.
 
 `Prepare` traverses from `Suite.Root`. For each resolved step it runs
 `VariableProcessor.Load` and `VariableProcessor.ParseRequestBody`.
@@ -276,8 +279,8 @@ For each step, execution uses only functions exposed by `pkg/runner` for
 external work. The skeleton phase order is `runner.Curl`,
 `ParseResponseExpected`, `ValidateTypes`, `ValidateExpected`, then `Capture`.
 
-Nonfatal failures from `ValidateTypes` or `ValidateExpected` are written through
-the injected output writer. Execution continues through all remaining steps,
+Nonfatal failures from `ValidateTypes` or `ValidateExpected` are sent to the
+injected Reporter. Execution continues through all remaining steps,
 files, directories, and stages. When at least one such failure occurred,
 `Execute` returns exit code `101` and an error matching `ValidationError` after
 the complete suite finishes.
@@ -366,11 +369,28 @@ error classification remains authoritative.
 
 No error may be returned with exit code `0`.
 
-## Output boundary
+## Reporter boundary
 
-The CLI owns fatal terminal diagnostics. `StepRunner` owns only the injected
-`io.Writer` used for validation output. The skeleton defines no Reporter,
-machine-readable event stream, ANSI-color contract, or final summary model.
+`internal/reporter.Reporter` owns all human-readable standard output. Its
+constructor retains an `io.Writer`; the CLI normally supplies `os.Stdout`, and
+tests may supply a buffer or another writer. The CLI and StepRunner call
+Reporter methods and do not write standard output directly.
+
+The skeleton exposes these high-level operations:
+
+```go
+NewReporter(output io.Writer) *Reporter
+WorkingDirectory(workDir string) error
+Success(ctx, directory) error
+FailureTypes(ctx, step, failure) error
+FailureExpected(ctx, step, failure) error
+Debug(ctx, step) error
+```
+
+Only `WorkingDirectory` has a concrete text format in the current skeleton.
+The remaining methods establish ownership and integration boundaries without
+committing to detailed formatting or scheduling semantics. Fatal diagnostics
+remain on standard error and are outside Reporter.
 
 ## Not specified by the skeleton
 
@@ -381,7 +401,8 @@ skeleton:
 - external-tool preflight APIs;
 - Git-based comparison functions;
 - direct HTTP-status capture or validation behavior;
-- a Reporter service or JSON event output;
+- machine-readable event output or exact Reporter formatting beyond the
+  working-directory line;
 - exact variable interpolation syntax;
 - detailed response-type tokens and modifiers;
 - URL normalization beyond values passed to `runner.Curl`;

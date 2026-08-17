@@ -2,10 +2,10 @@ package execution
 
 import (
 	"apih/skeleton/internal/domain"
+	"apih/skeleton/internal/reporter"
 	"apih/skeleton/pkg/errs"
 	"context"
 	"errors"
-	"io"
 	"sync"
 )
 
@@ -15,18 +15,18 @@ var ExecutionCanceledError = errors.New("execution canceled")
 type StepRunner struct {
 	varProc *VariableProcessor
 	val     *Validator
-	out     io.Writer
+	report  *reporter.Reporter
 }
 
 func NewStepRunner(
 	variableProcessor *VariableProcessor,
 	validator *Validator,
-	output io.Writer,
+	report *reporter.Reporter,
 ) *StepRunner {
 	return &StepRunner{
 		varProc: variableProcessor,
 		val:     validator,
-		out:     output,
+		report:  report,
 	}
 }
 
@@ -42,7 +42,7 @@ func (s *StepRunner) Prepare(
 // Execute traverses directories through children, starting from suite.Root, from goroutines, one for each directory,
 // until entire same number stage is executed. For each directory it iterates directory.ResolvedSteps and executes
 // runner.Curl, varProc.ParseResponseExpected, val.ValidateTypes, val.ValidateExpected and finally varProc.Capture
-// On detected validation error, Execute does not return error, but reports failed validation to standard s.out.
+// On detected validation error, Execute reports failed validation through s.report.
 // Once it finishes traversing with one or more validation failures it returns exit code 101 and ValidationError.
 func (s *StepRunner) Execute(
 	ctx context.Context,
