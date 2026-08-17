@@ -7,7 +7,6 @@ import (
 	"apih/skeleton/pkg/errs"
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -16,9 +15,11 @@ var InvalidPathError = errors.New("invalid path")
 var WorkingDirectoryError = errors.New("working directory error")
 
 func main() {
-	exitCode, err := run(context.Background(), os.Args, reporter.NewReporter(os.Stdout))
+	outputReport := reporter.NewReporter(os.Stdout)
+	errorReport := reporter.NewReporter(os.Stderr)
+	exitCode, err := run(context.Background(), os.Args, outputReport)
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		_ = errorReport.Error(err)
 	}
 	os.Exit(exitCode)
 }

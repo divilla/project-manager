@@ -8,6 +8,7 @@ import (
 
 // ValidationError reports that ValidateTypes or ValidateExpected found at least one mismatch.
 var ValidationError = errors.New("validation error")
+var ErrValidatorFatal = errors.New("fatal validator error")
 
 type Validator struct{}
 

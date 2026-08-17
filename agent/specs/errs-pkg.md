@@ -1,275 +1,85 @@
-# pkg/errs Package
+# `pkg/errs`
 
-## Status
+## Status and ownership
 
-- Package path: `pkg/errs`
-- Package name: `errs`
-- Status: implementation specification
+- Binding reference: `skeleton/pkg/errs/errors.go`
+- Shared product contract: [`app.md`](../prds/app.md)
+- Status: skeleton-aligned specification
 
-## Purpose
+This specification owns contextual error construction. The PRD owns the
+meaning of the four product exit codes; originating packages own their static
+error classifications.
 
-`errs` creates consistently formatted APIHydra errors. Its first operation,
-`Definition`, creates a source-aware error for an invalid member of an APIHydra
-YAML definition.
-
-The package owns error construction and presentation only. It does not decide
-whether a definition value is valid.
-
-## Responsibilities
-
-`errs` owns:
-
-- Locating the source line of a supplied YAML path in a supplied YAML file.
-- Constructing the exact APIHydra definition-error prefix.
-- Including the supplied static diagnostic message.
-- Optionally attaching and wrapping an original error.
-- Returning errors that are safe to pass through other application layers.
-
-## Non-responsibilities
-
-`errs` does not:
-
-- Discover APIHydra files.
-- Classify, decode, or validate YAML definitions.
-- Choose the YAML path or static diagnostic message for a caller.
-- Mutate the YAML file or any decoded model.
-- Log, print, terminate the process, or select an exit code.
-- Add terminal colors or other presentation-dependent formatting.
-
-## Public contract
+## Public API
 
 ```go
-package errs
+type ExitCoder interface {
+    ExitCode() int
+}
 
-func Definition(
-    yamlFilename string,
-    yamlPathToMemberThatCausedError string,
-    staticErrorMessage string,
-    err error,
-) error
+func Build(code int, errStatic, errOriginal error, details ...any) error
+func WithExitCode(code int, err error) error
+func Code(err error, fallback int) int
+func DefaultsDefinitionError(defaults *domain.DefaultsDefinition, yamlPath string,
+    errStatic, errOriginal error) error
+func StepDefinitionError(step *domain.StepsDefinition, yamlPath string,
+    errStatic, errOriginal error) error
+func StepExecutionError(step *domain.Step, yamlPath string,
+    errStatic, errOriginal error) error
 ```
 
-`Definition` always returns a non-nil error when its input contract is
-satisfied.
+`ExitError` is the concrete private-state implementation of `error` and
+`ExitCoder` exposed by these constructors.
 
-## Input contract
+## Construction and lookup
 
-### `yamlFilename`
+`Build` returns nil when `errStatic` is nil. Otherwise it retains the supplied
+code, static error, optional original error, and detail values.
 
-`yamlFilename` is the path of the source YAML file. It must identify a readable
-regular file. The document is normally syntactically valid so its YAML path can
-be resolved. A malformed document is supported only when the non-nil `err`
-provides source-position information from which the line can be recovered.
+`ExitError.Error` joins non-empty components with `": "` in this order:
 
-The exact supplied string is used in the formatted error. The function must not
-replace it with a base name, absolute path, cleaned path, or path relative to
-the working directory.
+1. static error text;
+2. `fmt.Sprint(details...)`;
+3. original error text.
 
-### `yamlPathToMemberThatCausedError`
+`ExitError.Unwrap` returns the static error and, when present, the original
+error. Both identities remain available to `errors.Is` and `errors.As`.
+`ExitCode` returns the retained code.
 
-`yamlPathToMemberThatCausedError` identifies the source member using the YAML
-path syntax supported by `github.com/goccy/go-yaml`, for example:
+`WithExitCode(code, err)` delegates to `Build(code, err, nil)`.
 
-```text
-$.spec.baseUrl
-$.spec.steps[0].request.timeout
-$.spec.steps[1].response.expected
-```
+`Code` returns:
 
-Sequence indexes in a YAML path are zero-based. The path may identify an absent
-member when absence is the error. In that case line resolution uses the nearest
-existing containing node while the formatted error preserves the exact supplied
-path.
+- `ExitSuccess` for nil;
+- the first discoverable `ExitCoder.ExitCode()` for a coded error;
+- `fallback` for a non-nil uncoded error.
 
-The exact supplied path string is included in the formatted error.
+## Provenance helpers
 
-### `staticErrorMessage`
+`DefaultsDefinitionError` and `StepDefinitionError` always use
+`ExitConfiguration`. `StepExecutionError` uses the original error's attached
+code with `ExitInternal` as fallback; an attached success code is replaced by
+`ExitInternal`.
 
-`staticErrorMessage` is the stable, caller-owned explanation of the validation
-or decoding rule that failed. It must be non-empty and must not include the
-APIHydra prefix, source location, YAML path, or original error.
+The helpers safely derive optional details through the reference provenance
+chain. A source file contributes `file <path>`, a non-empty YAML path
+contributes `yaml path <path>`, and both are joined with `, `. Missing
+definitions, files, or step provenance omit unavailable details without
+panicking.
 
-The exact supplied message is included without quoting, capitalization changes,
-punctuation changes, or trimming.
+## Boundary
 
-### `err`
-
-`err` is an optional underlying cause:
-
-- A nil value adds no cause text and no trailing cause separator.
-- A non-nil value is attached to the returned error and contributes its
-  `Error()` text after the static message.
-
-## Source-line resolution
-
-`Definition` determines a one-based source line in this order:
-
-1. When the YAML document is syntactically valid, resolve the exact supplied
-   YAML path.
-2. When a valid path identifies an absent member, resolve its nearest existing
-   containing path without changing the path included in the formatted error.
-3. When YAML parsing itself failed and `err` contains source-position
-   information supported by the YAML dependency, use the cause's line.
-
-The function may read `yamlFilename` to perform this lookup.
-
-The line is the line reported by the selected YAML syntax node's first source
-token. Columns are not included in the formatted result.
-
-The implementation may use the existing `github.com/goccy/go-yaml` dependency
-to parse the YAML path, read the selected node, and obtain its token position.
-Third-party YAML syntax types must not appear in the public contract.
-
-`Definition` must not retain file bytes, syntax nodes, paths, or errors after it
-returns.
-
-## Error format
-
-The base error string is exactly:
-
-```text
-apih definition error at <yamlFilename>:<lineNumber> <yamlPathToMemberThatCausedError>: <staticErrorMessage>
-```
-
-When `err == nil`, the returned error's `Error()` string is exactly the base
-string.
-
-When `err != nil`, the returned error's `Error()` string is exactly:
-
-```text
-<baseErrorString>:<err.Error()>
-```
-
-There is no whitespace between the final cause separator and `err.Error()`.
-There is exactly one ASCII space:
-
-- Between `at` and `yamlFilename`.
-- Between the line number and YAML path.
-- After the colon separating the YAML path from the static message.
-
-The word `definition` is spelled exactly as shown.
-
-### Example without an underlying error
-
-Given:
-
-```go
-errs.Definition(
-    "testdata/users.yaml",
-    "$.spec.steps[0].request.timeout",
-    "timeout must be positive",
-    nil,
-)
-```
-
-and the selected YAML member is on line 14, `Error()` returns:
-
-```text
-apih definition error at testdata/users.yaml:14 $.spec.steps[0].request.timeout: timeout must be positive
-```
-
-### Example with an underlying error
-
-Given the same source values and:
-
-```go
-cause := errors.New("cannot decode integer")
-```
-
-`Error()` returns:
-
-```text
-apih definition error at testdata/users.yaml:14 $.spec.steps[0].request.timeout: timeout must be positive:cannot decode integer
-```
-
-## Error wrapping
-
-When `err` is non-nil, it must be wrapped rather than copied only as text.
-Consequently:
-
-```go
-errors.Is(errs.Definition(file, path, message, cause), cause) == true
-```
-
-and `errors.As` must continue to discover compatible values in the cause's
-error chain.
-
-When `err` is nil, the returned error has no underlying cause.
-
-## Invalid formatter input
-
-An unreadable file, invalid YAML path, or inability to obtain a line from either
-the source document or a positioned YAML cause is a failure to construct the
-requested definition error. `Definition` must return a non-nil error describing
-that construction failure and wrapping its internal cause when one exists. It
-must not panic or fabricate a source line.
-
-The exact text of a construction-failure error is not part of this package's
-stable presentation contract. Callers are responsible for satisfying the input
-contract during normal definition-error reporting.
-
-## State and concurrency
-
-`errs` has no package-level mutable state. `Definition` uses only call-local
-state and is safe for concurrent calls with different or identical input files.
+This package does not own static errors from other packages, terminal output,
+ANSI styling, source-line lookup, cancellation, or command execution. The
+repository-wide contextual-error ownership rule is defined once in the PRD.
 
 ## Acceptance criteria
 
-### AC-Definition-1: Format an error without a cause
-
-Given a readable YAML file, a YAML path selecting a member on line `N`, a
-static message, and a nil cause, when `Definition` is called, then it returns a
-non-nil error whose text is exactly:
-
-```text
-apih definition error at <filename>:N <path>: <message>
-```
-
-No trailing colon or cause text is present.
-
-### AC-Definition-2: Format an error with a cause
-
-Given valid source inputs and a non-nil cause, when `Definition` is called, then
-the returned text is the base definition-error string followed immediately by
-`:` and the cause's exact `Error()` text.
-
-### AC-Definition-3: Preserve cause identity
-
-Given a non-nil cause, when the returned error is inspected with `errors.Is` or
-`errors.As`, then the cause remains discoverable through the returned error's
-unwrap chain.
-
-### AC-Definition-4: Resolve a one-based source line
-
-Given a YAML path selecting a nested mapping member or sequence member, when
-`Definition` is called, then the formatted line number is the selected node's
-one-based source line.
-
-### AC-Definition-5: Preserve caller text
-
-Given a relative filename, YAML path, and static message, when the error is
-formatted, then each supplied string appears exactly as provided and is not
-cleaned, trimmed, quoted, or otherwise normalized.
-
-### AC-Definition-6: Reject an invalid source location safely
-
-Given an unreadable YAML file, invalid YAML path, or no line-bearing YAML cause
-for malformed YAML, when `Definition` cannot locate a line, then it returns a
-non-nil construction-failure error and does not panic or invent a line number.
-
-### AC-Definition-7: Locate an absent member at its containing node
-
-Given a valid path for an absent member and an existing containing mapping, when
-`Definition` is called, then the formatted error preserves the absent member's
-path and uses the containing mapping's source line.
-
-### AC-Definition-8: Use a positioned YAML cause
-
-Given malformed YAML and a non-nil YAML cause carrying a source line, when
-`Definition` is called, then it uses that line and attaches the cause normally.
-
-### AC-Definition-9: Remain side-effect-free
-
-Given valid inputs, when `Definition` is called, then it does not mutate the
-source file, log or print output, terminate the process, or retain per-call
-state.
+1. All exported names and signatures match the reference.
+2. Construction preserves codes, error identities, component order, and
+   optional details exactly.
+3. Nil static errors return nil, and nil lookup returns success.
+4. Definition helpers use configuration code and safe provenance.
+5. Step execution errors cannot expose a non-nil error as success.
+6. No other package's static classification or presentation behavior is
+   duplicated here.

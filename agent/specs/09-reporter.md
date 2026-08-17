@@ -1,148 +1,98 @@
 # `internal/reporter` Reporter
 
-## Status and authority
+## Status and ownership
 
-- Package: `internal/reporter`
-- Shared models: `internal/domain`
-- Error builder: `pkg/errs`
 - Binding reference: `skeleton/internal/reporter/reporter.go`
+- Reference tests: `skeleton/internal/reporter/reporter_test.go`
+- Terminal-output boundary: [`app.md`](../prds/app.md#package-ownership)
 - Status: skeleton-aligned specification
 
-This specification must not extend the Reporter beyond the binding skeleton
-and `agent/prds/app.md`.
+This specification owns Reporter construction and the output behavior fixed by
+the reference implementation or method comments. It does not define execution
+scheduling or validation algorithms.
 
-## Purpose
-
-`Reporter` is the sole owner of human-readable standard output. The CLI
-normally constructs it with `os.Stdout`; tests may supply a buffer, a failing
-writer, or another `io.Writer`.
-
-The CLI and execution services call Reporter methods instead of retaining or
-writing to a standard-output writer themselves. Fatal diagnostics written to
-standard error remain owned by the CLI.
-
-## Public contract
+## Public API
 
 ```go
 var ReporterError = errors.New("reporter error")
-
-type Reporter struct {
-    output io.Writer
-}
+var TypeValidationError = errors.New("type validation failed for")
+var ExpectedValidationError = errors.New("response does not match expected")
 
 func NewReporter(output io.Writer) *Reporter
-
 func (r *Reporter) WorkingDirectory(workDir string) error
-
-func (r *Reporter) Success(
-    ctx context.Context,
-    directory *domain.Directory,
-) error
-
-func (r *Reporter) FailureTypes(
-    ctx context.Context,
-    step *domain.Step,
-    failure error,
-) error
-
-func (r *Reporter) FailureExpected(
-    ctx context.Context,
-    step *domain.Step,
-    failure error,
-) error
-
-func (r *Reporter) Debug(
-    ctx context.Context,
-    step *domain.Step,
-) error
+func (r *Reporter) Error(failure error) error
+func (r *Reporter) Success(ctx context.Context, directory *domain.Directory) error
+func (r *Reporter) FailureTypes(ctx context.Context, step *domain.Step, failure error) error
+func (r *Reporter) FailureDiff(ctx context.Context, step *domain.Step, failure error) error
+func (r *Reporter) Debug(ctx context.Context, step *domain.Step) error
 ```
 
-The names `FailureExpected` and `internal/reporter` are authoritative. Legacy
-names such as `FailureDiff`, `internal.runtime.Reporter`, and
-`internal.output.Reporter` are not part of the product API.
+`FailureDiff` is the exact reference name; there is no `FailureExpected`
+method.
 
-## Construction and injection
+## Construction and output ownership
 
-`NewReporter` retains the supplied writer and performs no output. The
-application composition root supplies `os.Stdout`:
+`NewReporter` retains the supplied `io.Writer`. The CLI normally constructs
+one Reporter for stdout and another for stderr. The repository-wide rule that
+human-readable terminal writes remain in this package is owned by the PRD and
+enforced by the architecture test.
 
-```go
-reporter.NewReporter(os.Stdout)
-```
-
-Tests inject another writer through the same constructor. Components that
-produce standard output receive the constructed `*Reporter`; they do not
-receive `os.Stdout` or a separate `io.Writer`.
+Reporter contains a mutex and execution-output state. The two implemented
+write methods serialize access to their writer. The exact state transitions
+for the remaining stub methods are not yet specified.
 
 ## `WorkingDirectory`
 
-`WorkingDirectory` writes exactly:
+For a non-nil Reporter and writer, `WorkingDirectory` writes exactly:
 
 ```text
 Working Directory: <workDir>
 
 ```
 
-The method returns nil after a successful write. A nil Reporter, nil writer,
-or write failure returns a built error matching `ReporterError` with internal
-exit code `103`. A writer failure remains discoverable through
-`errors.Is`/`errors.As`.
+A nil Reporter/writer or failed write returns a built internal error matching
+`ReporterError`; writer errors remain available through the error chain.
 
-## Execution reporting entry points
+## `Error`
 
-`Success`, `FailureTypes`, `FailureExpected`, and `Debug` establish the
-presentation boundary used by `execution.StepRunner`:
+`Error` writes one fatal diagnostic. It removes ANSI SGR sequences matched by
+the reference expression, wraps the complete remaining message in red, and
+adds one newline:
 
-- `Success` receives a completed directory.
-- `FailureTypes` receives one step and one nonfatal type-validation failure.
-- `FailureExpected` receives one step and one nonfatal expected-response
-  failure.
-- `Debug` receives one runtime step selected for debug presentation.
+```text
+ESC[31m<diagnostic>ESC[0m\n
+```
 
-Their exact text, colors, aggregation, terminal detection, formatting tools,
-and scheduling rules are intentionally not specified by the current skeleton.
-Adding any of those commitments requires changing the skeleton first.
+A nil Reporter/writer, nil failure, or failed write returns a built internal
+error matching `ReporterError`. This method does not choose or change the
+process exit code.
 
-## Error ownership
+## Stubbed reporting operations
 
-`ReporterError` is the Reporter package's static classification. Contextual
-errors are built through `pkg/errs`; Reporter must not use `fmt.Errorf` or
-another local wrapping mechanism.
+The remaining reference methods currently return nil. Their comments establish
+only these boundaries:
 
-Reporter methods return errors to their caller. They never print their own
-errors, choose a process exit code independently of a built error, or write a
-fatal diagnostic.
+- `Success` reports a directory whose execution completed without validation
+  failures; its formatting is intentionally left to the implementation.
+- `FailureTypes` reports one nonfatal response-type validation failure.
+- `FailureDiff` reports one nonfatal expected-response diff and preserves any
+  command colors carried by the failure when rendering the output block.
+- `Debug` reports the final runtime state of a selected debug step.
 
-## Concurrency and state
-
-The current skeleton retains only the injected writer. It does not establish a
-public buffering, mutex, terminal-detection, or prior-output contract. Because
-StepRunner may invoke reporting from same-stage directory goroutines, a future
-implementation must make writer access safe before it emits execution output;
-the precise mechanism is private.
-
-## Non-responsibilities
-
-Reporter does not:
-
-- discover, decode, validate, resolve, prepare, schedule, or execute steps;
-- invoke external tools;
-- define validation semantics or error classifications owned by execution;
-- choose suite or step control flow;
-- write fatal diagnostics to standard error;
-- define a JSON event stream, summary model, or CLI flag.
+The skeleton does not specify their exact text, icons, spacing, path rendering,
+JSON payloads, calls to Runner, failure-class validation, or error behavior.
+It also does not define how a debug step is selected or scheduled.
 
 ## Acceptance criteria
 
-1. `NewReporter` retains an injected writer and writes nothing.
-2. The CLI constructs Reporter with `os.Stdout`; tests can inject another
-   writer.
-3. `WorkingDirectory` produces the exact two-line boundary and preserves
-   writer failures in an error matching `ReporterError` with code `103`.
-4. StepRunner receives `*reporter.Reporter`, not `io.Writer`.
-5. No production component outside `internal/reporter` writes standard output
-   directly.
-6. The four execution reporting methods compile with the exact skeleton names
-   and parameter types.
-7. No legacy Git diff, `jq` pretty-printing, `bat`, ANSI-color, debug-stop, or
-   per-directory output behavior is treated as a current contract.
+1. Public names, signatures, static errors, and writer injection match the
+   reference.
+2. Working-directory output is byte-exact and write failures preserve their
+   causes.
+3. Fatal diagnostics remove embedded SGR styling and use one red wrapper.
+4. Stubbed methods remain within their documented reporting boundaries and do
+   not acquire execution or validation responsibilities.
+5. FailureDiff preserves colored diff payloads as required by its reference
+   comment.
+6. No unimplemented layout, Runner integration, debug scheduling, or success
+   policy is asserted as a requirement.

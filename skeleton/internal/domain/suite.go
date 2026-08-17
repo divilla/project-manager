@@ -75,28 +75,28 @@ type Defaults struct {
 }
 
 type Step struct {
-	Vars    map[string]YAMLString `yaml:"vars"`
+	Vars    map[string]YAMLString `yaml:"vars" json:"vars"`
 	Request struct {
-		Method   string            `yaml:"method"`
-		BaseURL  string            `yaml:"baseUrl"`
-		BasePath string            `yaml:"basePath"`
-		Path     string            `yaml:"path"`
-		Headers  map[string]string `yaml:"headers"`
-		Timeout  int               `yaml:"timeout"`
-		Retries  int               `yaml:"retries"`
-		Query    string            `yaml:"query"`
-		Body     YAMLString        `yaml:"body"`
-	} `yaml:"request"`
+		Method   string            `yaml:"method" json:"method"`
+		BaseURL  string            `yaml:"baseUrl" json:"baseUrl"`
+		BasePath string            `yaml:"basePath" json:"basePath"`
+		Path     string            `yaml:"path" json:"path"`
+		Headers  map[string]string `yaml:"headers" json:"headers"`
+		Timeout  int               `yaml:"timeout" json:"timeout"`
+		Retries  int               `yaml:"retries" json:"retries"`
+		Query    string            `yaml:"query" json:"query"`
+		Body     YAMLString        `yaml:"body" json:"body"`
+	} `yaml:"request" json:"request"`
 	Response struct {
-		Status   []int                 `yaml:"status"`
-		Body     string                `yaml:"body"`
-		Expected YAMLString            `yaml:"expected"`
-		Types    map[string][]string   `yaml:"types"`
-		Capture  map[string]YAMLString `yaml:"capture"`
-	} `yaml:"response"`
-	Debug      bool             `yaml:"debug"`
-	Definition *StepsDefinition `yaml:"-"`
-	Index      int              `yaml:"-"`
+		Status   []int                 `yaml:"status" json:"status"`
+		Body     string                `yaml:"body" json:"body"`
+		Expected YAMLString            `yaml:"expected" json:"expected"`
+		Types    map[string][]string   `yaml:"types" json:"types"`
+		Capture  map[string]YAMLString `yaml:"capture" json:"capture"`
+	} `yaml:"response" json:"response"`
+	Debug      bool             `yaml:"debug" json:"debug"`
+	Definition *StepsDefinition `yaml:"-" json:"-"`
+	Index      int              `yaml:"-" json:"index"`
 }
 
 func (s *Step) DirectoryStage() int {

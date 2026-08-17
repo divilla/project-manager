@@ -11,7 +11,7 @@ func NewResolver() *Resolver {
 	return &Resolver{}
 }
 
-// ResolveDefaults traverses directory structure from suite.Workdir
+// ResolveDefaults traverses directory structure from suite.Root and
 // populates directory.ResolvedDefaults with values merged from
 // self directory.DefaultsDefinition and parent directory.DefaultsDefinition
 func (l *Resolver) ResolveDefaults(
@@ -21,7 +21,7 @@ func (l *Resolver) ResolveDefaults(
 	return nil
 }
 
-// ResolveSteps traverses directory structure from suite.Workdir
+// ResolveSteps traverses directory structure from suite.Root and
 // populates directory.ResolvedSteps with values merged from
 // self directory.StepsDefinition and directory.DefaultsDefinition
 func (l *Resolver) ResolveSteps(
@@ -31,7 +31,7 @@ func (l *Resolver) ResolveSteps(
 	return nil
 }
 
-// ValidateStepsDefinitions traverses directory structure from suite.Directory
+// ValidateStepsDefinitions traverses directory structure from suite.Root,
 // iterating and validating *directory.StepsDefinitions. App exits on error.
 func (l *Resolver) ValidateStepsDefinitions(
 	ctx context.Context,

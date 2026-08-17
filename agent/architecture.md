@@ -1,436 +1,105 @@
 # APIHydra Architecture
 
-## Status and purpose
+## Authority
 
-This document defines the target code architecture for APIHydra. Product
-behavior belongs in `agent/prds/app.md`; service-specific behavior and exact
-public signatures belong in the corresponding service Specs.
-
-The architecture is optimized for two audiences:
-
-- AI agents must be able to understand, rewrite, and verify one service without
-  loading the entire application into context.
-- Human developers must see logical modules built around recognizable product
-  concepts rather than arbitrary code fragments.
-
-Most implementation code belongs under `internal`. Packages under `pkg` are
-reserved for thin wrappers around external tools.
-
-## Architectural principles
-
-### Public contracts are the stable surface
-
-A service is a concrete Go type shaped like `definition.Loader`. It
-has a constructor, exported methods, and any exported types required by those
-methods. A service may have one operation or several related operations.
-
-For developers and agents, the supported contract of a service consists of:
-
-- Its exported types.
-- Its constructor signature.
-- Its exported method signatures.
-- The behavior and errors assigned to those methods by its Spec.
-
-Private types, helper functions, algorithms, and file organization are not part
-of the contract. They may be completely replaced while the public contract and
-specified behavior remain intact.
-
-Do not export an implementation detail merely to make it accessible to another
-package. Data that genuinely crosses service boundaries belongs in the shared
-models package.
-
-### Services wrap logical concepts
-
-Every service must own a coherent entity or capability that a human can name,
-such as suites, defaults, stages, steps, variables, requests, responses, or
-output. A service boundary is valid when a developer can readily answer:
-
-- What concept does this service own?
-- Why do its operations belong together?
-- What data does it accept and produce?
-- Where should the next related operation be added?
-
-Agent convenience must not create tiny mechanical services with no meaningful
-human boundary.
-
-### Services are sized for complete rewrites
-
-A service should be small enough that an agent can read its contract and Spec,
-rewrite the complete implementation, and verify it in less than approximately
-15 minutes.
-
-About 1,000 lines of production code is the expected upper target, not a strict
-limit. Behavioral complexity, required context, and dependency surface matter
-more than the raw line count. Tests are not included in this approximation.
-
-Services are allowed to grow as cohesive functionality is added. Split a
-service when its size, contract, dependencies, or behavioral complexity makes a
-complete 15-minute rewrite unrealistic. Do not split it prematurely only to
-meet an arbitrary line count.
-
-### Dependencies are minimized
-
-Services should not depend directly on other services when the workflow can be
-kept external to both. The orchestrator should call each service and pass the
-returned data to the next service.
-
-Prefer:
-
-```go
-root, err := loader.LoadDirectoryStructure(ctx)
-err = loader.LoadDirectoryFiles(ctx, root)
-err = decoder.DecodeFiles(ctx, root)
-```
-
-over:
-
-```go
-decoder := NewDecoder(loader)
-root, err := decoder.LoadAndDecode(ctx)
-```
-
-The example illustrates data flow; exact signatures are defined by service
-Specs.
-
-Avoiding service injection is a strong preference, not an absolute rule. Inject
-a collaborator only when external orchestration cannot express the behavior
-cleanly or when the dependency materially improves correctness and cohesion.
-When injection is necessary, inject the narrowest useful contract and document
-why it is required.
-
-Do not introduce interfaces, factories, dependency containers, or service
-locators without a concrete need. Constructors should normally receive only
-stable configuration or unavoidable collaborators. Per-run and per-step values
-should normally be method arguments.
-
-### Data flow is explicit
-
-Data flows from discovery through parsing, resolution, planning, execution,
-validation, and presentation. A producing service returns data, the
-orchestrator carries it, and a receiving service accepts it as a method
-argument.
-
-Inter-service data carriers live in one neutral package under
-`internal/models`. This keeps a consumer from importing the producer's service
-package and prevents service-to-service dependency chains.
-
-Prefer returning a new or explicitly enriched model. If a service mutates a
-shared model such as `Suite`, that mutation must be part of its public
-contract; hidden state changes are not allowed.
+The binding architecture and API live in `skeleton/`. The shared product
+contract is [`prds/app.md`](prds/app.md), and package-local requirements live
+in `specs/`. This document describes package relationships only; it does not
+duplicate service behavior.
 
 ## Package layout
 
-The target dependency layout is:
+```text
+cmd/cli/                    process composition and exit
+internal/domain/            shared Suite/Directory/File/definition/step models
+internal/definition/        Loader, Decoder, Resolver
+internal/execution/         KeyValueStore, VariableProcessor, Validator, StepRunner
+internal/reporter/          human-readable terminal output
+pkg/errs/                   contextual errors and exit-code metadata
+pkg/runner/                 external-command operations
+```
+
+Parallel production model, orchestration, runtime, variable, output, error, or
+command-wrapper packages are not part of the reference architecture.
+
+## Dependency boundaries
+
+Shared workflow values belong to `internal/domain`. The current skeleton keeps
+package dependencies acyclic and enforces three production boundaries:
+
+- external command execution belongs to `pkg/runner`;
+- contextual error composition belongs to `pkg/errs`;
+- terminal writes belong to `internal/reporter`.
+
+`cmd/cli` is the composition root and the only reference package that calls
+`os.Exit`. `bat` and `BatDiff` are absent.
+
+## Domain lifecycle
+
+The same `domain.Suite` tree exposes fields for these phases:
 
 ```text
-cmd/cli
-  -> internal/orchestrator
-       -> internal service packages
-            -> internal/models
-            -> internal/errors
-            -> selected pkg tool wrappers
-       -> internal/models
-       -> internal/errors
-
-internal/errors -> internal/models
-internal/models -> standard library only
-
-pkg/curl -> standard library
-pkg/jq   -> standard library
-pkg/git  -> standard library
+WorkDir
+  -> Root / Children
+  -> Files
+  -> DefaultsFile / StepsFiles
+  -> DefaultsDefinition / StepsDefinitions
+  -> ResolvedDefaults / ResolvedSteps
+  -> RuntimeSteps
 ```
 
-A representative repository layout is:
+The field schema and provenance helpers are owned by the PRD. Mutation behavior
+is owned by the applicable package spec.
 
-```text
-cmd/cli/                  process entry point
+## Definition services
 
-internal/models/          all inter-service carrier types
-internal/orchestrator/    service construction and complete application flow
-internal/errors/          source-aware APIHydra errors and formatting
-internal/definition/      YAML discovery, decoding, and definition resolution
-internal/variable/        write-once store and substitution behavior
-internal/request/         runtime request construction
-internal/response/        capture and response validation behavior
-internal/output/          terminal and NDJSON presentation
+`internal/definition` contains three stateless services:
 
-pkg/curl/                 curl process wrapper
-pkg/jq/                   jq process wrapper
-pkg/git/                  Git process wrapper
-```
+- [`Loader`](specs/01-loader-service.md)
+- [`Decoder`](specs/02-decoder-service.md)
+- [`Resolver`](specs/03-resolver-service.md)
 
-The exact service packages may evolve. New packages must represent logical
-product concepts and obey the same dependency rules. Related services may share
-a package when the package remains cohesive and each service retains a clear
-public contract.
+The current CLI composition order is owned by the PRD and summarized in
+[`orchestrator.md`](orchestrator.md).
 
-Because the primary packages are under `internal`, an exported Go identifier is
-public to the APIHydra codebase but is not a supported third-party library API.
+## Execution services
 
-## Shared models
+`internal/execution` contains:
 
-`internal/models` owns the values passed between services. It must not perform
-filesystem discovery, process execution, orchestration, terminal output, or
-other workflow behavior.
+- [`KeyValueStore`](specs/04-key-value-store-service.md)
+- [`VariableProcessor`](specs/06-variable-processor.md)
+- [`Validator`](specs/07-validator.md)
+- [`StepRunner`](specs/08-step-runner.md)
 
-The models should describe distinct lifecycle states instead of reusing one
-partially populated type for unrelated phases. In particular:
+StepRunner owns preparation order, execution phase order, tree validation, and
+stage scheduling. The other execution specs define only their own APIs and do
+not duplicate orchestration rules.
 
-```text
-Step -> RuntimeStep -> StepResult
-```
+## Reporter and commands
 
-- `Step` represents the declarative YAML step.
-- `RuntimeStep` represents a step after inherited defaults and available
-  variables have been resolved.
-- `StepResult` represents execution, capture, and validation outcomes.
+[`Reporter`](specs/09-reporter.md) owns the terminal-output API and the exact
+working-directory and fatal-diagnostic behavior implemented by the skeleton.
+Its other reporting methods remain stubbed and are specified only to the extent
+of their reference comments.
 
-The PRD term is `Step`, not `Task`. Target model names and YAML fields must use
-`Step`, `RuntimeStep`, `RuntimeSteps`, `steps`, and `kind: steps` consistently.
+[`pkg/runner`](specs/05-runner-pkg.md) owns Curl, JQFilter, JQSelect, JQPretty,
+and GitDiff. Their signatures and reference comments are binding; command-line
+construction and result-normalization details are not yet architectural
+requirements.
 
-### Parsed directory structure
+## Errors and exits
 
-The suite's directory-oriented structure has this shape:
+Static classifications originate in the package that declares them.
+[`pkg/errs`](specs/errs-pkg.md) alone owns contextual construction and attached
+codes. The PRD owns the shared meanings of codes `0`, `101`, `102`, and `103`.
 
-```go
-type Suite struct {
-    WorkDir string
-    Root    *Directory
-}
+## Architecture constraints
 
-type Directory struct {
-    Depth           int
-    Dir             string
-    RuntimeDefaults RuntimeDefaults
-    Files           []*File
-    Children        []*Directory
-}
-
-type File struct {
-    FilePath        string
-    Kind            DocumentKind
-    Root            *RootFile
-    Defaults        *DefaultsFile
-    Steps           *StepsFile
-    ParentDefaults  *Defaults
-    RuntimeDefaults RuntimeDefaults
-    RuntimeSteps    []RuntimeStep
-}
-```
-
-One `Suite` represents the directory selected by the CLI. Its `Root` directory
-must contain the suite's one root file. A `Directory` preserves filesystem
-ancestry through `Children` and owns every parsed `File` in that directory.
-
-One `File` carries the original YAML file path and the resolved state related to
-that file:
-
-- `Root`, `Defaults`, or `Steps` contains the kind-specific parsed document.
-- `ParentDefaults` identifies the applicable nearest ancestor defaults.
-- `RuntimeDefaults` contains the effective inherited defaults.
-- `RuntimeSteps` contains steps populated from those runtime defaults.
-
-This structure keeps suite identity, directory hierarchy, and YAML files
-distinct while preserving the ancestry needed for defaults inheritance.
-
-`kind: root` is distinct from `kind: defaults`. Exactly one root document must
-exist directly in the selected suite-root directory. It both anchors the suite
-and supplies its initial defaults. A defaults document may appear only below
-the suite root and cannot make an arbitrary selected directory a valid root.
-
-### Stages
-
-A stage is a logical execution barrier containing one or more directories. It
-does not replace `Directory`; a planning service derives stages from the
-parsed directory tree.
-
-Conceptually:
-
-```go
-type Stage struct {
-    Depth       int
-    Directories []*Directory
-}
-```
-
-The suite-root directory is the first stage. All directories at the same depth
-belong to the same stage. Stages execute in depth order, directories and step
-files within one stage may execute concurrently, and steps within one file
-execute sequentially.
-
-### Source references
-
-Every parsed value that may cause a later error must remain traceable to the
-exact YAML node that produced it. The parser must capture this association when
-it has access to the YAML syntax tree and expose a neutral `SourceRef` through
-the models package.
-
-A source reference should identify at least:
-
-```go
-type SourceRef struct {
-    FilePath string
-    YAMLPath string
-    Line     int
-    Column   int
-}
-```
-
-The concrete representation may evolve, but it must not expose a third-party
-YAML AST type as an inter-service contract. `FilePath` links to the original
-YAML document, while the YAML path and position identify the exact originating
-node. Structured values may carry a source map keyed by semantic paths such as
-`request.body` or `response.expected`.
-
-Source metadata must survive every transformation from `Step` through
-`RuntimeStep` and `StepResult`. For example, invalid JSON produced after
-variable substitution must still point to the original `response.expected`
-node rather than to the substitution service.
-
-## Orchestrator
-
-`internal/orchestrator` is the only package that owns the complete application
-flow. It constructs services, invokes them in order, transfers shared models,
-owns cancellation, applies stage barriers, and determines when results are
-presented.
-
-The intended flow is:
-
-```text
-resolve CLI input
-  -> discover YAML files
-  -> parse files into Suite
-  -> require exactly one root document in the selected directory
-  -> select step documents
-  -> resolve defaults inheritance
-  -> resolve RuntimeSteps
-  -> derive stages from directory depth
-  -> preflight required external tools
-  -> execute stages in order
-       -> directories and files concurrently
-       -> steps within each file sequentially
-       -> capture variables and validate responses
-  -> stream results to the output service
-  -> render the final summary and return the exit code
-```
-
-Services do not call the next service in this flow. They return their output to
-the orchestrator. The orchestrator may call services concurrently, but service
-implementations must not silently create unrelated workflow branches.
-
-The CLI entry point must remain thin: parse process-level arguments, call the
-orchestrator, write only the final process-level diagnostic when necessary, and
-return the selected exit code. Product logic does not belong in `cmd/cli`.
-
-## External-tool wrappers
-
-Every external executable used by APIHydra must have a thin wrapper in its own
-`pkg` subdirectory. Initial wrappers are `pkg/curl`, `pkg/jq`, and `pkg/git`.
-Wrappers should expose small functions; they should not become service objects
-unless maintaining tool-specific state is genuinely necessary.
-
-A wrapper owns only external-process mechanics:
-
-- Argument construction for that tool.
-- Context-aware process startup and cancellation.
-- Standard input, output, and error capture.
-- The tool's exact exit status.
-
-Wrappers must not own APIHydra defaults inheritance, stage scheduling,
-step behavior, variable policy, validation policy, or user-facing error text.
-They should use generic arguments and results and must not import
-`internal/models` or internal service packages.
-
-Internal services interpret wrapper results and add APIHydra context through
-the shared error package. This keeps tool behavior independently testable and
-prevents process details from spreading through the application.
-
-## Errors
-
-`internal/errors` is shared by all services and owns APIHydra error categories,
-structured error values, wrapping, exit-code metadata, and final formatting.
-It must not import a service package.
-
-Initial categories include:
-
-- Configuration errors.
-- Runtime-resolution errors.
-- Execution errors.
-- Response-validation errors.
-- Internal APIHydra errors.
-
-An APIHydra error must be able to carry:
-
-- Its category.
-- A human-readable operation or failure message.
-- The originating `models.SourceRef`.
-- The original wrapped error.
-- An external tool name and exact exit code when applicable.
-- Structured details such as a Git diff when applicable.
-
-Error constructors and formatters should be functions with consistent shapes,
-for example configuration, resolution, execution, and validation constructors
-plus common `Format` and `ExitCode` operations. Exact exported signatures belong
-in the error service Spec.
-
-Services create or wrap errors where the failure is detected, but they do not
-print them. The output service or CLI formats and writes each error once.
-
-Every error originating from YAML must include its category, original YAML file
-path, and exact line. For example:
-
-```text
-apih execution error in x/y/z.yaml:16: expected is not valid JSON after parsing variables: <original jq error>
-```
-
-When curl, jq, Git, or another external tool fails, its original diagnostic must
-be preserved in the APIHydra error. APIHydra may prepend its category, YAML
-location, and operation context, but must not replace the tool error with a
-generic paraphrase. The external exit code must also remain available for the
-PRD's exit-code policy.
-
-The source reference used for an error must be the narrowest relevant YAML node.
-For example, a failure parsing substituted expected JSON points to
-`response.expected`, while an invalid type declaration points to the specific
-entry under `response.types`.
-
-## Service design and testing rules
-
-Each service must have a focused Spec that states:
-
-- Its exported types, constructor, and method signatures.
-- Preconditions and results for every operation.
-- Which shared models it consumes and produces.
-- Whether it mutates an input model.
-- Its error categories and required source references.
-- Its mapped unit and integration tests.
-
-Tests should exercise the public contract so private implementation can be
-rewritten freely. Private helpers may have tests when useful, but they must not
-become an accidental second contract that prevents safe replacement.
-
-Service methods should be deterministic when their stated responsibility has no
-I/O. Services that perform I/O must accept `context.Context` where cancellation
-is relevant. Do not use process-global mutable state or implicit service
-registries.
-
-When a service grows beyond the rewrite target, split it along an existing
-logical seam. Preserve the old public contract when it remains useful, and let
-the orchestrator route data through the newly extracted service. Do not force
-one service to import another merely because code was extracted.
-
-## Dependency review checklist
-
-Before adding or changing a service, verify:
-
-1. The service wraps a concept recognizable to humans.
-2. Its complete implementation can reasonably be rewritten and verified in
-   about 15 minutes.
-3. Its public contract contains only necessary exported types and operations.
-4. Inter-service arguments and results use `internal/models` carriers.
-5. The orchestrator, rather than a service dependency, can express the flow.
-6. Any injected collaborator is unavoidable and narrowly defined.
-7. YAML-originated failures preserve an exact `SourceRef`.
-8. External-tool failures preserve the original diagnostic and exit status.
-9. External process mechanics remain in a dedicated `pkg` wrapper.
-10. The dependency direction remains acyclic and follows this document.
+1. `skeleton/` remains the binding architecture and API.
+2. Shared carriers remain in `internal/domain`.
+3. Contextual errors, external commands, and terminal writes remain in their
+   owner packages.
+4. Package specs do not create parallel APIs or restate another spec's
+   requirements.
+5. Behavior absent from the skeleton remains an implementation choice, not a
+   product or architecture commitment.

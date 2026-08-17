@@ -24,6 +24,18 @@ func TestPackageBoundaries(t *testing.T) {
 			[]string{"fmt.Errorf(", "errors.Join("},
 		)
 	})
+
+	t.Run("terminal writes belong to reporter", func(t *testing.T) {
+		assertPatternsAbsentOutside(
+			t,
+			filepath.FromSlash("internal/reporter"),
+			[]string{"fmt.Fprint(", "fmt.Fprintf(", "fmt.Fprintln(", "log.Print(", "log.Printf(", "log.Println("},
+		)
+	})
+
+	t.Run("bat is not a command dependency", func(t *testing.T) {
+		assertPatternsAbsentOutside(t, "", []string{"BatDiff", "exec.Command(\"bat\"", "exec.CommandContext(ctx, \"bat\""})
+	})
 }
 
 func assertPatternsAbsentOutside(t *testing.T, allowedDir string, patterns []string) {
