@@ -1,7 +1,7 @@
 PKG := "apih"
 PKG_LIST := $(shell go list ${PKG}/... | grep -Ev '^apih/skeleton(/|$$)')
 
-.PHONY: check init lint vet test race benchmark help test_version
+.PHONY: check init lint vet test coverage race benchmark help test_version
 
 .DEFAULT_GOAL := check
 check: lint vet race ## Check project
@@ -21,6 +21,9 @@ vet: ## Vet the files
 
 test: ## Run tests
 	@go test -short ${PKG_LIST}
+
+coverage: ## Display test coverage
+	@go test -cover ${PKG_LIST}
 
 race: ## Run tests with data race detector
 	@go test -race ${PKG_LIST}
