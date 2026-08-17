@@ -53,7 +53,7 @@ runtime model after execution.
 - Continuing later steps after validation failures.
 - Canceling immediately on configuration, variable, external-tool, output, or
   other fatal errors and returning after active goroutines join.
-- Reporting exit code `101` after the complete tree executes when at least one
+- Reporting exit code `1` after the complete tree executes when at least one
   step had a validation failure.
 
 ### Non-responsibilities
@@ -71,7 +71,7 @@ runtime model after execution.
 - Reorder `Directory.Children`, either dimension of a step matrix, variables,
   response types, or captures.
 - Print fatal errors, call `os.Exit`, or choose a process exit code other than
-  the completed-run validation code `101`.
+  the completed-run validation code `1`.
 - Add ANSI color or verbose/debug output.
 - Mutate a declarative step through its `Definition` provenance pointer.
 
@@ -110,7 +110,7 @@ phases and must not retain the context after returning.
 
 `ErrStepValidation` classifies a completed tree containing at least one
 nonfatal validation mismatch. The returned error must match
-`ErrStepValidation` through `errors.Is` and expose exit code `101` through:
+`ErrStepValidation` through `errors.Is` and expose exit code `1` through:
 
 ```go
 interface {
@@ -519,7 +519,7 @@ and later stages run after the stage barrier.
 step failed validation. After every runtime step has executed:
 
 - Return nil when every step passed.
-- Return an error matching `ErrStepValidation` with exit code `101` when one or
+- Return an error matching `ErrStepValidation` with exit code `1` when one or
   more steps failed type or expected-value validation.
 
 The validation error is returned only after the complete tree runs. It must not
@@ -707,7 +707,7 @@ later steps still execute.
 Given one step fails validation and later runtime steps exist, when `Execute`
 runs, then later steps in that directory, other active-stage directories, and
 all later stages execute normally, and the method returns `ErrStepValidation`
-with exit code `101` only after every stage completes.
+with exit code `1` only after every stage completes.
 
 #### AC-Execute-11: Stop on variable or curl failure
 
@@ -808,7 +808,7 @@ both expected-value and type validation run and report their failures.
 
 Given any expected-value or type assertion failure, when other steps remain in
 the same file, other files, or later stages, then the caller records the
-failure, executes the remaining suite, and returns exit code `101` after the
+failure, executes the remaining suite, and returns exit code `1` after the
 suite completes.
 
 ### AC-Combined-4: Stop on fatal tool errors
@@ -840,7 +840,7 @@ acceptance criterion in this specification. At minimum, tests must cover:
 - Preservation of the original fatal error when sibling processes return
   cancellation errors.
 - Atomic output blocks and completion-order output from parallel directories.
-- Exit code `101` only after all remaining steps complete.
+- Exit code `1` only after all remaining steps complete.
 - Byte-exact regular output using the copied old `normal.txt` fixture.
 - Empty trees, empty groups, repeated preparation, writer failures, nil input,
   broken parent links, and repeated directory pointers.

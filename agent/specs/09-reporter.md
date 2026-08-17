@@ -832,7 +832,7 @@ Error precedence is exact:
 - When execution otherwise succeeds and deferred debug formatting fails,
   `Execute` returns the debug error and its applicable exact exit code.
 - When execution accumulated validation failures and deferred debug succeeds,
-  `Execute` returns the established validation error and exit code `101`.
+  `Execute` returns the established validation error and exit code `1`.
 - A fatal error remains fatal and is printed only by the caller after
   `Execute` returns. Therefore the debug block is the final standard-output
   block even though a later fatal diagnostic may be written to standard error.
@@ -856,7 +856,7 @@ This specification replaces these conflicting rules from
 
 Stage barriers, directory concurrency, step ordering, runtime element pointer
 identity, curl response assignment, normal non-debug capture behavior, fatal
-cancellation, joining, validation exit code `101`, and all other unaffected
+cancellation, joining, validation exit code `1`, and all other unaffected
 StepRunner contracts remain unchanged.
 
 ### Integration acceptance criteria
@@ -871,7 +871,7 @@ passing line.
 
 Given one step fails types and expected comparison, when it completes, then
 stdout contains the type block followed by the diff block, each with its own
-red-cross header, and the run ultimately returns exit code `101`.
+red-cross header, and the run ultimately returns exit code `1`.
 
 #### AC-Integration-3: Stop at one debug winner
 
@@ -941,7 +941,7 @@ must never retain or read the step concurrently with an active mutation.
 - Nonfatal type mismatches match `TypeValidationError`.
 - Nonfatal expected mismatches match `ExpectedValidationError`.
 - A completed run containing either mismatch returns the established
-  `ErrStepValidation` classification and exit code `101`.
+  `ErrStepValidation` classification and exit code `1`.
 - Reporter formatting and writer errors are fatal and preserve an external
   process exit code when one exists.
 - Optional bat discovery or non-cancellation execution failure is suppressed
@@ -996,7 +996,7 @@ At minimum, coverage must include:
   debug step was selected.
 - No debug output when fatal termination occurs before a debug step is reached.
 - Execution-error precedence when deferred debug also fails.
-- Validation exit code `101` with a final successful debug rendering.
+- Validation exit code `1` with a final successful debug rendering.
 - Fatal diagnostics absent from Reporter output.
 
 Integration tests must use deterministic fake executables or controlled PATH

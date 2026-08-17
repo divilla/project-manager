@@ -718,7 +718,7 @@ Consequently:
 
 There are several differences between the mock and the product requirements:
 
-- The mock returns validation exit code `1`; the PRD requires `101`.
+- The mock and PRD both use validation exit code `1`.
 - The mock uses internal error code `4`; the PRD requires `3`.
 - `RunOptions.JSON` is currently unused.
 - `EventError` exists, but `Run` does not emit it on fatal errors.

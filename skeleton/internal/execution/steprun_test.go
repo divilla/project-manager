@@ -2,6 +2,7 @@ package execution
 
 import (
 	"apih/skeleton/internal/domain"
+	"apih/skeleton/pkg/errs"
 	"context"
 	"errors"
 	"strconv"
@@ -91,31 +92,35 @@ func TestCollectDirsRejectsInvalidTrees(t *testing.T) {
 
 func TestExecuteStagesCancelsAndJoinsActiveStageOnError(t *testing.T) {
 	wantErr := errors.New("fatal execution error")
+	wantExitCode := 23
 	failing := &domain.Directory{Stage: 0, Path: "/failing"}
 	sibling := &domain.Directory{Stage: 0, Path: "/sibling"}
 	later := &domain.Directory{Stage: 1, Path: "/later"}
 
 	siblingReturned := make(chan struct{})
 	var laterStarted atomic.Bool
-	process := func(ctx context.Context, dir *domain.Directory) error {
+	process := func(ctx context.Context, dir *domain.Directory) (int, error) {
 		switch dir {
 		case failing:
-			return wantErr
+			return wantExitCode, wantErr
 		case sibling:
 			<-ctx.Done()
 			close(siblingReturned)
-			return ctx.Err()
+			return errs.ExitInternal, ctx.Err()
 		case later:
 			laterStarted.Store(true)
 		}
-		return nil
+		return errs.ExitSuccess, nil
 	}
 
-	err := executeStages(
+	exitCode, err := executeStages(
 		context.Background(),
 		[][]*domain.Directory{{failing, sibling}, {later}},
 		process,
 	)
+	if exitCode != wantExitCode {
+		t.Fatalf("executeStages() exit code = %d, want %d", exitCode, wantExitCode)
+	}
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("executeStages() error = %v, want %v", err, wantErr)
 	}
@@ -126,5 +131,71 @@ func TestExecuteStagesCancelsAndJoinsActiveStageOnError(t *testing.T) {
 	}
 	if laterStarted.Load() {
 		t.Fatal("executeStages() started a later stage after a fatal error")
+	}
+}
+
+func TestExecuteReturnsConfigurationExitCodeForInvalidTree(t *testing.T) {
+	runner := NewStepRunner(nil, nil, nil)
+
+	exitCode, err := runner.Execute(context.Background(), &domain.Suite{})
+	if exitCode != errs.ExitConfiguration {
+		t.Fatalf("Execute() exit code = %d, want %d", exitCode, errs.ExitConfiguration)
+	}
+	if !errors.Is(err, ErrInvalidDirectoryTree) {
+		t.Fatalf("Execute() error = %v, want ErrInvalidDirectoryTree", err)
+	}
+}
+
+func TestExecuteStagesNeverReturnsSuccessWithError(t *testing.T) {
+	wantErr := errors.New("uncoded error")
+
+	exitCode, err := executeStages(
+		context.Background(),
+		[][]*domain.Directory{{{Stage: 0, Path: "/"}}},
+		func(context.Context, *domain.Directory) (int, error) {
+			return errs.ExitSuccess, wantErr
+		},
+	)
+	if exitCode != errs.ExitInternal {
+		t.Fatalf("executeStages() exit code = %d, want %d", exitCode, errs.ExitInternal)
+	}
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("executeStages() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestExecutionErrorsUseProductExitCodes(t *testing.T) {
+	tests := map[string]struct {
+		err      error
+		exitCode int
+	}{
+		"invalid directory tree": {errs.Build(errs.ExitConfiguration, ErrInvalidDirectoryTree, nil), errs.ExitConfiguration},
+		"missing variable":       {errs.Build(errs.ExitConfiguration, NotFoundError, nil), errs.ExitConfiguration},
+		"duplicate variable":     {errs.Build(errs.ExitConfiguration, KeyExistError, nil), errs.ExitConfiguration},
+		"validation":             {errs.Build(errs.ExitValidation, ValidationError, nil), errs.ExitValidation},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := errs.Code(test.err, errs.ExitInternal); got != test.exitCode {
+				t.Fatalf("exit code = %d, want %d", got, test.exitCode)
+			}
+		})
+	}
+}
+
+func TestExecuteStagesDerivesValidationExitCode(t *testing.T) {
+	exitCode, err := executeStages(
+		context.Background(),
+		[][]*domain.Directory{{{Stage: 0, Path: "/"}}},
+		func(context.Context, *domain.Directory) (int, error) {
+			return errs.ExitSuccess, errs.Build(errs.ExitValidation, ValidationError, nil)
+		},
+	)
+	if exitCode != errs.ExitValidation {
+		t.Fatalf("executeStages() exit code = %d, want %d", exitCode, errs.ExitValidation)
+	}
+	if !errors.Is(err, ValidationError) {
+		t.Fatalf("executeStages() error = %v, want ValidationError", err)
 	}
 }

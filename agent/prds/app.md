@@ -1,1021 +1,414 @@
 # APIHydra Product Requirements Document
 
-## Document status
+## Authority and status
 
 - Product: APIHydra
 - CLI command: `apih`
-- Status: Initial draft
-- Primary interface: YAML files and terminal output
+- Status: skeleton-aligned draft
+- Binding reference: `skeleton/`
 
-## Product summary
+This PRD describes only architecture, APIs, data, and behavior represented by
+the binding skeleton. It must not introduce another package, service, command,
+model, field, method signature, error owner, exit code, or execution path unless
+the skeleton is explicitly changed first.
 
-APIHydra is an API integration-testing CLI designed primarily for use by AI
-agents. Its test suites and terminal output must also remain easy for humans to
-navigate, inspect, understand, and troubleshoot.
+## Product
 
-An APIHydra suite is a directory tree containing a root document, optional
-defaults documents, and step documents. APIHydra resolves inherited defaults,
-expands run-wide variables, turns declarative steps into concrete curl commands,
-executes those commands, and validates their JSON responses.
+APIHydra is a Go CLI that discovers YAML definitions in a directory tree,
+decodes and validates those definitions, resolves inherited request defaults,
+prepares steps, executes HTTP requests through external command wrappers, and
+validates responses.
 
-## Goals
+The product operates on one `domain.Suite`. A suite has a selected working
+directory and a root `domain.Directory`; directories retain their hierarchy,
+files, decoded definitions, resolved values, and runtime steps throughout one
+run.
 
-- Let AI agents define and run API integration tests through a concise,
-  declarative YAML format.
-- Keep test suites readable and directly inspectable by human users.
-- Support reusable defaults across directories without duplicating common
-  request values.
-- Support stateful integration flows by passing values from earlier steps to
-  later steps.
-- Run independent work concurrently while preserving explicit dependency order.
-- Produce clear configuration, runtime, request, and validation failures.
+## Package boundaries
 
-## Non-goals for the initial product
+The repository uses these skeleton packages:
 
-- A graphical interface.
-- Mutable or reassignable variables.
-- Full-response equality when only selected values are declared under
-  `response.expected`.
-- Parallel execution of steps declared in the same step file.
-- Parallel execution of different step files belonging to the same directory.
-- Arbitrary raw curl arguments. Curl capabilities must be exposed through
-  explicit typed YAML fields.
+| Package | Responsibility |
+| --- | --- |
+| `cmd/cli` | Resolve the working directory, compose services, print terminal errors, and return the selected exit code. |
+| `internal/domain` | Own all shared suite, directory, file, definition, defaults, and step models. |
+| `internal/definition` | Load, classify, decode, validate, and resolve definitions. |
+| `internal/execution` | Own variables, validation, step preparation, stage scheduling, and step execution. |
+| `pkg/errs` | Build every contextual error and attach exit-code metadata. |
+| `pkg/runner` | Own every external command invocation. |
 
-## Core concepts
+Services communicate through `internal/domain` values. Packages must not add
+parallel model hierarchies or duplicate another package's responsibility.
 
-### Suite root
+## CLI contract
 
-The suite root is the directory from which APIHydra discovers YAML files and
-builds the execution hierarchy.
+`cmd/cli` starts from `os.Getwd()`. When a first positional argument exists, it
+joins that value to the current directory and requires the result to identify a
+directory. Invalid paths match the CLI-owned `InvalidPathError`.
 
-The user selects it in one of two ways:
+After resolving the working directory, the CLI writes:
 
 ```text
-apih
-apih <relative-path-to-apih-yaml-root>
+Working Directory: <path>
+
 ```
 
-With no argument, the current directory is the suite root. With an argument,
-the given path is resolved relative to the current directory and becomes the
-suite root.
+It creates `domain.Suite{WorkDir: workDir}` and invokes the definition pipeline
+in this exact order:
 
-### YAML document kinds
+1. `Loader.LoadDirectoryStructure`
+2. `Loader.LoadDirectoryFiles`
+3. `Loader.DecodeBaseDefinitions`
+4. `Decoder.DecodeFiles`
+5. `Decoder.ValidateDefaultsDefinitions`
+6. `Decoder.ValidateStepsDefinitions`
+7. `Resolver.ResolveDefaults`
+8. `Resolver.ResolveSteps`
 
-APIHydra recognizes three kinds of YAML documents:
+The current CLI skeleton ends after `ResolveSteps`. Execution services exist as
+an API but are not yet composed into `cmd/cli`.
 
-- `root`: the mandatory suite marker and initial defaults.
-- `defaults`: inherited values used to resolve steps below the suite root.
-- `steps`: one or more declarative curl steps.
+## Domain contract
 
-Documents identify themselves as APIHydra documents and declare their kind.
-The schema uses `app: apihydra` and `kind: root|defaults|steps`.
+### Documents
 
-Exactly one `root` document must exist directly in the directory selected by
-the CLI. This prevents a run from silently treating an arbitrary directory as
-a suite. A `root` document also supplies that directory's defaults. Descendant
-directories may use `defaults` documents, but a `defaults` document can never
-anchor a suite.
+`domain.DocumentKind` has exactly these values:
 
-An APIHydra document may optionally declare metadata:
-
-```yaml
-metadata:
-  name: create-steps
-  labels: [create, steps]
+```go
+KindRoot     = "root"
+KindDefaults = "defaults"
+KindSteps    = "steps"
 ```
 
-Metadata is used only when the user requests a filtered test run. It is not
-required for, and does not alter, a normal full-suite run.
+`BaseDefinition` contains `app`, `kind`, and a raw `spec`. A classified
+defaults or root document decodes to `DefaultsDefinition`; a steps document
+decodes to `StepsDefinition`. Definitions may carry `metadata.name` and
+`metadata.labels`.
 
-### RuntimeDefaults
+### Suite tree
 
-Every directory in the discovered suite tree has one effective
-`RuntimeDefaults`. It is the resolved set of inherited default values available
-to step files in that directory.
+```go
+type Suite struct {
+    WorkDir string
+    Root    *Directory
+}
+```
 
-Common default values initially include:
+Each `Directory` retains:
 
-- `baseUrl`
-- `basePath`
-- `headers`
-- `timeout`
-- `retries`
+- `Stage`, `Path`, `Parent`, and `Children`;
+- discovered `Files`, one `DefaultsFile`, and ordered `StepsFiles`;
+- one `DefaultsDefinition` and ordered `StepsDefinitions`;
+- `ResolvedDefaults`, `ResolvedSteps`, and `RuntimeSteps`.
 
-### Stage
+Each `File` retains its `Stage`, `Path`, `Kind`, exact `Bytes`, and owning
+`Directory` pointer.
 
-Every discovered directory has a non-negative integer `Stage` property. The
-suite-root directory has stage `0`; each child directory has its parent's stage
-plus `1`. Therefore directories at the same depth beneath the suite root have
-the same stage number.
+### Defaults and steps
 
-Stage numbers are execution barriers. APIHydra starts with stage `0` and then
-executes each higher stage in ascending numeric order through the maximum
-discovered stage. For the active stage, APIHydra starts exactly one goroutine
-for every directory whose `Directory.Stage` equals that stage number. Those
-directory goroutines execute in parallel, and the next stage cannot begin until
-all of them finish.
-
-Within each directory goroutine, execution is entirely sequential. Its selected
-step YAML files execute alphabetically by cleaned file path. APIHydra executes
-every step in the first file sequentially in declaration order, then every step
-in the second file sequentially, and continues that way through the remaining
-files. Files and steps belonging to one directory never execute in parallel.
-
-Defaults inheritance continues to follow directory ancestry and is independent
-of stage execution grouping.
-
-### Step
-
-A `Step` is a declarative set of curl execution parameters. A step may define
-request values itself and may omit values that are available from its
-directory's `RuntimeDefaults`.
-
-### RuntimeStep
-
-A `RuntimeStep` is a step after all available missing values have been populated
-from its directory's `RuntimeDefaults`.
+`Defaults` exposes only:
 
 ```text
-Step + directory RuntimeDefaults -> RuntimeStep
+baseUrl, basePath, headers, timeout, retries
 ```
 
-Step-defined values take precedence over inherited defaults. A value absent
-from both sources remains undefined and causes validation failure when that
-value is required to execute or validate the step.
-
-## Functional requirements
-
-### 1. Suite discovery and startup
-
-1. APIHydra must accept either no positional path or one relative suite-root
-   path.
-2. APIHydra must recursively inspect regular files ending in `.yaml` or `.yml`
-   beneath the selected suite root, at any directory depth.
-3. A YAML file whose `app` field is missing or is not exactly `apihydra` must be
-   treated as unrelated and ignored.
-4. A YAML file declaring `app: apihydra` must declare `kind: root`,
-   `kind: defaults`, or `kind: steps`. A missing or unsupported kind must
-   produce a configuration error.
-5. No APIHydra document kinds other than `root`, `defaults`, and `steps` are
-   supported.
-6. `metadata`, `metadata.name`, and `metadata.labels` must all be optional.
-7. When supplied, `metadata.name` must be unique within the suite so name-based
-   filtering is unambiguous.
-8. When supplied, `metadata.labels` must be an array of strings.
-9. Metadata must affect step selection only when the user requests a filtered
-   run. It must have no effect on an unfiltered full-suite run.
-10. The selected suite-root directory must contain exactly one `root` document.
-11. If the selected directory has no root document or multiple root documents,
-   APIHydra must report a configuration error and must not execute steps.
-12. A root document below the selected suite-root directory must produce a
-   configuration error; roots cannot be nested.
-13. The selected suite-root directory must not contain a `defaults` document,
-   because its root document already supplies the root defaults.
-14. A non-root directory may contain no defaults document or one defaults
-   document.
-15. If any non-root directory contains multiple defaults documents, APIHydra
-   must report a configuration error and must not execute steps.
-16. A defaults document's parent defaults must be discovered from the filesystem
-   hierarchy. Starting with its parent directory, APIHydra must search ancestor
-   directories upward until it finds the nearest defaults or root document.
-17. A root document has no parent defaults.
-18. An unfiltered suite that resolves to zero steps, whether because it has no
-    steps documents or only empty steps documents, must produce an error, execute
-    no curl commands, and return exit code `2`.
-19. Each APIHydra YAML file must contain exactly one YAML document. An APIHydra
-    file containing multiple `---`-separated documents must produce a fatal
-    configuration error.
-20. APIHydra documents must be decoded using strict schema validation. Any
-    unknown field must produce a fatal configuration error identifying the file
-    and YAML field path, and APIHydra must return exit code `2` without executing
-    steps.
-21. Duplicate YAML mapping keys must produce a fatal configuration error even
-    when their values are identical. The error must identify the file and
-    duplicated key.
-22. APIHydra must assign every discovered directory a non-negative integer
-    `Stage` property.
-23. The suite-root directory must have stage `0`. Every child directory's stage
-    must equal its parent directory's stage plus `1`; consequently, all
-    directories with the same relative depth have the same stage.
-24. A stage may contain one or more directories. Directories containing no
-    selected steps contribute no request work but must retain their stage and
-    remain available for defaults inheritance and descendant discovery.
-
-### 1.1 Filtered execution
-
-1. APIHydra must support `--name <name>` and its short form `-n <name>`.
-2. A name filter must select a `steps` document whose `metadata.name` exactly
-   matches the supplied name.
-3. APIHydra must support repeatable `--label <label>` and its short form
-   `-l <label>`.
-4. Repeated label filters must use AND semantics: a selected steps document must
-   contain every requested label.
-5. When name and label filters are combined, a steps document must satisfy both
-   the exact name filter and every label filter.
-6. Filters must select whole `steps` documents. Every step in a selected
-   document must execute; individual steps are not filtered.
-7. Root and defaults documents must not be excluded by step filters. APIHydra
-   must load every defaults chain needed to resolve selected step documents.
-8. An invocation without name or label filters must execute the entire suite.
-9. If the supplied filters select no steps documents or resolve to zero steps,
-   APIHydra must report that no steps matched, execute no curl commands, and
-   return exit code `2`.
-
-Examples:
+`Step` exposes only:
 
 ```text
-apih --name create-steps
-apih -n create-steps
-apih --label create
-apih -l create -l smoke
-apih tests --name create-steps --label smoke
+vars
+request.method
+request.baseUrl
+request.basePath
+request.path
+request.headers
+request.timeout
+request.retries
+request.query
+request.body
+response.status
+response.body
+response.expected
+response.types
+response.capture
+debug
 ```
 
-### 1.2 External-tool preflight
+Variable values, request bodies, response expectations, and capture selectors
+use `domain.YAMLString`. A step retains its source `Definition` pointer and
+zero-based `Index`. `DirectoryStage`, `DirectoryPath`, and `FilePath` derive
+source information through that provenance chain.
 
-1. After filtering and runtime resolution but before executing any request,
-   APIHydra must determine which external tools the selected steps require.
-2. `curl` must always be available.
-3. `jq` must be available when any selected step has a request body or uses
-   response capture, expected-value comparison, or type validation.
-4. `git` must be available when any selected step uses `response.expected`.
-5. If a required tool is unavailable, APIHydra must execute no requests, report
-   the missing dependency, and return exit code `3`.
-6. The initial product does not require the external `yq` command. This may be
-   revisited if a later workflow requires it.
+## Definition pipeline
 
-### 2. Defaults inheritance
+### Loader
 
-1. The root document establishes the root directory's `RuntimeDefaults`.
-2. A child directory without its own defaults document inherits the effective
-   `RuntimeDefaults` available from its nearest ancestor defaults or root
-   document.
-3. A child directory with its own defaults document inherits values from the
-   nearest defaults or root document found by searching upward from its parent
-   directory and overrides inherited values that it defines locally.
-4. Values not overridden by the child remain inherited from the parent
-   defaults chain.
-5. Header maps must merge by header name. Headers absent from the child defaults
-   remain inherited, while a child header replaces the inherited header with the
-   same name.
-6. Header-name comparison must be case-insensitive. APIHydra must canonicalize
-   emitted header names using standard HTTP header casing. Thus a child
-   `Content-Type` overrides a parent `content-type` and is emitted as
-   `Content-Type`.
-7. The resolved result is the child directory's `RuntimeDefaults`.
-8. All step files in a directory receive that directory's
-   `RuntimeDefaults`.
+`NewLoader() *Loader` creates a loader.
 
-### 3. Runtime step resolution
+- `LoadDirectoryStructure(ctx, suite)` builds the directory tree rooted at
+  `suite.WorkDir`. The root directory path is `/`; descendant paths are
+  relative to `Suite.WorkDir`.
+- `LoadDirectoryFiles(ctx, suite)` populates each `Directory.Files` with `.yaml`
+  and `.yml` files.
+- `DecodeBaseDefinitions(ctx, suite)` decodes base headers, assigns `File.Kind`,
+  and classifies defaults/root and steps files.
 
-1. APIHydra must resolve every declared step against the `RuntimeDefaults` of
-   the directory containing its step file.
-2. To locate a step file's defaults, APIHydra must search first in the step
-   file's own directory and then upward through ancestor directories until it
-   finds the nearest defaults or root document.
-3. A value explicitly defined by the step must override the corresponding
-   runtime-default value.
-4. For each undefined step value, APIHydra must use the corresponding
-   runtime-default value when one exists.
-5. Step-level headers must merge with runtime-default headers by header
-   name. Runtime headers absent from the step remain present, while a step header
-   replaces the runtime header with the same name.
-6. Step-level header merging must use the same case-insensitive comparison and
-   canonical output names as defaults inheritance.
-7. The result of resolution must be represented as a `RuntimeStep` suitable for
-   curl execution and response validation.
-8. APIHydra must validate a runtime step before executing it and report missing
-   required values as errors.
+Discovered and classified file slices must be deterministic. `StepsFiles` are
+ordered alphabetically by cleaned file path.
 
-### 4. Request execution
+### Decoder
 
-1. Each `RuntimeStep` must resolve to a concrete curl command.
-2. Request parameters may include method, base URL, base path, path, headers,
-   timeout, retries, query parameters, and body.
-3. An explicitly declared `request.method` must always take precedence.
-4. APIHydra must preserve an explicit method exactly as written and pass it to
-   curl without restricting it to known or RFC-defined method names. A defined
-   empty method must produce a fatal configuration error.
-5. When `request.method` is omitted and the request has no body, the runtime
-   method must default to `GET`.
-6. When `request.method` is omitted and the request has a body, the runtime
-   method must default to `POST`.
-7. An explicitly declared `POST` request is valid without a body.
-8. The final request URL must be composed as:
+`NewDecoder() *Decoder` creates a decoder.
 
-   ```text
-   baseUrl + [basePath] + path + [?query]
-   ```
+- `DecodeFiles(ctx, suite)` decodes `DefaultsFile` into
+  `DefaultsDefinition` and `StepsFiles` into `StepsDefinitions` without
+  mutating unrelated fields.
+- `ValidateDefaultsDefinitions(ctx, suite)` validates every decoded defaults or
+  root definition.
+- `ValidateStepsDefinitions(ctx, suite)` validates every decoded steps
+  definition.
 
-9. `baseUrl` and `path` must be present after runtime-step resolution.
-10. `basePath` is optional. When undefined, it contributes an empty string to
-   the final URL. When defined, it must not be an empty string and must be
-   included between `baseUrl` and `path`.
-11. `query` is optional. When undefined, no query delimiter or query text is
-    appended. When defined, it must not be an empty string and APIHydra must
-    append `?` followed by its value.
-12. A defined-but-empty `basePath` or `query` must produce a runtime-step
-    validation error.
-13. APIHydra must use Go's URL-aware `net/url` behavior to parse the base URL,
-    normalize and join URL path components, and assign the optional raw query.
-    It must not use filesystem-path joining.
-14. Joining must normalize component boundaries so redundant or missing `/`
-    separators do not produce a malformed path while preserving the URL scheme
-    and authority.
-15. URL validation must remain lightweight and rely on Go's standard URL
-    handling. APIHydra must not implement a custom exhaustive RFC validator;
-    operational URL problems may be reported by curl as execution failures.
-16. `timeout` must be expressed in seconds. If it remains undefined after step
-    and runtime-default resolution, it must default to `10`.
-17. `retries` must control curl retry behavior. If it remains undefined after
-    step and runtime-default resolution, it must default to `3`.
-18. The resolved timeout must be a positive number and must map directly to
-    curl's `--max-time` option.
-19. The resolved retry count must be a non-negative integer and must map directly
-    to curl's `--retry` option. Thus `retries: 3` permits the initial attempt plus
-    up to three retries.
-20. A step-defined `timeout` or `retries` value must override the corresponding
-    runtime-default value like any other scalar step setting.
-21. APIHydra must pass the resolved timeout and retry values to curl.
-22. The request `body` must be handled as a literal JSON string.
-23. After variable substitution and before curl execution, APIHydra must use
-    `jq` to validate the final request body as JSON and recursively order object
-    members alphabetically.
-24. APIHydra must render the validated and ordered request body as
-    pretty-formatted JSON. The formatted body is the body passed to curl.
-25. If jq rejects the request body, APIHydra must stop immediately and forward
-    jq's exact exit code. The invalid request must not execute.
+### Resolver
 
-### 5. Global variable store
+`NewResolver() *Resolver` creates a resolver.
 
-1. A run must have one active, in-memory key-value store shared by all step
-   runners.
-2. Both keys and values in the store must be strings.
-3. Stored values must preserve their JSON literal representation. For example:
+- `ResolveDefaults(ctx, suite)` traverses the tree and populates each
+  `Directory.ResolvedDefaults` by merging its local defaults with inherited
+  parent defaults.
+- `ResolveSteps(ctx, suite)` populates `Directory.ResolvedSteps` by resolving
+  local steps against the directory defaults.
+- `ValidateStepsDefinitions(ctx, suite)` exposes the resolver-owned validation
+  boundary present in the skeleton.
 
-   ```text
-   change_id -> 1
-   date      -> "2026-01-01T00:00:00"
-   ```
+Resolution preserves alphabetical file order and step declaration order in the
+two-dimensional `ResolvedSteps` matrix.
 
-4. A step may declare literal variables in a step-level `vars` map using YAML
-   key-value pairs. These variables are written before the request is resolved.
-5. Values under `step.vars` may be any JSON-compatible YAML scalar, array,
-   object, or `null`. APIHydra must serialize each value as compact JSON before
-   writing it to the string-to-string store. For example, YAML `1`, `true`,
-   `Test`, `[1, 2]`, and `null` are stored as `1`, `true`, `"Test"`, `[1,2]`,
-   and `null` respectively.
-6. A step variable value that cannot be represented as JSON must produce a
-   configuration error.
-7. A step may capture variables from its curl response using `jq` expressions
-   declared in `response.capture`.
-8. APIHydra must execute response-capture expressions after curl returns and
-   before substituting or validating `response.expected`, allowing a step to use
-   a value captured from its own response in its expected-value assertions.
-9. Response capture must use the terminal `jq` application.
-10. A response-derived variable must store the literal text emitted for the
-   extracted JSON value.
-11. Variables are global to the run. Every step runner may access variables set
-   by previously completed steps, regardless of whether they came from a
-   step-level declaration or response capture.
-12. Variable keys are write-once. Any second attempt to set an existing key must
-   produce a fatal runtime configuration error at the exact assignment point.
-   The original value must remain unchanged and APIHydra must stop the suite
-   immediately.
-13. Variables may be referenced only from a request `body` or response
-   `expected` value in the initial product.
-14. Referencing a variable key that does not exist in the global store at
-    substitution time must produce a fatal runtime configuration error. APIHydra
-    must identify the missing key, stop immediately, and return exit code `2`.
-    Keys storing `null`, `false`, `0`, or an empty JSON string are present and
-    must not be treated as missing.
-15. Variable keys must match `[A-Za-z_][A-Za-z0-9_:]*`, allowing Redis-style
-    grouped keys such as `change:id`.
+## Execution contract
 
-### 6. Variable substitution
+### Key-value store
 
-1. Request `body` and response `expected` values must be processed as literal
-   JSON strings.
-2. A whole-value variable reference uses `$<key>`, for example:
+`NewKeyValueStore()` returns an empty, concurrency-safe, string-to-string
+store. `Set` is write-once: a duplicate key returns execution-owned
+`KeyExistError` and never overwrites the original value. `Get` returns the
+stored value or execution-owned `NotFoundError`. The store uses an `RWMutex` so
+same-stage directory goroutines may access it safely.
 
-   ```yaml
-   body: '{"id": $change_id}'
-   ```
+### Variable processor
 
-3. An embedded variable reference uses `${<key>}`, for example:
+`NewVariableProcessor() *VariableProcessor` creates a processor. Its exact
+operations are:
 
-   ```yaml
-   body: '{"path": "/changes/${change_id}"}'
-   ```
-
-4. For `$<key>`, APIHydra must insert the stored string unchanged, preserving
-   the complete JSON literal.
-5. For `${<key>}`, APIHydra must remove one leading and one trailing JSON double
-   quote from the stored string when both are present, then insert the remaining
-   string. If the stored string does not have both outer quotes, it must be
-   inserted unchanged.
-6. `$<key>` and `${<key>}` must recognize keys matching
-   `[A-Za-z_][A-Za-z0-9_:]*`, including references such as `$change:id` and
-   `${change:id}`.
-7. `$$` must produce one literal `$` and must not start a variable reference.
-8. After all substitutions, APIHydra must use `jq` to validate both request
-   `body` and response `expected` values as JSON and recursively order object
-   members alphabetically.
-9. APIHydra must render both validated and ordered values as pretty-formatted
-   JSON and replace the corresponding runtime step members with that text.
-10. If jq rejects either substituted value, APIHydra must stop immediately and
-    forward jq's exact exit code. An invalid request body must not execute; an
-    invalid expected value must stop response processing after curl returns.
-
-### 7. Response validation
-
-1. A step's `response` section must be optional. When omitted, the step passes
-   if curl completes successfully; APIHydra must not validate HTTP status or
-   response body content.
-2. APIHydra must require a valid JSON response body when the step declares any
-   of `response.capture`, `response.expected`, or `response.types`. It must use
-   `jq` to validate the actual response JSON.
-3. When none of those JSON-based response features is present, the body may be
-   empty or non-JSON and APIHydra may validate status alone.
-4. If jq rejects an actual response that requires JSON processing, APIHydra must
-   stop immediately and forward jq's exact exit code.
-5. A step may declare accepted HTTP status codes as an array under
-   `response.status`, for example `status: [200, 201]`.
-6. When present, `response.status` must be a non-empty array of unique integers
-   from `100` through `599`. An empty array, duplicate value, non-integer, or
-   out-of-range value must produce a fatal configuration error with exit code
-   `2`.
-7. When `response.status` is present, the actual HTTP response status must equal
-   one of the declared values. Otherwise, status validation must fail the step.
-8. When `response.status` is omitted, APIHydra must accept any HTTP response
-   status.
-9. A status mismatch must not stop the remaining suite from executing.
-10. A status mismatch must not short-circuit other response processing. When the
-   response body is valid JSON, APIHydra must still run `response.capture`,
-   `response.expected`, and `response.types` and collect all failures for the
-   step.
-11. Variables captured from a valid JSON response become available according to
-   the normal variable rules even when status validation failed.
-12. A step may declare value assertions under `response.expected`.
-13. `response.expected` must be handled as a literal JSON string and expanded
-    using the run-wide variable store before validation. APIHydra must apply the
-    shared variable-substitution rule that validates, recursively orders, and
-    pretty-formats the substituted JSON.
-14. `response.expected` may contain any valid JSON value: object, array, string,
-    number, boolean, or `null`.
-15. When expected is an object, it is a partial assertion and may contain only
-    the response members relevant to the test.
-16. When expected is a top-level array, scalar, or `null`, APIHydra must compare
-    it against the entire actual response rather than performing object-member
-    projection.
-17. Expected object members must be ordered recursively and the result rendered
-    as pretty-formatted JSON. Compact JSON output must not be used for
-    comparison. If jq rejects expected, APIHydra must stop immediately and
-    forward jq's exact exit code.
-18. For an object expectation, APIHydra must use `jq` to project the actual
-    response down to the members declared by the expected JSON, recursively
-    order the projected object members alphabetically, and render the result as
-    pretty-formatted JSON.
-19. Members present in the actual response but omitted from an object `expected`
-    must be removed by the projection and must not cause a failure.
-20. Every member declared in an object `expected` must exist in the actual
-    response. A missing member and a member explicitly containing `null` are
-    different and must produce different projected JSON.
-21. APIHydra must compare the two pretty-formatted JSON documents using Git's
-   diff command.
-22. If Git reports a difference, exact-value validation must fail and APIHydra
-   must report the Git diff to the user.
-23. If Git reports no difference, exact-value validation must pass.
-24. A step may declare type assertions under `response.types`.
-25. A type assertion validates only that the selected response value has the
-   declared target type; it does not validate the value itself.
-26. Each entry in `response.types` must map a full `jq` expression selecting a
-   response value to an array containing its required base type and any
-   modifiers, for example:
-
-   ```yaml
-   response:
-     types:
-       ".change_id": [integer]
-       ".project.owner_id": [uuid, optional]
-       ".attempt_count": [integer, zero]
-       ".previous_count": [integer, zero, optional]
-   ```
-
-27. The first array item must be exactly one base type. The initial supported
-    base types must include `string`, `number`, `integer`,
-    `boolean`, `object`, `array`, `null`, `datetime`, and `uuid`.
-28. With no modifiers, the selected response member must exist, must not be
-    `null`, must have the declared base type, and must not contain that type's
-    zero value. Thus `[integer]` rejects numeric `0`.
-29. The optional `zero` modifier must allow the selected member's zero value
-    while retaining base-type validation. Thus `[integer, zero]` accepts `0`.
-30. The optional `optional` modifier must allow the selected member to be absent
-    or explicitly `null`. If the member exists with a non-null value, normal
-    base-type and zero-value validation still applies.
-31. The modifiers may be combined. `[integer, zero, optional]` accepts an absent
-    member, `null`, `0`, or a non-zero integer, but rejects a value of another
-    type.
-32. A type selector may emit multiple values. APIHydra must validate every value
-    emitted by the `jq` expression against the same declaration.
-33. A selector emitting zero values must pass only when `optional` is present.
-34. A selector emitting `null` must pass only when `optional` is present.
-35. When a selector emits one or more non-null values, every value must satisfy
-    the declared base type and zero-value rule; any invalid value must fail the
-    assertion.
-36. Zero values must be defined as follows:
-
-    | Base type | Zero value |
-    | --- | --- |
-    | `string` | `""` |
-    | `number` | `0` |
-    | `integer` | `0` |
-    | `boolean` | `false` |
-    | `object` | `{}` |
-    | `array` | `[]` |
-    | `datetime` | Any accepted representation of the instant `0001-01-01T00:00:00Z` |
-    | `uuid` | `00000000-0000-0000-0000-000000000000` |
-
-37. `datetime` must accept values matching one of these forms:
-
-    ```text
-    YYYY-MM-DD
-    YYYY-MM-DDZ
-    YYYY-MM-DD±HH:MM
-    YYYY-MM-DDTHH:MM:SSZ
-    YYYY-MM-DDTHH:MM:SS±HH:MM
-    YYYY-MM-DDTHH:MM:SS.sssZ
-    YYYY-MM-DDTHH:MM:SS.sss±HH:MM
-    YYYY-MM-DDTHH:MM:SS.ssssssZ
-    YYYY-MM-DDTHH:MM:SS.ssssss±HH:MM
-    ```
-
-38. A datetime timezone offset may use any valid `±HH:MM` value, not only
-    `+00:00`. A value containing a time component must include either `Z` or an
-    offset. Fractional seconds, when present, must contain exactly three or six
-    digits. A date-only value may omit its timezone.
-39. `uuid` must accept valid canonical, hyphenated UUID strings of any version.
-40. `null` is a special case: `[null]` requires the selector to produce a
-    present `null` value. It does not require a `zero` modifier.
-41. Type declaration arrays must contain exactly one supported base type in the
-    first position. Only `zero` and `optional` may follow, each at most once and
-    in either order.
-42. An empty declaration array, unknown token, duplicate modifier, or base type
-    outside the first position must produce a fatal configuration error with
-    exit code `2`.
-43. A step may use `expected`, `types`, or both.
-44. A mismatch in status, exact-value, or type validation must fail the step and
-    must identify the failed assertion clearly.
-
-### 8. Response variable extraction
-
-1. A step may map variable keys to `jq` expressions under `response.capture`.
-2. APIHydra must apply each expression to the curl response JSON using the
-   terminal `jq` application.
-3. Each successful expression result must be written to the global variable
-   store using the configured key.
-4. Duplicate keys must be rejected according to the store's write-once rule.
-5. Captured variables become visible immediately after successful extraction,
-   including to `response.expected` in the producing step.
-6. APIHydra must accept a non-zero `jq` exit status when it is caused by the
-   filter producing the JSON value `null` or `false`; the corresponding literal
-   value must still be captured.
-7. Any other non-zero `jq` exit status must be treated as an operational
-   external-tool failure: APIHydra must report the capture configuration context,
-   stop immediately, and forward jq's exact exit code.
-8. APIHydra must not reject a successful `jq` invocation because it emits an
-   object, an array, or multiple JSON values. Its emitted text must be stored as
-   the captured string.
-9. Capture does not independently validate whether the stored string can be
-   embedded into another JSON document. If later substitution makes a request
-   `body` or `response.expected` invalid, its required jq validation must stop
-   immediately and forward jq's exit code.
-
-### 9. Execution order and concurrency
-
-`StepRunner.Execute` starts at stage `0` and advances through higher stage
-numbers in ascending order. All directories whose `Directory.Stage` equals the
-active stage execute in parallel. Within each directory, files execute
-alphabetically and all steps execute sequentially:
-
-1. APIHydra must determine the maximum `Directory.Stage` value and execute
-   every stage number in ascending numeric order from `0` through that maximum.
-2. Stage `N+1` must not begin until every directory goroutine in stage `N` has
-   finished. A stage finishes only after every file and step in all of its
-   directories has finished.
-3. For each stage, APIHydra must start exactly one goroutine per directory whose
-   `Stage` property equals the current stage number.
-4. Directory goroutines within the same stage execute concurrently. A directory
-   containing no selected step files performs no request work and completes its
-   goroutine normally.
-5. A directory goroutine must execute that directory's selected step YAML files
-   one at a time, alphabetically by cleaned file path. This is the deterministic
-   order already held by `Directory.StepsFiles`.
-6. The directory goroutine must execute every step in the first file
-   sequentially in declaration order before starting the first step of the
-   second file. It repeats this rule until all steps in every alphabetically
-   ordered file in that directory have finished.
-7. APIHydra must not start a separate goroutine for a file or step. Files and
-   steps belonging to the same directory must never overlap in execution.
-8. A step may rely on variables created by an earlier step in the same file, by
-   any step in an alphabetically earlier completed file in the same directory,
-   or by any completed earlier stage.
-9. A step must not rely on a variable created by another directory in the same
-   stage because those directory goroutines execute concurrently and have no
-   defined relative completion order.
-10. Concurrent attempts from different directory goroutines to create the same
-    variable key must not overwrite one another; at most one write may succeed.
-    Detection of any duplicate write must trigger the fatal
-    duplicate-assignment policy.
-11. A step validation failure must not stop suite execution.
-12. After validation fails, APIHydra must continue later sequential steps in the
-    same file, later alphabetically ordered files in the same directory, other
-    directory goroutines, and all later stages according to
-    the normal scheduling rules.
-13. APIHydra must collect validation failures throughout the run and return exit
-    code `101` after the entire suite finishes when at least one validation
-    failed.
-14. Pre-execution configuration errors that prevent the suite from being
-    resolved remain fatal and must prevent step execution.
-15. An operational failure from curl, jq, Git, or another external tool must be
-    fatal. APIHydra must stop execution immediately and forward that tool's exact
-    non-zero exit code.
-16. A non-zero tool status with defined semantic meaning must follow that
-    meaning instead of the operational-failure rule. In particular, Git diff
-    status `1` means a validation mismatch, and the accepted jq status for a
-    `null` or `false` result is not an error.
-17. Duplicate variable assignment is a fatal runtime configuration error, not a
-    recoverable validation failure. It must stop execution when detected.
-18. Missing variable references are fatal runtime configuration errors and must
-    stop execution when detected.
-19. When any fatal error occurs while directory goroutines are running,
-    APIHydra must stop scheduling work, cancel all in-flight external processes,
-    wait for every started directory goroutine to terminate, and return the
-    original fatal error code. Cancellation outcomes must not replace that
-    original code.
-20. For each step, APIHydra must load `step.vars`, substitute, validate, order,
-    and format `request.body`, and then execute the request.
-21. After curl returns, APIHydra must store the response text in the runtime
-    step's `response.body`, capture response variables, and only then
-    substitute, validate, order, and format `response.expected`. This order lets
-    a step use its own captured variables in `response.expected`.
-
-An example execution tree is:
-
-```text
-stage 0
-  -> suite-root directory
-       -> 01-users.yaml: execute all steps sequentially
-       -> 02-projects.yaml: execute all steps sequentially
-       -> continue through remaining files alphabetically
-  -> wait for stage 0
-stage 1
-  -> start one goroutine for each immediate child directory
-       -> directory A: files alphabetically, all steps sequentially
-       -> directory B: files alphabetically, all steps sequentially
-       -> directory A and directory B run concurrently
-  -> wait for all of stage 1
-stage 2
-  -> start one goroutine for each directory whose Stage is 2
-  -> wait for all of stage 2
-  -> continue through maxStage
+```go
+Load(ctx, step)                  (int, error)
+ParseRequestBody(ctx, step)      (int, error)
+ParseResponseExpected(ctx, step) (int, error)
+Capture(ctx, step)               (int, error)
 ```
 
-### 10. Errors and observability
-
-1. APIHydra must distinguish configuration errors, runtime-resolution errors,
-   curl execution errors, and response-validation failures.
-2. Errors must identify the relevant file and step whenever applicable.
-3. Configuration errors must be detected before any step execution when they
-   can be found during suite loading and resolution.
-4. Terminal output must be structured and consistent enough for AI agents to
-   interpret reliably.
-5. Terminal output must remain concise and readable enough for a human to trace
-   stage, directory, file, step, request, and validation context.
-6. The command must return a non-zero exit status when configuration,
-   execution, or validation fails.
-7. Step validation errors must be reported without preventing the rest of a
-   successfully resolved suite from running.
-8. Exit codes must follow this contract:
-
-   - `0`: the suite completed with no validation failures.
-   - `2`: invocation, discovery, YAML, configuration, or filter-selection error;
-     fatal immediately. This includes duplicate variable assignment detected
-     during step execution and missing variable references detected during
-     substitution.
-   - `3`: missing external dependency or internal APIHydra failure; fatal
-     immediately.
-   - `101`: one or more step validation failures; returned after the complete
-     suite runs.
-   - Any operational non-zero exit from an invoked external tool: forwarded
-     exactly and fatal immediately.
-9. Exact error-message formatting is deferred to a later product decision.
-
-### 11. Terminal and machine-readable output
-
-1. Default output must be concise, human-readable terminal text.
-2. APIHydra must support `--json` for agent-oriented machine-readable output.
-3. `--json` output must use newline-delimited JSON: each output line must be one
-   complete, independently parseable JSON event object.
-4. JSON events must stream as execution progresses rather than being emitted
-   only after the whole suite completes.
-5. The event stream must represent suite lifecycle, step results, errors, and a
-   final suite summary.
-6. Parallel events may appear in actual completion order. Each event must carry
-   enough stage, directory, file, and step identity to associate it with the
-   correct step.
-7. In JSON mode, standard output must not contain ANSI escape codes or
-   human-formatted prose outside JSON event objects.
-8. Failure details, including Git diffs from expected-value validation, must be
-   represented as JSON string fields in the relevant event.
-9. The final summary event must state whether the suite passed and provide
-   enough counts to determine how many steps passed and failed.
-
-## Acceptance scenarios
-
-### Root document is required
-
-Given a selected suite root with step files or a defaults file but no root
-document, when `apih` is run, then it reports a configuration error and executes
-no curl commands.
-
-Given a valid root document but zero steps anywhere in an unfiltered suite,
-when `apih` is run, then it reports an error, executes no curl commands, and
-returns exit code `2`.
-
-Given a root document below the selected suite-root directory, when `apih` is
-run, then it reports a nested-root configuration error and executes no curl
-commands.
-
-### Unrelated YAML files are ignored
-
-Given YAML files without `app: apihydra`, when the suite is discovered, then
-APIHydra ignores them. Given a file with `app: apihydra` but no supported
-`kind`, APIHydra reports a configuration error and executes no curl commands.
-
-Given an APIHydra file containing multiple YAML documents separated by `---`,
-when the suite is loaded, then APIHydra reports a configuration error and
-executes no curl commands.
-
-Given an APIHydra document containing an unknown or misspelled field, when the
-suite is loaded, then APIHydra reports the file and field path, returns exit code
-`2`, and executes no curl commands.
-
-Given an APIHydra document containing a duplicate mapping key, when the suite is
-loaded, then APIHydra identifies the file and duplicated key, returns exit code
-`2`, and executes no curl commands.
-
-### Metadata is optional
-
-Given APIHydra documents without metadata, when an unfiltered suite is run, then
-all steps execute normally. Given optional names or labels, they affect step
-selection only during a filtered run.
-
-### Filter by name and labels
-
-Given steps documents with optional metadata, when `apih -n create-steps` is
-run, then only the document named `create-steps` is selected. When
-`apih -l create -l smoke` is run, only documents containing both labels are
-selected. The root document and all defaults documents required by the selected
-steps remain available for resolution.
-
-Given filters that match no steps documents, APIHydra reports an error, executes
-no curl commands, and returns exit code `2`.
-
-### External-tool preflight
+Success returns exit code `0` and nil. Failures return the applicable APIHydra
+code or exact external-tool code with a non-nil error.
+
+### Validator
+
+`Validator` exposes:
+
+```go
+ValidateTypes(ctx, step)    []error
+ValidateExpected(ctx, step) error
+```
 
-Given selected steps that require curl, jq, or Git, when any required executable
-is unavailable, then APIHydra identifies it, executes no requests, and returns
-exit code `3`. The absence of `yq` does not affect the initial product.
+`ValidateTypes` may return more than one failed validation. A non-nil
+`ValidateExpected` result represents an expected-response failure unless it is
+a fatal built error. `ValidationError` is the execution package's static
+classification for one or more nonfatal failures reported by either method.
 
-### One defaults document per non-root directory
+### StepRunner
+
+```go
+func NewStepRunner(
+    variableProcessor *VariableProcessor,
+    validator *Validator,
+    output io.Writer,
+) *StepRunner
+
+func (s *StepRunner) Prepare(
+    ctx context.Context,
+    suite *domain.Suite,
+) error
 
-Given a non-root directory containing two defaults documents, when `apih` loads
-the suite, then it reports the conflicting files as a configuration error and
-executes no curl commands.
+func (s *StepRunner) Execute(
+    ctx context.Context,
+    suite *domain.Suite,
+) (int, error)
+```
+
+The constructor retains the supplied processor, validator, and writer.
+
+`Prepare` traverses from `Suite.Root`. For each resolved step it runs
+`VariableProcessor.Load` and `VariableProcessor.ParseRequestBody`.
+
+`Execute` validates the directory tree before scheduling:
+
+- the suite and root must be non-nil;
+- root stage must be `0`;
+- children must be non-nil and unique;
+- each child's `Parent` must identify its containing directory;
+- each child stage must equal its parent stage plus one;
+- cycles and repeated pointers are invalid.
+
+Invalid input matches execution-owned `ErrInvalidDirectoryTree` and returns
+exit code `102` without panicking.
+
+Execution order is exact:
+
+1. Start at stage `0` and process higher stage numbers in ascending order.
+2. Start one goroutine for every directory whose `Directory.Stage` equals the
+   active stage.
+3. Run those directory goroutines in parallel.
+4. Wait for every active-stage directory goroutine before starting the next
+   stage.
+5. Within one directory, process files one at a time in the alphabetical order
+   represented by `StepsFiles` and the outer step matrix.
+6. Execute every step in one file sequentially in declaration order before
+   beginning the next file.
+7. Never create file or step goroutines.
+
+For each step, execution uses only functions exposed by `pkg/runner` for
+external work. The skeleton phase order is `runner.Curl`,
+`ParseResponseExpected`, `ValidateTypes`, `ValidateExpected`, then `Capture`.
 
-Given the selected suite-root directory contains a defaults document in
-addition to its root document, when `apih` loads the suite, then it reports the
-defaults document as a configuration error and executes no curl commands.
-
-### Defaults inheritance
-
-Given a root document with `baseUrl`, `basePath`, and headers, and a child
-defaults document that overrides `basePath`, when the child searches its
-ancestor directories and resolves the root document as its nearest defaults,
-then a step in the child uses the root `baseUrl` and inherited headers together
-with the child `basePath`.
-
-Given a parent header named `content-type` and a child header named
-`Content-Type`, when the child runtime defaults are resolved, then only the
-child value remains and the header is emitted as `Content-Type`.
-
-### Directory defaults apply to local steps
-
-Given multiple step files in one directory, when they are resolved, then every
-step uses the same directory `RuntimeDefaults` except where a step defines
-its own value.
-
-### Request method defaults
-
-Given a step without an explicit method or body, when it is resolved, then its
-runtime method is `GET`. Given a step without an explicit method but with a body,
-its runtime method is `POST`. Given any explicit method, the explicit value is
-used regardless of body presence.
-
-### Timeout and retry defaults
-
-Given no configured or step-defined timeout or retry count, when a runtime step
-is resolved, then it uses a 10-second timeout and 3 retries. Given inherited
-values, the step uses them; given step-level values, they override the inherited
-values and are passed to curl.
-
-### URL composition
-
-Given `baseUrl: https://api.example.com`, `basePath: /api/v1`, `path: /users`,
-and `query: page=1&limit=20`, when the runtime request is built, then its URL is
-`https://api.example.com/api/v1/users?page=1&limit=20`. Given no `basePath` or
-`query`, only `baseUrl + path` is used. Given a present but empty `basePath` or
-`query`, runtime-step validation fails.
-
-Given redundant boundary slashes in `baseUrl`, `basePath`, or `path`, when the
-URL is joined, then APIHydra normalizes the URL path without corrupting its
-scheme or authority. URL failures not rejected by standard URL handling are
-reported through the normal curl execution failure.
-
-### Request variable assignment and use
-
-Given one step with `vars: {change_id: 1}`, when a later step uses
-`$change_id` in its request body, then APIHydra replaces the reference with the
-literal `1`, validates the resulting body as JSON, recursively orders its object
-members, and pretty-formats it before executing curl.
-
-Given JSON-compatible scalar, array, object, or null values under `step.vars`,
-when the step is loaded, then each value is serialized as compact JSON and
-stored as a string. A value that cannot be represented as JSON causes a
-configuration error.
-
-### Embedded variable interpolation
-
-Given a stored value of `date -> "2026-01-01"`, when a JSON string contains
-`"Date: ${date}"`, then APIHydra removes the stored value's outer quotes and
-produces the JSON string `"Date: 2026-01-01"`.
-
-Given a stored `change:id` variable, `$change:id` and `${change:id}` resolve it.
-Given `$$` in a body or expected string, substitution produces a literal `$`.
-
-### Response extraction and later use
-
-Given a step with `response.capture: {change_id: .id}`, when curl returns and
-the capture succeeds, then the same step's `response.expected` and later
-sequential steps may reference the stored JSON literal through `$change_id`.
-This includes steps in alphabetically later files in the same directory.
-
-### Variables are write-once
-
-Given a store that already contains `change_id`, when any step tries to set
-`change_id` again, then APIHydra reports a fatal error at that assignment,
-preserves the original value, stops the suite immediately, and returns exit code
-`2`.
-
-Given a body or expected value referencing a key absent from the global store,
-when substitution reaches that reference, then APIHydra identifies the missing
-key, stops immediately, and returns exit code `2`. A present key whose value is
-`null`, `false`, `0`, or `""` does not trigger this error.
-
-### Expected response is a subset
-
-Given an actual response of `{"id":1,"name":"A","active":true}` and an
-expected value of `{"id":1}`, when the response is validated, then exact-value
-validation projects actual to `{"id":1}`, pretty-formats both documents, finds
-no Git diff, and passes.
-
-Given a top-level array, scalar, or `null` under `response.expected`, when the
-response is validated, then APIHydra pretty-normalizes and compares the entire
-actual JSON response with the expected value.
-
-### HTTP status validation
-
-Given `response.status: [200, 201]`, when curl returns status `201`, then status
-validation passes; when curl returns status `400`, the step fails, the failure
-identifies the unexpected status, and the remaining suite continues.
-
-Given a status-only step and a `204 No Content` response, when the step is
-validated, then the empty body is accepted. Given the same empty body with
-`capture`, `expected`, or `types` configured, jq rejects the response, APIHydra
-stops immediately, and jq's exit code is forwarded.
-
-Given a step without a `response` section, when curl exits successfully, then
-the step passes without inspecting its HTTP status or body.
-
-### Status failure does not skip body validation
-
-Given a status mismatch and a valid JSON response body, when the response is
-processed, then APIHydra records the status failure, still performs capture,
-expected-value comparison, and type validation, and reports every failure found
-for the step.
-
-### Exact-value mismatch
-
-Given an actual response of `{"id":2}` and an expected value of `{"id":1}`,
-when the response is validated, then Git reports a diff and the step fails with
-that diff.
-
-Given invalid substituted JSON under `response.expected`, when jq validation
-runs, then APIHydra stops immediately and forwards jq's exact exit code.
-
-Given valid request `body` and response `expected` JSON whose object members are
-not alphabetically ordered, when variable parsing completes, then both runtime
-members contain recursively ordered, pretty-formatted JSON.
-
-### Missing and null expected members differ
-
-Given an expected value of `{"deleted_at":null}` and an actual response of
-`{}`, when the response is projected and compared, then Git reports a diff and
-validation fails. A type assertion using the `optional` modifier is the
-mechanism for accepting either a missing member or an explicit `null`.
-
-### Type-only validation
-
-Given the response type assertion `".id": [number]`, when the actual response
-contains a non-zero numeric `id`, then that assertion passes regardless of the
-number's specific value.
-
-Given `".items[].id": [integer]`, when the selector emits multiple values, then
-every value is validated and any non-integer or zero value fails the assertion.
-Given an empty result or `null`, the assertion passes only when it includes the
-`optional` modifier.
-
-### Zero and optional type modifiers
-
-Given the response type assertion `".change_id": [integer, zero, optional]`,
-when `change_id` is absent, `null`, `0`, or a non-zero integer, then validation
-passes; when it is present with a value of another type, validation fails.
-
-### Zero-value validation
-
-Given `".items": [array]`, when the selector produces `[]`, then validation
-fails; given `".items": [array, zero]`, the same value passes.
-
-### Datetime validation
-
-Given a `datetime` assertion, values such as `2026-01-01`, `2026-01-01Z`,
-`2026-01-01+00:00`, `2026-01-01T00:00:00Z`,
-`2026-01-01T00:00:00.000+00:00`, and
-`2026-01-01T00:00:00.000000Z` pass format validation. A timestamp with a time
-component but no timezone, or with a fractional-second precision other than
-three or six digits, fails.
-
-### Stage scheduling
-
-Given `01-first.yaml` and `02-second.yaml` in the suite-root directory, when
-stage `0` runs, then APIHydra executes every declared step in `01-first.yaml`
-sequentially before it starts the first step in `02-second.yaml`. No file or
-step in that directory executes concurrently with another file or step in the
-same directory.
-
-Given two immediate child directories at stage `1`, when stage `0` has
-finished, then APIHydra starts one goroutine for each child directory. The two
-directories execute concurrently, while each goroutine executes its own files
-alphabetically and all steps sequentially. Stage `2` does not begin until both
-stage `1` directory goroutines finish.
-
-Given second-level descendants at stage `2`, when every stage `1` directory has
-finished, then APIHydra starts one goroutine for each stage `2` directory. This
-barrier-and-directory-goroutine pattern repeats in numeric order through the
-maximum discovered `Directory.Stage`.
-
-### Validation failures do not stop the suite
-
-Given a step that fails status, expected-value comparison, or type validation,
-when other steps remain anywhere in the resolved suite, then APIHydra records
-the failure, executes every remaining step according to the normal schedule,
-and returns exit code `101` after the suite completes.
-
-### External-tool failures are forwarded
-
-Given curl, jq, Git, or another invoked tool that terminates with an operational
-non-zero exit code, when APIHydra receives that code, then it stops immediately
-and returns the exact same code. Git diff status `1` representing a comparison
-difference and the accepted jq status for `null` or `false` retain their defined
-semantic handling instead.
-
-Given a fatal error while other parallel external processes are running, when
-fatal shutdown begins, then APIHydra schedules no new work, cancels the in-flight
-processes, waits for them to terminate, and returns the code from the original
-fatal error rather than a cancellation code.
-
-### JSON event output
-
-Given `apih --json`, when the suite runs, then every standard-output line is a
-valid JSON event without ANSI formatting, step events identify their source file
-and step, failures contain structured details, and the final event summarizes
-passed and failed step counts.
-
-## Open product decisions
-
-The following details require an explicit product decision before their related
-schema or behavior can be considered implementation-ready:
-
-1. **CLI contract:** Exact human and JSON output fields remain to be defined.
-   Exact error formatting is intentionally deferred until the user supplies it.
+Nonfatal failures from `ValidateTypes` or `ValidateExpected` are written through
+the injected output writer. Execution continues through all remaining steps,
+files, directories, and stages. When at least one such failure occurred,
+`Execute` returns exit code `101` and an error matching `ValidationError` after
+the complete suite finishes.
+
+The first fatal directory error cancels the shared execution context. Every
+goroutine already started for that stage is joined, no later stage starts, and
+the first error and its exit code take precedence over sibling cancellation
+errors.
+
+## External command boundary
+
+Every external tool invocation belongs to `pkg/runner`.
+
+The skeleton currently exposes:
+
+```go
+runner.Curl(method, url, headers, timeout, retries, query, body) (string, int, error)
+runner.JQFilter(selector, input)                              (string, int, error)
+```
+
+`pkg/runner` owns the static `CommandError`, `CurlError`, and
+`JQSelectorError` classifications. Any future external command must receive a
+dedicated function in `pkg/runner` before another package may use it.
+
+No production package outside `pkg/runner` may import `os/exec`, construct a
+command, start a process, or invoke an external executable directly. Other
+packages call runner functions and preserve their returned output, exact exit
+code, and error.
+
+## Error architecture
+
+### Static errors
+
+Every stable static error is declared with `errors.New` in the package where
+the failure originates. Examples include:
+
+- `cmd/cli.InvalidPathError`;
+- `execution.NotFoundError`, `execution.KeyExistError`,
+  `execution.ErrInvalidDirectoryTree`, `execution.ExecutionCanceledError`, and
+  `execution.ValidationError`;
+- `runner.CommandError`, `runner.CurlError`, and `runner.JQSelectorError`.
+
+Static errors carry classification only. They do not build contextual messages
+or own exit-code wrappers.
+
+### Built errors
+
+Every contextual error is built in `pkg/errs`. Production packages outside
+`pkg/errs` must not call `fmt.Errorf` or otherwise compose, wrap, or decorate an
+error. They pass their package-owned static error, original cause, exit code,
+and contextual values to an `errs` builder.
+
+`pkg/errs` owns:
+
+```go
+Build(code, errStatic, errOriginal, details...) error
+WithExitCode(code, err) error
+Code(err, fallback) int
+DefaultsDefinitionError(...)
+StepDefinitionError(...)
+StepExecutionError(...)
+```
+
+A built error preserves both the originating static error and original cause
+for `errors.Is`/`errors.As`, exposes its code through `ExitCoder`, and formats
+context in one place. Definition errors default to configuration exit code
+`102`. Step execution errors preserve a coded original tool error and otherwise
+default to internal exit code `103`.
+
+## Exit codes
+
+APIHydra reserves:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `101` | Execution completed with at least one type or expected validation failure. |
+| `102` | Invocation, definition, tree, variable, or other configuration failure. |
+| `103` | Internal failure or missing external dependency. |
+
+External command failures return the exact non-zero code supplied by the
+runner function. Consequently, low non-zero codes are never created by
+APIHydra itself. An external tool may coincidentally return `101`, `102`, or
+`103`, so a reserved number alone does not prove the error's origin; the built
+error classification remains authoritative.
+
+No error may be returned with exit code `0`.
+
+## Output boundary
+
+The CLI owns fatal terminal diagnostics. `StepRunner` owns only the injected
+`io.Writer` used for validation output. The skeleton defines no Reporter,
+machine-readable event stream, ANSI-color contract, or final summary model.
+
+## Not specified by the skeleton
+
+The following are not product commitments until explicitly added to the
+skeleton:
+
+- name or label filtering flags;
+- external-tool preflight APIs;
+- Git-based comparison functions;
+- direct HTTP-status capture or validation behavior;
+- a Reporter service or JSON event output;
+- exact variable interpolation syntax;
+- detailed response-type tokens and modifiers;
+- URL normalization beyond values passed to `runner.Curl`;
+- additional document fields, commands, services, or exit codes.
+
+Fields already present in the domain model, including `Response.Status` and
+`Debug`, remain available data but gain no behavior beyond an explicit skeleton
+service contract.
+
+## Acceptance criteria
+
+1. Production code compiles against the exact skeleton packages, models, and
+   method signatures without adapters that create a competing API.
+2. The CLI runs the definition pipeline in the documented order and returns
+   only `0`, a reserved APIHydra code, or an exactly forwarded runner code.
+3. Directory stages run in ascending order with a complete barrier; directories
+   in one stage run in parallel.
+4. Files in one directory run alphabetically and never overlap; every file's
+   steps run sequentially in declaration order.
+5. Invalid directory graphs return a built error matching
+   `ErrInvalidDirectoryTree` with code `102` and never panic.
+6. Any type or expected validation failure allows remaining work to finish and
+   produces final code `101`.
+7. The first fatal same-stage error retains its cause and code, cancels sibling
+   work, joins the stage, and prevents later stages.
+8. Static errors are declared only by their originating package; all contextual
+   errors are built only by `pkg/errs`.
+9. Only `pkg/runner` may invoke external commands; no direct command execution
+   exists elsewhere.
+10. `go test ./...`, `go test -race ./...`, and `git diff --check` pass.

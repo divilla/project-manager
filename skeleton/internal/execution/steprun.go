@@ -2,14 +2,15 @@ package execution
 
 import (
 	"apih/skeleton/internal/domain"
+	"apih/skeleton/pkg/errs"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 )
 
 var ErrInvalidDirectoryTree = errors.New("invalid directory tree")
+var ExecutionCanceledError = errors.New("execution canceled")
 
 type StepRunner struct {
 	varProc *VariableProcessor
@@ -42,32 +43,38 @@ func (s *StepRunner) Prepare(
 // until entire same number stage is executed. For each directory it iterates directory.ResolvedSteps and executes
 // runner.Curl, varProc.ParseResponseExpected, val.ValidateTypes, val.ValidateExpected and finally varProc.Capture
 // On detected validation error, Execute does not return error, but reports failed validation to standard s.out.
-// Once it finishes traversing in one or more validation failed it will return exit code 1, ValidationError error
+// Once it finishes traversing with one or more validation failures it returns exit code 101 and ValidationError.
 func (s *StepRunner) Execute(
 	ctx context.Context,
 	suite *domain.Suite,
 ) (int, error) {
 	dirs, err := collectDirs(suite)
 	if err != nil {
-		return 1, err
+		return errs.ExitConfiguration, err
 	}
 
-	if err := executeStages(ctx, dirs, s.processDir); err != nil {
-		return 1, err
+	exitCode, err := executeStages(ctx, dirs, s.processDir)
+	if err != nil {
+		return exitCode, err
 	}
 
-	return 0, nil
+	return errs.ExitSuccess, nil
 }
 
 func collectDirs(suite *domain.Suite) ([][]*domain.Directory, error) {
 	if suite == nil {
-		return nil, fmt.Errorf("%w: suite is nil", ErrInvalidDirectoryTree)
+		return nil, errs.Build(errs.ExitConfiguration, ErrInvalidDirectoryTree, nil, "suite is nil")
 	}
 	if suite.Root == nil {
-		return nil, fmt.Errorf("%w: root is nil", ErrInvalidDirectoryTree)
+		return nil, errs.Build(errs.ExitConfiguration, ErrInvalidDirectoryTree, nil, "root is nil")
 	}
 	if suite.Root.Stage != 0 {
-		return nil, fmt.Errorf("%w: root stage is %d, expected 0", ErrInvalidDirectoryTree, suite.Root.Stage)
+		return nil, errs.Build(
+			errs.ExitConfiguration,
+			ErrInvalidDirectoryTree,
+			nil,
+			"root stage is ", suite.Root.Stage, ", expected 0",
+		)
 	}
 
 	dirs := make([][]*domain.Directory, 1)
@@ -76,24 +83,29 @@ func collectDirs(suite *domain.Suite) ([][]*domain.Directory, error) {
 	var visit func(*domain.Directory, *domain.Directory) error
 	visit = func(dir, parent *domain.Directory) error {
 		if dir == nil {
-			return fmt.Errorf("%w: nil child", ErrInvalidDirectoryTree)
+			return errs.Build(errs.ExitConfiguration, ErrInvalidDirectoryTree, nil, "nil child")
 		}
 		if _, ok := seen[dir]; ok {
-			return fmt.Errorf("%w: repeated directory %q", ErrInvalidDirectoryTree, dir.Path)
+			return errs.Build(errs.ExitConfiguration, ErrInvalidDirectoryTree, nil, "repeated directory ", dir.Path)
 		}
 		seen[dir] = struct{}{}
 
 		if parent != nil {
 			if dir.Parent != parent {
-				return fmt.Errorf("%w: directory %q has an invalid parent", ErrInvalidDirectoryTree, dir.Path)
+				return errs.Build(
+					errs.ExitConfiguration,
+					ErrInvalidDirectoryTree,
+					nil,
+					"directory ", dir.Path, " has an invalid parent",
+				)
 			}
 			if dir.Stage != parent.Stage+1 {
-				return fmt.Errorf(
-					"%w: directory %q has stage %d, expected %d",
+				return errs.Build(
+					errs.ExitConfiguration,
 					ErrInvalidDirectoryTree,
-					dir.Path,
-					dir.Stage,
-					parent.Stage+1,
+					nil,
+					"directory ", dir.Path, " has stage ", dir.Stage,
+					", expected ", parent.Stage+1,
 				)
 			}
 		}
@@ -119,26 +131,27 @@ func collectDirs(suite *domain.Suite) ([][]*domain.Directory, error) {
 	return dirs, nil
 }
 
-type directoryProcessor func(context.Context, *domain.Directory) error
+type directoryProcessor func(context.Context, *domain.Directory) (int, error)
 
 func executeStages(
 	ctx context.Context,
 	dirs [][]*domain.Directory,
 	process directoryProcessor,
-) error {
+) (int, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	for _, stage := range dirs {
-		if err := executeStage(ctx, cancel, stage, process); err != nil {
-			return err
+		exitCode, err := executeStage(ctx, cancel, stage, process)
+		if err != nil {
+			return exitCode, err
 		}
 		if err := ctx.Err(); err != nil {
-			return err
+			return errs.ExitInternal, errs.Build(errs.ExitInternal, ExecutionCanceledError, err)
 		}
 	}
 
-	return nil
+	return errs.ExitSuccess, nil
 }
 
 func executeStage(
@@ -146,8 +159,9 @@ func executeStage(
 	cancel context.CancelFunc,
 	dirs []*domain.Directory,
 	process directoryProcessor,
-) error {
+) (int, error) {
 	var wg sync.WaitGroup
+	var firstExitCode int
 	var firstErr error
 	var firstErrOnce sync.Once
 
@@ -155,8 +169,13 @@ func executeStage(
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := process(ctx, dir); err != nil {
+			exitCode, err := process(ctx, dir)
+			if err != nil {
 				firstErrOnce.Do(func() {
+					if exitCode == errs.ExitSuccess {
+						exitCode = errs.Code(err, errs.ExitInternal)
+					}
+					firstExitCode = exitCode
 					firstErr = err
 					cancel()
 				})
@@ -165,15 +184,15 @@ func executeStage(
 	}
 
 	wg.Wait()
-	return firstErr
+	return firstExitCode, firstErr
 }
 
-func (s *StepRunner) processDir(ctx context.Context, dir *domain.Directory) error {
+func (s *StepRunner) processDir(ctx context.Context, dir *domain.Directory) (int, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return errs.ExitInternal, errs.Build(errs.ExitInternal, ExecutionCanceledError, err)
 	}
 
 	_ = s
 	_ = dir
-	return nil
+	return errs.ExitSuccess, nil
 }

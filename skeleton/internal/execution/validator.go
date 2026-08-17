@@ -6,6 +6,7 @@ import (
 	"errors"
 )
 
+// ValidationError reports that ValidateTypes or ValidateExpected found at least one mismatch.
 var ValidationError = errors.New("validation error")
 
 type Validator struct{}
