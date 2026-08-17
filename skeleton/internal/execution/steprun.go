@@ -4,6 +4,7 @@ import (
 	"apih/skeleton/internal/domain"
 	"context"
 	"io"
+	"sync"
 )
 
 type StepRunner struct {
@@ -42,5 +43,31 @@ func (s *StepRunner) Execute(
 	ctx context.Context,
 	suite *domain.Suite,
 ) (int, error) {
+	dirs := make([][]*domain.Directory, 255)
+	dirs = fillDirs(dirs, suite.Root)
+
+	for _, ds := range dirs {
+		wg := sync.WaitGroup{}
+		for _, dir := range ds {
+			wg.Add(1)
+			go processDir(&wg, dir)
+		}
+		wg.Wait()
+	}
+
 	return 0, nil
+}
+
+func fillDirs(dirs [][]*domain.Directory, dir *domain.Directory) [][]*domain.Directory {
+	dirs[dir.Stage] = append(dirs[dir.Stage], dir)
+	for _, d := range dir.Children {
+		dirs = fillDirs(dirs, d)
+	}
+
+	return dirs
+}
+
+func processDir(wg *sync.WaitGroup, dir *domain.Directory) {
+	defer wg.Done()
+	_ = dir
 }
