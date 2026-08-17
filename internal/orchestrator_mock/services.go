@@ -7,7 +7,7 @@ import (
 
 var ErrUnconfiguredMock = errors.New("orchestrator mock service is not configured")
 
-// LoaderMock models internal/suite discovery.
+// LoaderMock models internal/definition loader discovery.
 // Service size: SMALL (approximately 80-150 production lines).
 type LoaderMock struct {
 	FilesFunc func(context.Context, string) ([]string, error)

@@ -5,12 +5,9 @@
 There is no production `internal/orchestrator` package yet. The full design is
 represented by the compileable `internal/orchestrator_mock` package.
 
-The only partially implemented production services are:
-
-- `internal/suite.Loader`, which discovers YAML files.
-- `internal/suite.Parser`, which currently returns an almost-empty `Suite` and
-  does not parse YAML yet.
-- The CLI, which currently only resolves and prints the working directory.
+There are no partially implemented production services. The CLI currently only
+resolves and prints the working directory; service implementations remain in
+the `skeleton` tree.
 
 This document therefore describes the intended architecture encoded by the
 mock and product requirements, not a completed application.
@@ -261,15 +258,6 @@ State:
 
 The target mock contract is conceptually stateless because `workDir` is a
 method argument.
-
-The current production API is slightly different:
-
-```go
-loader := NewLoader(workDir)
-files, err := loader.Files()
-```
-
-In this implementation, `WorkDir` is constructor state stored on `Loader`.
 
 ## 2. Parser service
 

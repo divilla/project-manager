@@ -20,7 +20,7 @@ reserved for thin wrappers around external tools.
 
 ### Public contracts are the stable surface
 
-A service is a concrete Go type shaped like the existing `suite.Loader`. It
+A service is a concrete Go type shaped like `definition.Loader`. It
 has a constructor, exported methods, and any exported types required by those
 methods. A service may have one operation or several related operations.
 
@@ -77,15 +77,16 @@ returned data to the next service.
 Prefer:
 
 ```go
-files, err := loader.Files()
-group, err := parser.Parse(files)
+root, err := loader.LoadDirectoryStructure(ctx)
+err = loader.LoadDirectoryFiles(ctx, root)
+err = decoder.DecodeFiles(ctx, root)
 ```
 
 over:
 
 ```go
-parser := NewParser(loader)
-group, err := parser.Parse()
+decoder := NewDecoder(loader)
+root, err := decoder.LoadAndDecode(ctx)
 ```
 
 The example illustrates data flow; exact signatures are defined by service
@@ -147,10 +148,7 @@ cmd/cli/                  process entry point
 internal/models/          all inter-service carrier types
 internal/orchestrator/    service construction and complete application flow
 internal/errors/          source-aware APIHydra errors and formatting
-internal/suite/           YAML discovery and suite-tree parsing services
-internal/defaults/        defaults inheritance and resolution behavior
-internal/stage/           stage planning behavior
-internal/step/            step resolution behavior
+internal/definition/      YAML discovery, decoding, and definition resolution
 internal/variable/        write-once store and substitution behavior
 internal/request/         runtime request construction
 internal/response/        capture and response validation behavior
