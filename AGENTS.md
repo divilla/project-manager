@@ -1,5 +1,19 @@
 # Repository Instructions
 
+## Product identity
+
+- APIHydra, with `apih` as its application name, is an API Integration Tester
+  designed with an agent-first philosophy.
+
+## Unit-test requirements
+
+- Implement unit tests for all production code and keep unit-test coverage
+  greater than 95%.
+- Avoid tests that do not add coverage unless a test exists to prove a specific
+  Acceptance Criteria bullet.
+- Every individual Acceptance Criteria bullet must have at least one unit test
+  implemented and maintained in the test suite.
+
 ## User-maintained reference skeleton
 
 - The user maintains the `skeleton/` directory. It contains the reference
