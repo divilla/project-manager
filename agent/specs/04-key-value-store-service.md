@@ -2,9 +2,9 @@
 
 ## Status
 
-- Service: `internal/variable.KeyValueStore`
-- Package: `internal/variable`
-- Package name: `variable`
+- Service: `internal/runtime.KeyValueStore`
+- Package: `internal/runtime`
+- Package name: `runtime`
 - Status: implementation specification
 
 ## Base specification

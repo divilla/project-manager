@@ -35,7 +35,7 @@ when required by the PRD.
 - Projecting an actual object to the members declared by an expected object.
 - Preserving the difference between a missing expected member and a member
   explicitly containing `null`.
-- Comparing pretty-formatted expected and actual JSON with `git diff`.
+- Comparing pretty-formatted expected and actual JSON with `runner.GitDiff`.
 - Applying every `Step.Response.Types` jq selector to `Step.Response.Body`.
 - Validating every selected value against its base type and modifiers.
 - Returning all independently discoverable type assertion failures for a step.
@@ -77,6 +77,9 @@ func (v *Validator) ValidateExpected(
 The zero value of `Validator` is ready for use. No constructor or mutable
 service state is required.
 
+Each method passes its received context to every jq process it starts.
+`ValidateExpected` also passes that context to `runner.GitDiff`.
+
 The method return type is `[]error`, not `[]errors`; `error` is Go's built-in
 interface. A successful or inapplicable validation returns nil.
 
@@ -91,7 +94,7 @@ The caller supplies a non-nil runtime step after request execution:
 - `Step.Response.Body` contains curl's response body text.
 - `Step.Response.Expected`, when present, has already passed variable
   substitution, jq validation, recursive object ordering, and pretty
-  formatting through `VariableProcessor.Parse`.
+  formatting through `VariableProcessor.ParseResponse`.
 - `Step.Response.Types` has already passed Decoder declaration validation.
 
 Passing a nil step is a caller error. The methods must return a non-nil fatal
@@ -135,28 +138,6 @@ deferred by the PRD. Every assertion failure must nevertheless identify:
 - The complete type declaration.
 - The first rejected value as compact JSON, or that no value was selected.
 - The Git diff for an expected-value difference.
-
-### Response-validation order
-
-The step runner performs response work in this order:
-
-```text
-curl populates Step.Response.Body
-  -> validate required response JSON
-  -> capture response variables
-  -> parse Step.Response.Expected
-  -> ValidateExpected
-  -> ValidateTypes
-```
-
-`ValidateExpected` and `ValidateTypes` are independent assertion dimensions.
-An expected-value mismatch must not prevent type validation, and a type failure
-must not erase an expected-value failure. A fatal error stops subsequent
-response processing.
-
-A status mismatch is also independent: the caller records it and still runs
-capture, expected-value validation, and type validation when the response body
-is valid JSON.
 
 ## `ValidateExpected`
 
@@ -261,29 +242,22 @@ prefix matching is applied.
 
 ### Git comparison
 
-After canonicalization and any required projection, `ValidateExpected` writes
-the expected and comparison-actual documents to private files in a newly
-created temporary directory, with permissions no broader than `0600`, and runs
-the equivalent of:
+After producing the final expected and comparison-actual documents,
+`ValidateExpected` calls:
 
-```text
-git diff --no-index -U0 <expected-file> <actual-file>
+```go
+runner.GitDiff(ctx, expected, actual)
 ```
 
-The command is started directly with `exec.CommandContext`; no shell is used.
-Temporary paths must come from `os.MkdirTemp` and are removed before the method
-returns.
-
-- Exit `0`: the documents match and the method returns nil.
-- Exit `1`: the documents differ. The method returns one nonfatal validation
-  error containing Git's diff output.
-- Any other non-zero exit: the method returns one fatal error preserving Git's
-  exit status and diagnostic.
-- Startup, file, cleanup-independent comparison, and context errors are fatal.
+An empty returned diff means validation passes. A non-empty returned diff
+becomes the single nonfatal expected-value validation error, and the error's
+presentation text must be exactly that headerless diff. A non-nil runner error
+is fatal under the `ErrValidatorFatal` contract.
 
 The reported diff compares expected against projected actual. Members removed
-by object projection must not appear in it. The output layer may format the diff
-for its selected presentation mode, but this service must not color it.
+by object projection must not appear in it. `ValidateExpected` does not own
+temporary comparison files or invoke Git directly, and it must not color the
+diff.
 
 ### Mutation
 
@@ -673,43 +647,14 @@ evaluated, then the complete selector is passed to jq as one argument after
 Given an empty or nil type map, when `ValidateTypes` runs, then it returns nil
 without reading response JSON or invoking jq.
 
-## Combined validation acceptance tests from the PRD
-
-### AC-Combined-1: Run expected and types together
-
-Given a step declaring both `response.expected` and `response.types`, when the
-actual response is valid JSON, then the caller invokes both methods even when
-the expected comparison returns a nonfatal diff. Every expected and type
-failure is retained for the step.
-
-### AC-Combined-2: Do not short-circuit after status mismatch
-
-Given a status mismatch and valid JSON response body, when the response is
-processed, then the status failure remains recorded, captures still run, and
-both expected-value and type validation run and report their failures.
-
-### AC-Combined-3: Continue the suite after validation failures
-
-Given any expected-value or type assertion failure, when other steps remain in
-the same file, other files, or later stages, then the caller records the
-failure, executes the remaining suite, and returns exit code `101` after the
-suite completes.
-
-### AC-Combined-4: Stop on fatal tool errors
-
-Given jq or Git returns an operational non-zero status, when a validator returns
-the fatal error, then the caller stops scheduling work, cancels in-flight
-processes, waits for them, and forwards the original tool exit code. Git diff
-status `1` retains its nonfatal comparison meaning.
-
 ## State and concurrency
 
 `Validator` has no mutable package or instance state. All selectors, decoders,
-processes, buffers, files, and errors are local to one call.
+jq processes, buffers, and errors are local to one call.
 
-Different step runners may call the same `Validator` concurrently. Their jq and
-Git processes, standard streams, temporary directories, and returned slices
-must remain isolated and race-free.
+Different step runners may call the same `Validator` concurrently. Their jq
+processes, standard streams, and returned slices must remain isolated and
+race-free.
 
 ### Acceptance criteria
 
@@ -717,4 +662,4 @@ must remain isolated and race-free.
 
 Given concurrent calls for different steps, when their validations complete,
 then each result contains only its own selectors, values, diff, and errors; one
-call's cancellation or temporary-file cleanup does not corrupt another call.
+call's cancellation does not corrupt another call.

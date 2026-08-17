@@ -2,11 +2,11 @@
 
 ## Status
 
-- Service: `internal/runtime.VariableProcessor`
-- Package: `internal/runtime`
-- Package name: `runtime`
-- Shared models: `internal/models`
-- Variable store: `internal/variable.KeyValueStore`
+- Service: `internal/executor.VariableProcessor`
+- Package: `internal/executor`
+- Package name: `executor`
+- Shared models: `internal/domain`
+- Variable store: `internal/executor.KeyValueStore`
 - Command runner: `pkg/runner`
 - Status: implementation specification
 
@@ -66,7 +66,12 @@ func (p *VariableProcessor) Load(
     step *models.Step,
 ) (int, error)
 
-func (p *VariableProcessor) Parse(
+func (p *VariableProcessor) ParseRequest(
+    ctx context.Context,
+    step *models.Step,
+) (int, error)
+
+func (p *VariableProcessor) ParseResponse(
     ctx context.Context,
     step *models.Step,
 ) (int, error)
@@ -77,7 +82,7 @@ func (p *VariableProcessor) Capture(
 ) (int, error)
 ```
 
-All three operations return `(0, nil)` on success. A non-nil error is fatal to
+All four operations return `(0, nil)` on success. A non-nil error is fatal to
 the suite run. The caller must stop execution and return the accompanying exit
 code; the processor does not terminate the process directly.
 
@@ -89,34 +94,6 @@ copying it. The dependency must be non-nil.
 `VariableProcessor` has no mutable state besides the state owned by its shared
 store. It must not retain a context, step, selector result, or error after a
 method returns.
-
-### Runtime order
-
-The step runner uses the processor in this order:
-
-```text
-Load step vars
-  -> Parse request body
-  -> execute request and populate Step.Response.Body
-  -> Capture response variables
-  -> Parse response expected
-```
-
-`VariableProcessor` owns parsing for both members, but they become ready at
-different points. Request-body parsing must finish before the request executes.
-Expected-response parsing must occur after `Capture`, allowing it to reference
-a variable captured by the same step.
-
-`Parse` distinguishes these calls through `Step.Response.Body`, which is
-runtime response state rather than declarative configuration:
-
-- Before request execution, `Response.Body` is empty and `Parse` processes only
-  `Request.Body`.
-- After request execution, `Response.Body` contains curl's response text and
-  `Parse` processes only `Response.Expected`.
-
-When response JSON is required but curl returned an empty body, response
-validation fails before expected parsing.
 
 ### Exit-code contract
 
@@ -208,10 +185,15 @@ Given a step variable that cannot be represented as JSON, when `Load` reaches
 that value, then it returns exit code `2`, identifies the key, and does not
 write that value.
 
-## `Parse`
+## `ParseRequest` and `ParseResponse`
 
 ```go
-func (p *VariableProcessor) Parse(
+func (p *VariableProcessor) ParseRequest(
+    ctx context.Context,
+    step *models.Step,
+) (int, error)
+
+func (p *VariableProcessor) ParseResponse(
     ctx context.Context,
     step *models.Step,
 ) (int, error)
@@ -219,9 +201,9 @@ func (p *VariableProcessor) Parse(
 
 ### Variable replacement
 
-`Parse` applies the PRD variable syntax to the member selected by the runtime
-phase: `Step.Request.Body` before request execution and
-`Step.Response.Expected` after response capture.
+Both methods apply the PRD variable syntax to their selected member.
+`ParseRequest` processes only `Step.Request.Body`; `ParseResponse` processes
+only `Step.Response.Expected`.
 
 - `$key` inserts the exact stored string as a complete JSON literal.
 - `${key}` removes one leading and one trailing double quote when both are
@@ -234,11 +216,12 @@ Every lookup uses `KeyValueStore.Get`. A missing key returns exit code `2` and
 an error identifying the key and the affected step member. Present values such
 as `null`, `false`, `0`, or an empty JSON string must not be treated as missing.
 
-An omitted body or expected value is left unchanged.
+An omitted selected member is left unchanged. Neither method alters the other
+member, regardless of the value of `Step.Response.Body`.
 
 ### JSON validation, ordering, and formatting
 
-After replacing all references in the selected member, `Parse` must:
+After replacing all references in the selected member, each method must:
 
 1. Use terminal jq to validate the complete value as JSON.
 2. Recursively order every object's members alphabetically.
@@ -247,18 +230,19 @@ After replacing all references in the selected member, `Parse` must:
    `Step.Response.Expected` value with the formatted result.
 
 The jq filter used for ordering must recursively sort object entries while
-preserving array order and scalar values. `Parse` may use `runner.JQFilter` for
-that validation and ordering, then render the returned JSON with two-space
-indentation. Compact jq output is an intermediate value only; the value written
-back to the step is pretty-formatted.
+preserving array order and scalar values. The methods may use
+`runner.JQFilter(ctx, selector, input)` for that validation and ordering, then
+render the returned JSON with two-space indentation. Compact jq output is an
+intermediate value only; the value written back to the step is
+pretty-formatted.
 
 Arrays preserve element order. Object ordering applies at every nesting depth.
 Top-level strings, numbers, booleans, arrays, and `null` remain valid and are
 formatted without changing their JSON value.
 
-If jq rejects a value, `Parse` returns its exact exit code and error. It must
-identify whether request body or response expected failed. An invalid request
-body must never be sent by the request executor.
+If jq rejects a value, the method returns its exact exit code and error. It
+must identify whether request body or response expected failed. An invalid
+request body must never be sent by the request executor.
 
 The step runner invokes request-body parsing before request execution. It
 invokes expected-response parsing after `Capture`, so a same-step captured
@@ -291,9 +275,9 @@ result contains one literal `$` and performs no variable lookup for it.
 
 #### AC-Parse-4: Reject a missing variable
 
-Given a body or expected value references an absent key, when `Parse` reaches
-the reference, then it returns exit code `2`, identifies the key and member,
-and leaves that member unchanged.
+Given a body or expected value references an absent key, when its parse method
+reaches the reference, then it returns exit code `2`, identifies the key and
+member, and leaves that member unchanged.
 
 #### AC-Parse-5: Validate, order, and format request body
 
@@ -310,13 +294,33 @@ ordered, pretty-formatted JSON.
 #### AC-Parse-7: Forward invalid JSON failures
 
 Given substitution produces invalid JSON, when jq rejects the affected member,
-then `Parse` returns jq's exact exit code and an error identifying that member.
+then the parse method returns jq's exact exit code and an error identifying
+that member.
 
 #### AC-Parse-8: Use same-step captures in expected
 
 Given `response.capture` creates a variable referenced by
 `response.expected`, when `Capture` succeeds before expected parsing, then
-`Parse` resolves that variable from the shared store.
+`ParseResponse` resolves that variable from the shared store.
+
+#### AC-Parse-9: Parse only the request
+
+Given a step with request and expected variable references, when
+`ParseRequest` succeeds, then it updates only `Step.Request.Body` and leaves
+`Step.Response.Expected` unchanged regardless of the current response body.
+
+#### AC-Parse-10: Parse only the response
+
+Given a step with request and expected variable references, when
+`ParseResponse` succeeds, then it updates only `Step.Response.Expected` and
+leaves `Step.Request.Body` unchanged regardless of whether the response body is
+empty.
+
+#### AC-Parse-11: Remove phase inference
+
+Given any response-body value, when either parse method runs, then its selected
+member is determined only by the method name and never by
+`Step.Response.Body`.
 
 ## `Capture`
 
@@ -332,7 +336,7 @@ func (p *VariableProcessor) Capture(
 For every key-selector pair in `Step.Response.Capture`, `Capture` calls:
 
 ```go
-runner.JQFilter(string(selector), step.Response.Body)
+runner.JQFilter(ctx, string(selector), step.Response.Body)
 ```
 
 When `JQFilter` succeeds, `Capture` calls `KeyValueStore.Set` with the capture
@@ -399,3 +403,11 @@ shared mutable state outside that store.
 Given concurrent processors using the same `KeyValueStore`, when they load,
 parse, or capture variables, then store access remains race-free and duplicate
 writes retain the store's atomic first-write-wins behavior.
+
+## Required tests
+
+At minimum, tests must cover:
+
+- Independent request and response parsing with no response-body phase
+  inference.
+- Same-step capture use by `ParseResponse`.

@@ -28,12 +28,6 @@ operation receives the address of the actual step stored in `RuntimeSteps` so
 mutations made by one phase are visible to every later phase and remain on the
 runtime model after execution.
 
-Before `StepRunner` is implemented, this change also splits the phase-dependent
-`VariableProcessor.Parse` operation into explicit request and response methods,
-adds `runner.GitDiff` as the shared Git wrapper used by expected-value
-validation, and makes every external-process runner accept the shared
-cancellable context required for parallel fatal shutdown.
-
 ### Responsibilities
 
 `StepRunner` owns:
@@ -77,242 +71,6 @@ cancellable context required for parallel fatal shutdown.
   the completed-run validation code `101`.
 - Add ANSI color or verbose/debug output.
 - Mutate a declarative step through its `Definition` provenance pointer.
-
-## Required prerequisite contract changes
-
-The prerequisite changes in this section are part of this specification and
-must be completed before the `StepRunner` implementation.
-
-### Split `VariableProcessor.Parse`
-
-Remove the phase-dependent method:
-
-```go
-func (p *VariableProcessor) Parse(
-    ctx context.Context,
-    step *models.Step,
-) (int, error)
-```
-
-Replace it with:
-
-```go
-func (p *VariableProcessor) ParseRequest(
-    ctx context.Context,
-    step *models.Step,
-) (int, error)
-
-func (p *VariableProcessor) ParseResponse(
-    ctx context.Context,
-    step *models.Step,
-) (int, error)
-```
-
-`ParseRequest` performs substitution, JSON validation, recursive object-key
-ordering, and pretty formatting only for `Step.Request.Body`. An omitted body
-is a successful no-op. It must not inspect `Step.Response.Body` to infer the
-runtime phase and must not alter `Step.Response.Expected`.
-
-`ParseResponse` performs the same operations only for
-`Step.Response.Expected`. An omitted expectation is a successful no-op. It
-must not alter `Step.Request.Body`. The step runner calls it after `Capture`, so
-the expectation may reference a variable captured by the same step.
-
-Both methods retain the exit-code, error-wrapping, context, variable syntax,
-jq, JSON formatting, mutation, and nil-input contracts already specified for
-`VariableProcessor.Parse` in `06-variable-processor.md`. The old `Parse` method
-must not remain as a compatibility wrapper because its phase inference through
-`Step.Response.Body` is no longer part of the service contract.
-
-#### Acceptance criteria
-
-##### AC-ParseSplit-1: Parse only the request
-
-Given a step with request and expected variable references, when
-`ParseRequest` succeeds, then it updates only `Step.Request.Body` and leaves
-`Step.Response.Expected` unchanged regardless of the current response body.
-
-##### AC-ParseSplit-2: Parse only the response
-
-Given a step with request and expected variable references, when
-`ParseResponse` succeeds, then it updates only `Step.Response.Expected` and
-leaves `Step.Request.Body` unchanged regardless of whether the response body is
-empty.
-
-##### AC-ParseSplit-3: Make same-step captures available
-
-Given `Step.Response.Expected` references a variable declared by
-`Step.Response.Capture`, when `Capture` succeeds before `ParseResponse`, then
-`ParseResponse` reads the captured value from the shared store and formats the
-resulting expectation.
-
-##### AC-ParseSplit-4: Remove phase inference
-
-Given any response-body value, when either split method runs, then its selected
-member is determined only by the method name and never by
-`Step.Response.Body`.
-
-### Add `runner.GitDiff`
-
-Add this contract to `pkg/runner`:
-
-```go
-var GitDiffError = errors.New("git diff error")
-
-func GitDiff(
-    ctx context.Context,
-    expected string,
-    actual string,
-) (string, int, error)
-```
-
-The argument order is `expected, actual`. This is the conventional assertion
-order and matches Git operand order: removed `-` lines describe expected
-content and added `+` lines describe actual content.
-
-`GitDiff` writes the two supplied strings unchanged to private files named
-`expected` and `actual` in a newly created temporary directory. File
-permissions must be no broader than `0600`. It starts Git directly, without a
-shell and under the supplied context, using the equivalent arguments:
-
-```text
-git diff --no-index -U0 <expected-file> <actual-file>
-```
-
-The temporary directory is removed before the function returns. Temporary
-paths and Git's file-header lines are process mechanics and must not appear in
-the returned comparison text.
-
-The return contract is:
-
-- Git exit `0`: return `"", 0, nil`.
-- Git exit `1`: remove the first four Git header lines and one trailing line
-  ending from the diff, then return the remaining headerless diff, `0`, and
-  nil. Exit `1` is Git's defined difference result, not an operational error.
-- Git exit greater than `1`: return an empty diff, Git's exact exit code, and a
-  non-nil error matching `GitDiffError` and containing Git's standard error.
-- Git startup failure: return `"", 0`, and an error matching `CommandError`
-  and identifying `git`.
-- Context cancellation: terminate and wait for Git, return an empty diff and a
-  non-nil error matching `ctx.Err()`, and do not report cancellation as a
-  semantic difference.
-- Temporary-directory or file-write failure: return `"", 0`, and a non-nil
-  error describing the failed operation.
-
-`GitDiff` compares the supplied documents as text. It does not validate JSON,
-order members, project actual response members, add a final newline, interpret
-the diff, or color its output.
-
-`Validator.ValidateExpected` retains ownership of JSON validation,
-canonicalization, and actual-response projection. After producing the final
-expected and comparison-actual documents, it must call
-`runner.GitDiff(ctx, expected, actual)` instead of starting Git itself. An
-empty returned diff means validation passes. A non-empty returned diff becomes
-the single nonfatal expected-value validation error, and the error's
-presentation text must be exactly that headerless diff. A non-nil runner error
-remains fatal under the existing `ErrValidatorFatal` contract.
-
-This `runner.GitDiff` contract supersedes only the direct Git invocation and
-temporary comparison-file ownership in `07-validator.md`; all projection and
-validation behavior there remains unchanged.
-
-#### Acceptance criteria
-
-##### AC-GitDiff-1: Use expected-first comparison order
-
-Given expected `{"id":1}` and actual `{"id":2}`, when Git reports a
-difference, then the returned diff contains an expected line prefixed by `-`
-and an actual line prefixed by `+`.
-
-##### AC-GitDiff-2: Return no diff for equal documents
-
-Given byte-identical expected and actual strings, when Git exits `0`, then
-`GitDiff` returns an empty string, exit code `0`, and nil.
-
-##### AC-GitDiff-3: Return a headerless semantic difference
-
-Given different documents, when Git exits `1`, then `GitDiff` returns only the
-hunk header and changed content, removes temporary paths and file headers,
-returns exit code `0`, and returns nil.
-
-##### AC-GitDiff-4: Forward operational Git failures
-
-Given Git exits with status greater than `1`, when `GitDiff` returns, then its
-diff is empty, its exit code is Git's exact status, and its error matches
-`GitDiffError` and contains Git's diagnostic.
-
-##### AC-GitDiff-5: Clean up private files
-
-Given any match, difference, Git failure, or file failure after temporary
-directory creation, when `GitDiff` returns, then no comparison directory or
-file from that invocation remains.
-
-##### AC-GitDiff-6: Do not invoke a shell
-
-Given either input contains shell metacharacters, when `GitDiff` runs, then the
-input is written only as file content and no shell interprets it.
-
-##### AC-GitDiff-7: Honor cancellation
-
-Given Git is running when the supplied context is canceled, when `GitDiff`
-returns, then it terminates and waits for Git, removes its temporary files, and
-returns an error matching the context error rather than a diff result.
-
-### Make every runner operation context-aware
-
-Parallel fatal shutdown requires every external process to use the one
-cancellable execution context. Update the existing runner contracts to:
-
-```go
-func Curl(
-    ctx context.Context,
-    method string,
-    url string,
-    headers map[string]string,
-    timeout int,
-    retries int,
-    query string,
-    body string,
-) (string, int, error)
-
-func JQFilter(
-    ctx context.Context,
-    selector string,
-    input string,
-) (string, int, error)
-```
-
-Together with `GitDiff`, all three wrappers must start their command with
-`exec.CommandContext`, stop and wait for the process when the context is
-canceled, and return an error matching `ctx.Err()`. Their existing argument,
-output, semantic-exit-status, operational-exit-status, no-shell, and
-concurrency contracts remain unchanged.
-
-`VariableProcessor.ParseRequest`, `ParseResponse`, and `Capture` must pass
-their received context to `runner.JQFilter`. `StepRunner` passes its shared run
-context to `runner.Curl`, and `Validator` passes its received context to
-`runner.GitDiff` and every jq process it starts. These signature changes
-supersede the context-free declarations in `05-runner-pkg.md`.
-
-#### Acceptance criteria
-
-##### AC-RunnerContext-1: Cancel curl
-
-Given curl is running in one directory when a sibling directory reports a
-fatal error, when the shared context is canceled, then curl is terminated and
-waited for and returns the context error.
-
-##### AC-RunnerContext-2: Cancel jq
-
-Given jq is running during parsing, capture, or validation when a sibling
-directory reports a fatal error, when the shared context is canceled, then jq
-is terminated and waited for and returns the context error.
-
-##### AC-RunnerContext-3: Preserve semantic statuses
-
-Given no cancellation, when jq returns its accepted `false` or `null` status or
-Git returns difference status `1`, then the wrappers retain their existing
-nonfatal semantic behavior.
 
 ## Public contract
 
@@ -650,10 +408,14 @@ VariableProcessor.Load
   -> render the step result
 ```
 
-This order supersedes the response-validation order stated in
-`07-validator.md`. Type validation runs before expected-value validation. A
-nonfatal type mismatch does not skip expected-value validation. A fatal type
-error stops the current step before expected-value validation.
+`ValidateExpected` and `ValidateTypes` are independent assertion dimensions.
+Type validation runs before expected-value validation. A nonfatal type mismatch
+does not skip expected-value validation or erase an expected-value failure. A
+fatal type error stops the current step before expected-value validation.
+
+A status mismatch is also independent: the caller records it and still runs
+capture, expected-value validation, and type validation when the response body
+is valid JSON.
 
 #### Load variables
 
@@ -1022,18 +784,40 @@ write regular output, then each complete status-and-detail block is contiguous,
 blocks appear in actual completion order, and no two blocks interleave at byte
 boundaries.
 
+## Combined validation acceptance tests from the PRD
+
+### AC-Combined-1: Run expected and types together
+
+Given a step declaring both `response.expected` and `response.types`, when the
+actual response is valid JSON, then the caller invokes both methods even when
+the expected comparison returns a nonfatal diff. Every expected and type
+failure is retained for the step.
+
+### AC-Combined-2: Do not short-circuit after status mismatch
+
+Given a status mismatch and valid JSON response body, when the response is
+processed, then the status failure remains recorded, captures still run, and
+both expected-value and type validation run and report their failures.
+
+### AC-Combined-3: Continue the suite after validation failures
+
+Given any expected-value or type assertion failure, when other steps remain in
+the same file, other files, or later stages, then the caller records the
+failure, executes the remaining suite, and returns exit code `101` after the
+suite completes.
+
+### AC-Combined-4: Stop on fatal tool errors
+
+Given jq or Git returns an operational non-zero status, when a validator returns
+the fatal error, then the caller stops scheduling work, cancels in-flight
+processes, waits for them, and forwards the original tool exit code. Git diff
+status `1` retains its nonfatal comparison meaning.
+
 ## Required tests
 
 Implementation must add mapped unit and integration coverage for every
 acceptance criterion in this specification. At minimum, tests must cover:
 
-- Independent request and response parsing with no response-body phase
-  inference.
-- `runner.GitDiff` match, semantic difference, header removal, expected-first
-  signs, command failure, startup failure, cancellation, private permissions,
-  cleanup, and shell-metacharacter handling.
-- Curl and jq context cancellation without changing their accepted semantic
-  exit statuses.
 - Transactional deep-copy preparation across multiple directories and matrix
   shapes.
 - Actual-element pointer mutation rather than mutation of ranged copies.
@@ -1043,7 +827,6 @@ acceptance criterion in this specification. At minimum, tests must cover:
 - Concurrent same-stage directories with sequential work inside each one.
 - Guaranteed and intentionally undefined variable-visibility relationships,
   including atomic duplicate assignment under a race.
-- Same-step capture use by `ParseResponse`.
 - Multiple type failures plus an expected diff on one step.
 - Continuation after validation mismatches and coordinated cancel-and-join
   behavior after every fatal phase.
