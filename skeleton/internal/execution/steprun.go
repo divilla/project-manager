@@ -3,9 +3,13 @@ package execution
 import (
 	"apih/skeleton/internal/domain"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"sync"
 )
+
+var ErrInvalidDirectoryTree = errors.New("invalid directory tree")
 
 type StepRunner struct {
 	varProc *VariableProcessor
@@ -43,31 +47,133 @@ func (s *StepRunner) Execute(
 	ctx context.Context,
 	suite *domain.Suite,
 ) (int, error) {
-	dirs := make([][]*domain.Directory, 255)
-	dirs = fillDirs(dirs, suite.Root)
+	dirs, err := collectDirs(suite)
+	if err != nil {
+		return 1, err
+	}
 
-	for _, ds := range dirs {
-		wg := sync.WaitGroup{}
-		for _, dir := range ds {
-			wg.Add(1)
-			go processDir(&wg, dir)
-		}
-		wg.Wait()
+	if err := executeStages(ctx, dirs, s.processDir); err != nil {
+		return 1, err
 	}
 
 	return 0, nil
 }
 
-func fillDirs(dirs [][]*domain.Directory, dir *domain.Directory) [][]*domain.Directory {
-	dirs[dir.Stage] = append(dirs[dir.Stage], dir)
-	for _, d := range dir.Children {
-		dirs = fillDirs(dirs, d)
+func collectDirs(suite *domain.Suite) ([][]*domain.Directory, error) {
+	if suite == nil {
+		return nil, fmt.Errorf("%w: suite is nil", ErrInvalidDirectoryTree)
+	}
+	if suite.Root == nil {
+		return nil, fmt.Errorf("%w: root is nil", ErrInvalidDirectoryTree)
+	}
+	if suite.Root.Stage != 0 {
+		return nil, fmt.Errorf("%w: root stage is %d, expected 0", ErrInvalidDirectoryTree, suite.Root.Stage)
 	}
 
-	return dirs
+	dirs := make([][]*domain.Directory, 1)
+	seen := make(map[*domain.Directory]struct{})
+
+	var visit func(*domain.Directory, *domain.Directory) error
+	visit = func(dir, parent *domain.Directory) error {
+		if dir == nil {
+			return fmt.Errorf("%w: nil child", ErrInvalidDirectoryTree)
+		}
+		if _, ok := seen[dir]; ok {
+			return fmt.Errorf("%w: repeated directory %q", ErrInvalidDirectoryTree, dir.Path)
+		}
+		seen[dir] = struct{}{}
+
+		if parent != nil {
+			if dir.Parent != parent {
+				return fmt.Errorf("%w: directory %q has an invalid parent", ErrInvalidDirectoryTree, dir.Path)
+			}
+			if dir.Stage != parent.Stage+1 {
+				return fmt.Errorf(
+					"%w: directory %q has stage %d, expected %d",
+					ErrInvalidDirectoryTree,
+					dir.Path,
+					dir.Stage,
+					parent.Stage+1,
+				)
+			}
+		}
+
+		for len(dirs) <= dir.Stage {
+			dirs = append(dirs, nil)
+		}
+		dirs[dir.Stage] = append(dirs[dir.Stage], dir)
+
+		for _, child := range dir.Children {
+			if err := visit(child, dir); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	if err := visit(suite.Root, nil); err != nil {
+		return nil, err
+	}
+
+	return dirs, nil
 }
 
-func processDir(wg *sync.WaitGroup, dir *domain.Directory) {
-	defer wg.Done()
+type directoryProcessor func(context.Context, *domain.Directory) error
+
+func executeStages(
+	ctx context.Context,
+	dirs [][]*domain.Directory,
+	process directoryProcessor,
+) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for _, stage := range dirs {
+		if err := executeStage(ctx, cancel, stage, process); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func executeStage(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	dirs []*domain.Directory,
+	process directoryProcessor,
+) error {
+	var wg sync.WaitGroup
+	var firstErr error
+	var firstErrOnce sync.Once
+
+	for _, dir := range dirs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := process(ctx, dir); err != nil {
+				firstErrOnce.Do(func() {
+					firstErr = err
+					cancel()
+				})
+			}
+		}()
+	}
+
+	wg.Wait()
+	return firstErr
+}
+
+func (s *StepRunner) processDir(ctx context.Context, dir *domain.Directory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	_ = s
 	_ = dir
+	return nil
 }

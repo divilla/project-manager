@@ -108,15 +108,18 @@ suite-root directory has stage `0`; each child directory has its parent's stage
 plus `1`. Therefore directories at the same depth beneath the suite root have
 the same stage number.
 
-Stage numbers are execution barriers. APIHydra executes stages in numeric order
-from `0` through the maximum discovered stage. For one stage, APIHydra starts
-exactly one goroutine for every directory assigned to that stage. Those
-directory goroutines execute concurrently, and the next stage cannot begin
-until all of them finish.
+Stage numbers are execution barriers. APIHydra starts with stage `0` and then
+executes each higher stage in ascending numeric order through the maximum
+discovered stage. For the active stage, APIHydra starts exactly one goroutine
+for every directory whose `Directory.Stage` equals that stage number. Those
+directory goroutines execute in parallel, and the next stage cannot begin until
+all of them finish.
 
-Within one directory, execution is entirely sequential. Its selected step YAML
-files execute in ascending lexicographic path order. APIHydra executes every
-step in one file in declaration order before it begins the next file.
+Within each directory goroutine, execution is entirely sequential. Its selected
+step YAML files execute alphabetically by cleaned file path. APIHydra executes
+every step in the first file sequentially in declaration order, then every step
+in the second file sequentially, and continues that way through the remaining
+files. Files and steps belonging to one directory never execute in parallel.
 
 Defaults inheritance continues to follow directory ancestry and is independent
 of stage execution grouping.
@@ -590,9 +593,10 @@ apih tests --name create-steps --label smoke
 
 ### 9. Execution order and concurrency
 
-APIHydra executes stages sequentially. It executes directories within the same
-stage concurrently, while executing all selected files and steps within one
-directory sequentially:
+`StepRunner.Execute` starts at stage `0` and advances through higher stage
+numbers in ascending order. All directories whose `Directory.Stage` equals the
+active stage execute in parallel. Within each directory, files execute
+alphabetically and all steps execute sequentially:
 
 1. APIHydra must determine the maximum `Directory.Stage` value and execute
    every stage number in ascending numeric order from `0` through that maximum.
@@ -605,12 +609,12 @@ directory sequentially:
    containing no selected step files performs no request work and completes its
    goroutine normally.
 5. A directory goroutine must execute that directory's selected step YAML files
-   sequentially in ascending lexicographic order of their cleaned file paths.
-   This is the deterministic order already held by `Directory.StepsFiles`.
+   one at a time, alphabetically by cleaned file path. This is the deterministic
+   order already held by `Directory.StepsFiles`.
 6. The directory goroutine must execute every step in the first file
-   sequentially in declaration order before starting the next file. It repeats
-   this rule until all steps in all selected step files in that directory have
-   finished.
+   sequentially in declaration order before starting the first step of the
+   second file. It repeats this rule until all steps in every alphabetically
+   ordered file in that directory have finished.
 7. APIHydra must not start a separate goroutine for a file or step. Files and
    steps belonging to the same directory must never overlap in execution.
 8. A step may rely on variables created by an earlier step in the same file, by

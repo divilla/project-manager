@@ -17,11 +17,12 @@
 
 `StepRunner` prepares and executes the runtime copies of all resolved steps in
 one directory tree. Preparation copies every `Directory.ResolvedSteps` matrix
-to the corresponding `Directory.RuntimeSteps` matrix. Execution runs stages
-sequentially, directories in one stage concurrently, and every runtime step
-within one directory sequentially through variable loading, request parsing,
-curl, response capture, response parsing, type validation, and expected-value
-validation.
+to the corresponding `Directory.RuntimeSteps` matrix. `Execute` starts at stage
+`0` and advances through higher stage numbers in ascending order. All
+directories whose `Directory.Stage` equals the active stage execute in
+parallel. Within each directory, files execute alphabetically by cleaned path,
+and every step in one file executes sequentially in declaration order before
+the next file begins.
 
 `StepRunner` owns the complete lifecycle of a runtime `models.Step`. Every
 operation receives the address of the actual step stored in `RuntimeSteps` so
@@ -39,7 +40,9 @@ runtime model after execution.
 - Starting exactly one goroutine for every directory in the active stage.
 - Coordinating fatal cancellation and waiting for every started directory
   goroutine before returning.
-- Executing outer step groups and their steps sequentially in stored order.
+- Executing outer step groups one at a time in the alphabetical file order
+  represented by `StepsFiles`, with every group's steps sequential in
+  declaration order.
 - Passing the exact `*models.Step` runtime element to every runtime service.
 - Calling the runtime phases in the order defined by this specification.
 - Building the curl URL from the resolved request components.
@@ -307,7 +310,8 @@ stage have no defined relative start, request, completion, variable-write, or
 output order.
 
 Within each directory goroutine, runtime groups and steps execute strictly
-sequentially in this order:
+sequentially. Outer group order is the alphabetical cleaned-path order of the
+corresponding `StepsFiles`; inner group order is step declaration order:
 
 ```text
 RuntimeSteps[0][0]
@@ -648,11 +652,12 @@ Given runtime steps whose request and response members are changed by runtime
 phases, when `Execute` succeeds, then every change remains on the corresponding
 `Directory.RuntimeSteps` element and no resolved step changes.
 
-#### AC-Execute-2: Preserve sequential order within a directory
+#### AC-Execute-2: Preserve alphabetical file and sequential step order
 
-Given multiple groups and steps in one directory, when its goroutine runs, then
-it executes `[0][0]` before `[0][1]`, finishes one inner group before starting
-the next, and never overlaps two curl invocations from that directory.
+Given alphabetically ordered files represented by multiple groups in one
+directory, when its goroutine runs, then it executes `[0][0]` before `[0][1]`,
+finishes every step of the first file before starting the first step of the
+second file, and never overlaps two curl invocations from that directory.
 
 #### AC-Execute-3: Run phases in the accepted order
 
@@ -824,7 +829,9 @@ acceptance criterion in this specification. At minimum, tests must cover:
 - Exact phase call order and curl argument mapping.
 - Ascending stage scheduling, complete barriers, exactly one goroutine per
   active-stage directory, and no file or step goroutines.
-- Concurrent same-stage directories with sequential work inside each one.
+- Parallel same-stage directories, alphabetical files within each directory,
+  and sequential steps within each file, including proof that files and steps
+  in one directory never overlap.
 - Guaranteed and intentionally undefined variable-visibility relationships,
   including atomic duplicate assignment under a race.
 - Multiple type failures plus an expected diff on one step.
