@@ -3,7 +3,7 @@
 ## Authority
 
 The binding architecture and API live in `skeleton/`. The shared product
-contract is [`prds/app.md`](prds/app.md), and package-local requirements live
+contract is [`prd.md`](prd.md), and package-local requirements live
 in `specs/`. This document describes package relationships only; it does not
 duplicate service behavior.
 

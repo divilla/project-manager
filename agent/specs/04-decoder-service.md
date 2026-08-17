@@ -3,8 +3,8 @@
 ## Status and ownership
 
 - Binding reference: `skeleton/internal/definition/decoder.go`
-- Shared domain and pipeline: [`app.md`](../prds/app.md)
-- Contextual definition errors: [`errs-pkg.md`](02-errs-pkg.md)
+- Shared domain and pipeline: [`prd.md`](../prd.md)
+- Contextual definition errors: [`02-errs-pkg.md`](02-errs-pkg.md)
 - Status: skeleton-aligned specification
 
 This specification owns decoding classified files and validating the resulting
@@ -48,7 +48,7 @@ response-type tokens, jq syntax, HTTP-status behavior, or a non-empty suite
 rule.
 
 When an implementation creates contextual definition errors, their
-construction is governed by `errs-pkg.md`; this spec does not duplicate its
+construction is governed by `02-errs-pkg.md`; this spec does not duplicate its
 formatting rules. The skeleton currently declares no Decoder-specific static
 errors.
 

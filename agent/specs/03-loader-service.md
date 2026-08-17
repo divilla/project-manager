@@ -3,7 +3,7 @@
 ## Status and ownership
 
 - Binding reference: `skeleton/internal/definition/loader.go`
-- Shared domain and pipeline: [`app.md`](../prds/app.md)
+- Shared domain and pipeline: [`prd.md`](../prd.md)
 - Status: skeleton-aligned specification
 
 This specification owns only Loader's three mutations. Shared model fields and

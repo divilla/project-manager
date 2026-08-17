@@ -4,8 +4,8 @@
 
 - Binding reference: `skeleton/internal/execution/steprun.go`
 - Reference tests: `skeleton/internal/execution/steprun_test.go`
-- Shared domain and exit codes: [`app.md`](../prds/app.md)
-- Reporter methods: [`09-reporter.md`](10-reporter.md)
+- Shared domain and exit codes: [`prd.md`](../prd.md)
+- Reporter methods: [`10-reporter.md`](10-reporter.md)
 - Status: skeleton-aligned specification
 
 This specification is the single owner of preparation order, execution phase

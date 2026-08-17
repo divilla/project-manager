@@ -1,39 +1,37 @@
-app: apihydra # required - used for filtering when mixed non-apihydra YAML files
-kind: steps # required - root, defaults, or steps
+# Shape-only example. Values illustrate fields and do not define validation or runtime behavior.
+app: apihydra
+kind: steps
 metadata:
-  name: create-steps #optional - must be unique if used - used for querying steps
-  labels: [create, steps] #optional - used for querying steps
+  name: create-steps
+  labels: [create, steps]
 spec:
   steps:
-    - vars: #optional - write-once values available before request resolution
-        project_id: 1
+    - vars:
+        project_id: example-project
       request:
-        method: POST #optional - default GET - default with body POST
-        baseUrl: https://api.example.com #optional - typically inherited from defaults
-        basePath: /api/v1 #optional - typically inherited from defaults
-        path: /api/users #required
-        headers: #optional - typically inherited from defaults
+        method: POST
+        baseUrl: https://api.example.com
+        basePath: /api/v1
+        path: /api/users
+        headers:
           Content-Type: application/json
           Accept: application/json
-        timeout: 10 #optional - seconds - typically inherited - default 10
-        retries: 3 #optional - typically inherited - default 3
-        query: page=1&limit=20&sort=name #optional
-        body: | #required for POST - literal JSON string
+        timeout: 10
+        retries: 3
+        query: page=1&limit=20&sort=name
+        body: |
           {
-            "project_id": $project_id,
-            "title": "API tester Title",
-            "def": "API tester Def"
+            "project_id": "example-project",
+            "title": "Example title"
           }
       response:
-        status: [200, 201] #optional - accepted HTTP response statuses
-        capture: #optional - jq expressions stored as write-once variables
-          change_id: .id
-        types: #optional
-          ".changed": [datetime]
-          ".modified": [datetime, optional]
-        expected: | #optional - literal JSON string
+        status: [200, 201]
+        capture:
+          change_id: example-capture-expression
+        types:
+          example.selector: [example-type]
+        expected: |
           {
-            "id": $change_id,
             "agent_edit": false,
             "change_phase": "backlog",
             "change_types": []

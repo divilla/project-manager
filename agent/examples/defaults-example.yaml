@@ -1,5 +1,6 @@
-app: apihydra # required - used for filtering when mixed non-apihydra YAML files
-kind: defaults # optional - at most one in each non-root directory
+# Shape-only example. Values illustrate fields and do not define runtime behavior.
+app: apihydra
+kind: defaults
 spec:
   basePath: /api/v2
   headers:

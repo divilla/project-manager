@@ -3,7 +3,7 @@
 ## Status and ownership
 
 - Binding reference: `skeleton/pkg/errs/errors.go`
-- Shared product contract: [`app.md`](../prds/app.md)
+- Shared product contract: [`prd.md`](../prd.md)
 - Status: skeleton-aligned specification
 
 This specification owns contextual error construction. The PRD owns the

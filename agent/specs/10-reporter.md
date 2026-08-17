@@ -4,7 +4,7 @@
 
 - Binding reference: `skeleton/internal/reporter/reporter.go`
 - Reference tests: `skeleton/internal/reporter/reporter_test.go`
-- Terminal-output boundary: [`app.md`](../prds/app.md#package-ownership)
+- Terminal-output boundary: [`prd.md`](../prd.md#package-ownership)
 - Status: skeleton-aligned specification
 
 This specification owns Reporter construction and the output behavior fixed by

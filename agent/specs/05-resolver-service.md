@@ -3,8 +3,8 @@
 ## Status and ownership
 
 - Binding reference: `skeleton/internal/definition/resolver.go`
-- Shared domain and pipeline: [`app.md`](../prds/app.md)
-- Contextual definition errors: [`errs-pkg.md`](02-errs-pkg.md)
+- Shared domain and pipeline: [`prd.md`](../prd.md)
+- Contextual definition errors: [`02-errs-pkg.md`](02-errs-pkg.md)
 - Status: skeleton-aligned specification
 
 This specification owns the three Resolver operations. The PRD owns their
@@ -51,7 +51,7 @@ CLI pipeline does not invoke it.
 
 Its validation rules are not specified by the skeleton and must not duplicate
 or contradict Decoder rules. Contextual error construction, when needed, is
-owned by `errs-pkg.md`; the skeleton declares no Resolver-specific static
+owned by `02-errs-pkg.md`; the skeleton declares no Resolver-specific static
 errors.
 
 ## Acceptance criteria

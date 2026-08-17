@@ -3,7 +3,7 @@
 ## Status and ownership
 
 - Binding reference: `skeleton/internal/execution/kvs.go`
-- Shared product contract: [`app.md`](../prds/app.md)
+- Shared product contract: [`prd.md`](../prd.md)
 - Status: skeleton-aligned specification
 
 This specification owns the complete KeyValueStore behavior because that
@@ -40,7 +40,7 @@ atomic. The store does not normalize keys, validate values, interpolate text,
 or support overwrites.
 
 The two errors are returned directly. Contextual wrapping by a consumer, if
-needed, follows `errs-pkg.md`.
+needed, follows `02-errs-pkg.md`.
 
 ## Acceptance criteria
 

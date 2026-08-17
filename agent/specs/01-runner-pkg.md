@@ -4,7 +4,7 @@
 
 - Binding reference: `skeleton/pkg/runner/runner.go`
 - Package-boundary test: `skeleton/architecture_test.go`
-- Shared product contract: [`app.md`](../prds/app.md)
+- Shared product contract: [`prd.md`](../prd.md)
 - Status: skeleton-aligned specification
 
 This specification owns Runner's exported command-operation API. The PRD owns

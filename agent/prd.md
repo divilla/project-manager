@@ -21,7 +21,7 @@ decoding and validating those definitions, resolving inherited request
 defaults, preparing request steps, executing requests, and validating
 responses.
 
-The current production CLI implements the definition pipeline only. Execution
+The current reference CLI implements the definition pipeline only. Execution
 types and services are part of the reference API but are not yet composed by
 `cmd/cli`.
 
@@ -98,14 +98,14 @@ The JSON names on declarative and runtime step fields match their YAML names.
 `DirectoryStage`, `DirectoryPath`, and `FilePath` derive provenance through
 `Step.Definition.File.Directory` exactly as implemented by the skeleton.
 
-## Current CLI contract
+## Current reference CLI contract
 
-`cmd/cli.run` starts with `os.Getwd()`. If a first positional argument exists,
-it joins that argument to the current directory and requires the result to be
-a directory. Invalid input returns configuration code `102` and an error
+`skeleton/cmd/cli.run` starts with `os.Getwd()`. If a first positional argument
+exists, it joins that argument to the current directory and requires the result
+to be a directory. Invalid input returns configuration code `102` and an error
 matching CLI-owned `InvalidPathError`.
 
-The CLI creates separate Reporters for `os.Stdout` and `os.Stderr`. `run`
+The reference CLI creates separate Reporters for `os.Stdout` and `os.Stderr`. `run`
 reports the selected working directory, creates
 `domain.Suite{WorkDir: workDir}`, and invokes:
 
@@ -118,7 +118,7 @@ reports the selected working directory, creates
 7. `Resolver.ResolveDefaults`
 8. `Resolver.ResolveSteps`
 
-The current `run` returns success after step resolution. A returned error is
+The reference `run` returns success after step resolution. A returned error is
 passed to the stderr Reporter's `Error` method, after which `main` exits with
 the code returned by `run`.
 
@@ -134,7 +134,7 @@ The product reserves:
 | `errs.ExitInternal` | `103` | Internal failure. |
 
 The construction and lookup semantics for coded errors are owned by
-[`errs-pkg.md`](../specs/errs-pkg.md). Package specs must reference that
+[`02-errs-pkg.md`](specs/02-errs-pkg.md). Package specs must reference that
 contract instead of redefining contextual error formatting.
 
 ## Specification ownership
@@ -143,16 +143,16 @@ Package-local requirements are owned in one place:
 
 | Contract | Owning specification |
 | --- | --- |
-| Loader | [`01-loader-service.md`](../specs/01-loader-service.md) |
-| Decoder | [`02-decoder-service.md`](../specs/02-decoder-service.md) |
-| Resolver | [`03-resolver-service.md`](../specs/03-resolver-service.md) |
-| KeyValueStore | [`04-key-value-store-service.md`](../specs/04-key-value-store-service.md) |
-| External-command functions | [`05-runner-pkg.md`](../specs/05-runner-pkg.md) |
-| VariableProcessor | [`06-variable-processor.md`](../specs/06-variable-processor.md) |
-| Validator | [`07-validator.md`](../specs/07-validator.md) |
-| Preparation and execution phase order, tree validation, and stage scheduling | [`08-step-runner.md`](../specs/08-step-runner.md) |
-| Reporter methods and output fixed by the reference implementation | [`09-reporter.md`](../specs/09-reporter.md) |
-| Contextual errors | [`errs-pkg.md`](../specs/errs-pkg.md) |
+| External-command functions | [`01-runner-pkg.md`](specs/01-runner-pkg.md) |
+| Contextual errors | [`02-errs-pkg.md`](specs/02-errs-pkg.md) |
+| Loader | [`03-loader-service.md`](specs/03-loader-service.md) |
+| Decoder | [`04-decoder-service.md`](specs/04-decoder-service.md) |
+| Resolver | [`05-resolver-service.md`](specs/05-resolver-service.md) |
+| KeyValueStore | [`06-key-value-store-service.md`](specs/06-key-value-store-service.md) |
+| VariableProcessor | [`07-variable-processor.md`](specs/07-variable-processor.md) |
+| Validator | [`08-validator.md`](specs/08-validator.md) |
+| Preparation and execution phase order, tree validation, and stage scheduling | [`09-step-runner.md`](specs/09-step-runner.md) |
+| Reporter methods and output fixed by the reference implementation | [`10-reporter.md`](specs/10-reporter.md) |
 
 No spec restates another spec's normative behavior. A consumer spec references
 the owner and states only how its own API participates.
